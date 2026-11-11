@@ -1,0 +1,18 @@
+// Cloudflare Workers deployment of the web app (static files + /api forwarding to the backend).
+// Build: npm ci && npm run build   Deploy: npx wrangler deploy   (root directory: frontend)
+// The Worker name below must match the project name chosen in the Cloudflare dashboard.
+{
+  "name": "zscmst-library",
+  "main": "worker/index.js",
+  "compatibility_date": "2025-06-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // Every app address (/staff, /my/login, ...) serves index.html; React Router takes it from there.
+    "not_found_handling": "single-page-application",
+    // Only /api requests run the Worker code; everything else is served straight from the static files.
+    "run_worker_first": ["/api/*"]
+  },
+  // BACKEND_URL is set in the dashboard (Settings > Variables and Secrets); keep it across deploys.
+  "keep_vars": true
+}

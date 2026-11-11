@@ -117,6 +117,30 @@ DOMAIN=library.lan TLS=internal docker compose --profile https up -d
 
 Then set `CORS_ALLOWED_ORIGINS=https://<DOMAIN>` in `.env`.
 
+## Cloudflare (web app on Workers, API on a library PC)
+
+The web app runs on Cloudflare Workers (free `*.workers.dev` address); the API, database and files stay
+on a PC at the library, reached through a Cloudflare Tunnel. The Worker (`frontend/worker/index.js`)
+serves the app and forwards `/api/*` to the PC, so browsers see one address.
+
+1. **On the PC:** `docker compose up -d` (as in Quick start), then open a tunnel to the API:
+   ```bash
+   cloudflared tunnel --url http://localhost:8080
+   ```
+   It prints an address like `https://random-words.trycloudflare.com`. Keep it running.
+   (A quick tunnel gets a new address each time it starts. For a fixed one, add a domain to
+   Cloudflare and create a named tunnel: `cloudflared tunnel create library`.)
+2. **In Cloudflare → Workers & Pages → Create → Import a repository** (`Glenn74813/library`):
+   - Project name: `zscmst-library` (must match `name` in `frontend/wrangler.jsonc`)
+   - Build command: `npm ci && npm run build` · Deploy command: `npx wrangler deploy`
+   - Advanced settings → Root directory / path: `frontend`
+   - Build variable `NODE_VERSION` = `22`
+3. **After the first deploy:** the Worker → Settings → Variables and Secrets → add `BACKEND_URL` =
+   the tunnel address from step 1, then Deploy again. Update it whenever the quick-tunnel address changes.
+
+The PC must stay on and connected; if it is off, the app loads but shows "Bad Gateway" errors.
+SIP2 (port 6001) and the kiosks on the library network keep talking to the PC directly.
+
 ## Security model
 
 - **Access tokens**: HS256 JWT, 15 min (`JWT_ACCESS_TTL`), roles in the `roles` claim.
