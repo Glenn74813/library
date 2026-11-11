@@ -12,6 +12,11 @@ export function useSession() {
   return useContext(AuthContext)
 }
 
+/** The My Library (patron portal) session, kept apart from the staff session. */
+export function usePatronSession() {
+  return useSyncExternalStore(subscribe, () => getSession('patron'))
+}
+
 export function useKioskSession() {
   return useSyncExternalStore(subscribe, () => getSession('kiosk'))
 }

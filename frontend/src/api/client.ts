@@ -3,11 +3,11 @@ import type { AuthResponse, CheckoutResult, Principal } from './types'
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
 /**
- * Two independent session slots: "user" for staff/patrons in a normal browser, "kiosk" for an
- * unattended OPAC/attendance kiosk signed in with a KIOSK account (so a librarian can also log in
- * on the same machine without logging the kiosk out).
+ * Independent session slots, so signing in to one never signs another out on the same browser:
+ * "user" for staff, "patron" for the My Library portal, and "kiosk" for an unattended kiosk
+ * signed in with a KIOSK device account.
  */
-export type Slot = 'user' | 'kiosk'
+export type Slot = 'user' | 'patron' | 'kiosk'
 
 export interface Session {
   accessToken: string
@@ -28,7 +28,28 @@ function load(slot: Slot): Session | null {
   }
 }
 
-const sessions: Record<Slot, Session | null> = { user: load('user'), kiosk: load('kiosk') }
+const sessions: Record<Slot, Session | null> = { user: load('user'), patron: load('patron'), kiosk: load('kiosk') }
+
+// Patrons used to share the staff slot: move such a session to the patron slot.
+if (sessions.user?.user.roles.includes('PATRON')) {
+  sessions.patron ??= sessions.user
+  sessions.user = null
+  try {
+    localStorage.setItem(storageKey('patron'), JSON.stringify(sessions.patron))
+    localStorage.removeItem(storageKey('user'))
+  } catch { /* storage unavailable */ }
+}
+
+/**
+ * The slot requests use when none is given: the patron session on My Library pages and in the
+ * e-book reader (unless staff opened it with ?staff=1), the staff session everywhere else.
+ */
+export function defaultSlot(): Slot {
+  const { pathname, search } = window.location
+  if (pathname.startsWith('/my')) return 'patron'
+  if (pathname.startsWith('/read')) return !search.includes('staff=1') && sessions.patron ? 'patron' : 'user'
+  return 'user'
+}
 const listeners = new Set<() => void>()
 
 export function getSession(slot: Slot = 'user'): Session | null {
@@ -104,7 +125,7 @@ export interface RequestOptions {
 }
 
 async function send(path: string, opts: RequestOptions, retry: boolean): Promise<Response> {
-  const slot = opts.slot ?? 'user'
+  const slot = opts.slot ?? defaultSlot()
   const headers: Record<string, string> = {}
   const isForm = opts.body instanceof FormData
   if (opts.body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
@@ -142,13 +163,13 @@ export async function api<T = void>(path: string, opts: RequestOptions = {}): Pr
 }
 
 /** Fetches a protected file into memory (e-book reader); nothing is saved to disk. */
-export async function fetchBytes(path: string, slot: Slot = 'user', anonymous = false) {
+export async function fetchBytes(path: string, slot: Slot = defaultSlot(), anonymous = false) {
   const res = await send(path, { slot, anonymous }, true)
   return { data: await res.arrayBuffer(), contentType: res.headers.get('Content-Type') ?? '' }
 }
 
 /** Downloads a file (CSV export etc.) using the current session. */
-export async function download(path: string, fallbackName: string, slot: Slot = 'user') {
+export async function download(path: string, fallbackName: string, slot: Slot = defaultSlot()) {
   const res = await send(path, { slot }, true)
   const blob = await res.blob()
   const cd = res.headers.get('Content-Disposition') ?? ''
@@ -163,6 +184,20 @@ export async function download(path: string, fallbackName: string, slot: Slot = 
   URL.revokeObjectURL(url)
 }
 
+/** Opens a PDF (labels, cards) in a new tab for printing. The tab opens first so pop-up blockers allow it. */
+export async function openPdf(path: string) {
+  const tab = window.open('', '_blank')
+  try {
+    const res = await send(path, { slot: 'user' }, true)
+    const url = URL.createObjectURL(await res.blob())
+    if (tab) tab.location.href = url
+    else window.location.href = url
+  } catch (e) {
+    tab?.close()
+    throw e
+  }
+}
+
 export async function login(username: string, password: string, slot: Slot = 'user') {
   const r = await api<AuthResponse>('/api/auth/login', { body: { username, password }, anonymous: true })
   setSession(slot, fromAuthResponse(r))
@@ -171,11 +206,11 @@ export async function login(username: string, password: string, slot: Slot = 'us
 
 export async function patronLogin(cardNumber: string, pin: string) {
   const r = await api<AuthResponse>('/api/auth/patron-login', { body: { cardNumber, pin }, anonymous: true })
-  setSession('user', fromAuthResponse(r))
+  setSession('patron', fromAuthResponse(r))
   return r.user
 }
 
-export async function logout(slot: Slot = 'user') {
+export async function logout(slot: Slot = defaultSlot()) {
   const s = sessions[slot]
   setSession(slot, null)
   if (s) {

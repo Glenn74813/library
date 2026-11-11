@@ -50,7 +50,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/login", "/api/auth/patron-login", "/api/auth/refresh",
-                                "/api/auth/logout").permitAll()
+                                "/api/auth/logout", "/api/auth/pin-reset/**").permitAll()
                         .requestMatchers("/api/opac/**").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/info", "/error").permitAll()
                         .requestMatchers("/api/auth/**").authenticated()
@@ -61,6 +61,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/**").hasAnyRole(STAFF)
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(o -> o.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
+        http.addFilterAfter(new PasswordChangeFilter(),
+                org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 

@@ -38,7 +38,8 @@ export function AttendanceKiosk() {
   return <KioskScreen />
 }
 
-function KioskSetup() {
+/** One-time sign-in of a kiosk PC with its KIOSK device account (shared by the attendance and self-checkout kiosks). */
+export function KioskSetup({ title = 'Attendance kiosk setup' }: { title?: string }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -58,7 +59,7 @@ function KioskSetup() {
     <div className="center-page">
       <form className="card auth-card stack" onSubmit={submit}>
         <div className="logo"><Logo large /></div>
-        <h1>Attendance kiosk setup</h1>
+        <h1>{title}</h1>
         <p className="muted small" style={{ textAlign: 'center' }}>Sign in once with the kiosk device account. The kiosk stays signed in.</p>
         <ErrorAlert error={error} />
         <Field label="Kiosk username"><input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" required /></Field>

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { api } from '../../api/client'
+import { api, openPdf, qs } from '../../api/client'
 import { ITEM_STATUSES, MATERIAL_TYPES, type BibRecord, type CustomFieldDef, type IsbnResult, type Item, type RecordDetail } from '../../api/types'
 import { HeadingInput } from '../../components/HeadingInput'
 import { useAsync } from '../../hooks/useAsync'
@@ -154,7 +154,17 @@ export function RecordPage() {
         <div className="card">
           <div className="page-head" style={{ marginBottom: 8 }}>
             <h2 style={{ margin: 0 }}>Copies ({items.length})</h2>
-            <button className="btn primary" onClick={() => setEditingItem({ status: 'AVAILABLE', location: 'General Circulation' })}><Icon name="plus" />Add copy</button>
+            <div className="row">
+              {items.length > 0 && <select className="btn" style={{ width: 'auto' }} value="" aria-label="Print labels" onChange={(e) => {
+                const kind = e.target.value
+                openPdf(`/api/labels/items${qs({ recordId: id, kind })}`).catch((err) => toast(errorText(err), 'error'))
+              }}>
+                <option value="" disabled>Print labels…</option>
+                <option value="barcode">Barcode labels (all copies)</option>
+                <option value="spine">Spine labels (all copies)</option>
+              </select>}
+              <button className="btn primary" onClick={() => setEditingItem({ status: 'AVAILABLE', location: 'General Circulation' })}><Icon name="plus" />Add copy</button>
+            </div>
           </div>
           <Table rows={items} rowKey={(i) => i.id} onRowClick={setEditingItem} empty="No copies yet" columns={[
             { header: 'Barcode', render: (i) => <span className="mono">{i.barcode}</span> },

@@ -146,6 +146,13 @@ Tester(s): ______________________  Date: ____________  Version / build: ________
 | M10 | Set grace 1 day and cap PHP 50; return an item 20 days late | Fine = (late open days − 1) × rate, at most PHP 50 | | |
 | M11 | Revoke a gate device's tokens | Gate calls fail (401) until a new token is entered | | |
 | M12 | Audit trail: filter by user, action and dates; export PDF | Only matching entries, also in the file | | |
+| M13 | Self-checkout: card + PIN, borrow 2 items with the RFID pad, renew one, print slip | Due dates shown; desk sees the loans | | |
+| M14 | Self-checkout: wrong PIN 5 times | Card locked for the set minutes; desk can still serve the patron | | |
+| M15 | Self-checkout: item refused (limit, hold for someone else, room use) | Clear message to go to the desk | | |
+| M16 | Patron "Forgot PIN" with e-mail on record | Code e-mailed; new PIN works; code can't be reused | | |
+| M17 | Admin resets a staff password | Staff must choose a new password before anything else | | |
+| M18 | Print barcode labels, spine labels and 10 ID cards on real sheets | Print lines up with the labels / card stock | | |
+| M19 | Reports → E-book usage after patrons open e-books | Openings, readers and titles match | | |
 
 ## Sign-off
 

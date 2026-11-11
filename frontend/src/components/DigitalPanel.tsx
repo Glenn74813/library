@@ -89,7 +89,7 @@ export function DigitalPanel({ recordId }: { recordId: number }) {
             <div><dt className="muted small">Times opened by patrons</dt><dd style={{ margin: 0 }}>{info.views}</dd></div>
           </dl>
           <div className="row actions-stretch">
-            <Link className="btn" to={`/read/${recordId}`} target="_blank"><Icon name="eye" />Preview</Link>
+            <Link className="btn" to={`/read/${recordId}?staff=1`} target="_blank"><Icon name="eye" />Preview</Link>
             <button className="btn" disabled={busy} onClick={() => fileRef.current?.click()}><Icon name="upload" />{busy ? 'Uploading…' : 'Replace file'}</button>
             <button className="btn danger" onClick={removeFile}><Icon name="trash-2" />Remove</button>
           </div>

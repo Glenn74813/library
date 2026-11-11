@@ -20,6 +20,9 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     List<Item> findByRecordIdOrderByBarcodeAsc(Long recordId);
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "record")
+    List<Item> findByCreatedAtGreaterThanEqualOrderByBarcodeAsc(java.time.Instant since);
+
     @EntityGraph(attributePaths = "record")
     List<Item> findByStatusIn(Collection<ItemStatus> statuses);
 

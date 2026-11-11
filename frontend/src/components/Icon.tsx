@@ -16,6 +16,7 @@ const files = import.meta.glob<string>([
   '@feather/trash-2.svg', '@feather/zoom-in.svg', '@feather/zoom-out.svg', '@feather/arrow-left.svg',
   '@feather/tablet.svg', '@feather/lock.svg', '@feather/bell.svg', '@feather/check-circle.svg',
   '@feather/music.svg', '@feather/play.svg', '@feather/mic.svg', '@feather/camera.svg',
+  '@feather/check.svg', '@feather/corner-down-left.svg', '@feather/tag.svg', '@feather/mail.svg',
 ], { query: '?raw', import: 'default', eager: true })
 
 export type IconName =
@@ -24,6 +25,7 @@ export type IconName =
   | 'external-link' | 'file-text' | 'key' | 'log-out' | 'menu' | 'monitor' | 'package' | 'plus' | 'printer'
   | 'repeat' | 'search' | 'settings' | 'shield' | 'trending-up' | 'type' | 'upload' | 'user' | 'users'
   | 'volume-2' | 'x' | 'eye' | 'link' | 'trash-2' | 'zoom-in' | 'zoom-out' | 'arrow-left' | 'tablet' | 'lock' | 'bell' | 'check-circle' | 'music' | 'play' | 'mic' | 'camera'
+  | 'check' | 'corner-down-left' | 'tag' | 'mail'
 
 // name -> inner SVG markup (paths, circles, ...) so we can render with our own size and class.
 const ICONS: Record<string, string> = {}

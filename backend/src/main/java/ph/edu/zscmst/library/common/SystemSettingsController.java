@@ -27,7 +27,8 @@ public class SystemSettingsController {
                           @Size(max = 500) String receiptFooter) {
     }
 
-    public record Kiosks(@Min(15) @Max(3600) int opacResetSeconds, @Min(0) @Max(3600) int duplicateTapSeconds) {
+    public record Kiosks(@Min(15) @Max(3600) int opacResetSeconds, @Min(0) @Max(3600) int duplicateTapSeconds,
+                         boolean selfCheckRequirePin, boolean selfCheckAllowReturns) {
     }
 
     public record Sessions(@Min(5) @Max(240) int accessTokenMinutes, @Min(1) @Max(90) int refreshTokenDays,
@@ -73,7 +74,9 @@ public class SystemSettingsController {
         LibraryProfile p = system.profile();
         return new Settings(new Profile(p.systemName(), p.name(), p.institution(), p.shortName(), p.address(), p.phone(),
                 p.email(), p.website(), p.receiptHeader(), p.receiptFooter()),
-                new Kiosks(system.opacResetSeconds(), system.duplicateTapSeconds()),
+                new Kiosks(system.opacResetSeconds(), system.duplicateTapSeconds(),
+                        !"false".equals(settings.get("selfcheck.requirePin", "true")),
+                        !"false".equals(settings.get("selfcheck.allowReturns", "true"))),
                 new Sessions((int) system.accessTokenTtl().toMinutes(), (int) system.refreshTokenTtl().toDays(),
                         (int) system.deviceTokenTtl().toDays()),
                 uploads());
@@ -95,6 +98,8 @@ public class SystemSettingsController {
         put("library.receiptFooter", p.receiptFooter());
         put("kiosk.opacResetSeconds", s.kiosks().opacResetSeconds());
         put("kiosk.duplicateTapSeconds", s.kiosks().duplicateTapSeconds());
+        put("selfcheck.requirePin", s.kiosks().selfCheckRequirePin());
+        put("selfcheck.allowReturns", s.kiosks().selfCheckAllowReturns());
         put("security.accessTokenMinutes", s.sessions().accessTokenMinutes());
         put("security.refreshTokenDays", s.sessions().refreshTokenDays());
         put("security.deviceTokenDays", s.sessions().deviceTokenDays());
@@ -102,7 +107,8 @@ public class SystemSettingsController {
         put("uploads.audioMaxMb", s.uploads().audioMaxMb());
         put("uploads.photoMaxMb", s.uploads().photoMaxMb());
         audit.record("SYSTEM_SETTINGS", "profile \"" + p.name() + "\"; OPAC reset " + s.kiosks().opacResetSeconds()
-                + "s; double-tap " + s.kiosks().duplicateTapSeconds() + "s; sessions " + s.sessions().accessTokenMinutes()
+                + "s; double-tap " + s.kiosks().duplicateTapSeconds() + "s; self-check PIN "
+                + s.kiosks().selfCheckRequirePin() + ", returns " + s.kiosks().selfCheckAllowReturns() + "; sessions " + s.sessions().accessTokenMinutes()
                 + "m/" + s.sessions().refreshTokenDays() + "d/device " + s.sessions().deviceTokenDays() + "d; uploads "
                 + s.uploads().ebookMaxMb() + "/" + s.uploads().audioMaxMb() + "/" + s.uploads().photoMaxMb() + " MB");
         return get();

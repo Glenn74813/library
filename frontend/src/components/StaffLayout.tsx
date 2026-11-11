@@ -29,6 +29,7 @@ const NAV: { section: string; icon: IconName; items: NavItem[] }[] = [
       { to: '/staff/catalog', label: 'Catalog' },
       { to: '/staff/inventory', label: 'Stocktake' },
       { to: '/staff/authorities', label: 'Authorities' },
+      { to: '/staff/labels', label: 'Labels & ID cards' },
     ],
   },
   {
@@ -75,6 +76,9 @@ export function StaffLayout() {
   if (!hasRole(session, ...STAFF_ROLES)) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
   }
+  if (session?.user.mustChangePassword && location.pathname !== '/staff/account') {
+    return <Navigate to="/staff/account" replace />
+  }
 
   return (
     <div className="shell">
@@ -103,6 +107,7 @@ export function StaffLayout() {
           <div className="section"><Icon name="monitor" />Public screens</div>
           <NavLink to="/opac" target="_blank">OPAC kiosk</NavLink>
           <NavLink to="/kiosk/attendance" target="_blank">Attendance kiosk</NavLink>
+          <NavLink to="/kiosk/selfcheck" target="_blank">Self-checkout kiosk</NavLink>
         </nav>
         <div className="user-block">
           <div><strong>{session!.user.displayName}</strong></div>

@@ -7,7 +7,7 @@ import { useAsync } from '../../hooks/useAsync'
 
 interface SystemSettings {
   profile: LibraryProfile
-  kiosks: { opacResetSeconds: number; duplicateTapSeconds: number }
+  kiosks: { opacResetSeconds: number; duplicateTapSeconds: number; selfCheckRequirePin: boolean; selfCheckAllowReturns: boolean }
   sessions: { accessTokenMinutes: number; refreshTokenDays: number; deviceTokenDays: number }
   uploads: { ebookMaxMb: number; audioMaxMb: number; photoMaxMb: number }
 }
@@ -70,6 +70,14 @@ export function SystemSettingsPage() {
                 <input type="number" min={15} max={3600} value={f.kiosks.opacResetSeconds} onChange={section('kiosks', 'opacResetSeconds')} /></Field>
               <Field label="Ignore repeat taps (seconds)" hint="Attendance kiosk ignores the same card tapped again within this time; 0 = never">
                 <input type="number" min={0} max={3600} value={f.kiosks.duplicateTapSeconds} onChange={section('kiosks', 'duplicateTapSeconds')} /></Field>
+              <Field label="Self-checkout" as="div" className="span-all" hint="Kiosk at /kiosk/selfcheck; the same loan rules as the desk, without overrides">
+                <div className="stack" style={{ gap: 4 }}>
+                  <label className="check"><input type="checkbox" checked={f.kiosks.selfCheckRequirePin}
+                    onChange={(e) => setF({ ...f, kiosks: { ...f.kiosks, selfCheckRequirePin: e.target.checked } })} /> Ask for the patron's PIN</label>
+                  <label className="check"><input type="checkbox" checked={f.kiosks.selfCheckAllowReturns}
+                    onChange={(e) => setF({ ...f, kiosks: { ...f.kiosks, selfCheckAllowReturns: e.target.checked } })} /> Allow returns at the kiosk</label>
+                </div>
+              </Field>
             </div>
           </div>
           <div className="card stack">

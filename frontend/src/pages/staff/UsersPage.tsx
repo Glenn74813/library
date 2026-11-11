@@ -123,7 +123,7 @@ function UserModal({ value, onClose, onSaved }: { value: Partial<User>; onClose:
               {STAFF_ROLES.map((r) => <option key={r.id} value={r.id}>{r.text}</option>)}
             </select>
           </Field>
-          <Field label={f.id ? 'New password (leave empty to keep)' : 'Password'} hint="At least 8 characters">
+          <Field label={f.id ? 'Temporary password (leave empty to keep)' : 'Temporary password'} hint="At least 8 characters. It is temporary: the person must choose their own at next sign-in">
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
           </Field>
           {f.id && <Field label="Status" as="div">

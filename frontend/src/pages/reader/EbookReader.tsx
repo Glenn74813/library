@@ -3,9 +3,9 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import * as pdfjs from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import ePub, { type Rendition } from 'epubjs'
-import { api, fetchBytes } from '../../api/client'
+import { api, defaultSlot, fetchBytes } from '../../api/client'
 import type { OpacDetail } from '../../api/types'
-import { hasRole, STAFF_ROLES, useSession } from '../../auth/AuthContext'
+import { hasRole, STAFF_ROLES, usePatronSession, useSession } from '../../auth/AuthContext'
 import { Icon } from '../../components/Icon'
 import { errorText } from '../../components/Toast'
 
@@ -20,7 +20,10 @@ interface Loaded { data: ArrayBuffer; format: 'PDF' | 'EPUB' }
  */
 export function EbookReader() {
   const { recordId } = useParams()
-  const session = useSession()
+  const staffSession = useSession()
+  const patronSession = usePatronSession()
+  // Same choice as the API client: the patron's own session unless staff opened a preview.
+  const session = defaultSlot() === 'patron' ? patronSession : staffSession
   const navigate = useNavigate()
   const isPatron = hasRole(session, 'PATRON')
   const isStaff = hasRole(session, ...STAFF_ROLES)

@@ -42,7 +42,9 @@ public class TokenService {
     public record TokenPair(IssuedToken access, IssuedToken refresh, PrincipalInfo principal) {
     }
 
-    public record PrincipalInfo(String subject, String username, String displayName, List<String> roles, Long patronId) {
+    /** {@code mustChangePassword}: the account may only change its password until it does. */
+    public record PrincipalInfo(String subject, String username, String displayName, List<String> roles, Long patronId,
+                                boolean mustChangePassword) {
     }
 
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -68,12 +70,12 @@ public class TokenService {
 
     public static PrincipalInfo principalOf(AppUser user) {
         return new PrincipalInfo("user:" + user.getId(), user.getUsername(), user.getFullName(),
-                List.of(user.getRole().name()), null);
+                List.of(user.getRole().name()), null, user.isMustChangePassword());
     }
 
     public static PrincipalInfo principalOf(Patron patron) {
         return new PrincipalInfo("patron:" + patron.getId(), patron.getCardNumber(), patron.getFullName(),
-                List.of("PATRON"), patron.getId());
+                List.of("PATRON"), patron.getId(), false);
     }
 
     @Transactional
@@ -155,6 +157,9 @@ public class TokenService {
                 .claim("roles", p.roles());
         if (p.patronId() != null) {
             claims.claim("patronId", p.patronId());
+        }
+        if (p.mustChangePassword()) {
+            claims.claim(PasswordChangeFilter.CLAIM, true);
         }
         if (deviceTokenVersion != null) {
             claims.claim(DeviceTokenValidator.VERSION_CLAIM, deviceTokenVersion);

@@ -51,7 +51,19 @@ Demo data (20 Nicholas Sparks novels with copies, 20 patrons with PIN `1234`, lo
 scripts/seed_demo.py --api http://localhost:8080 --user admin --password <admin password>
 ```
 
-Tests: `scripts/mvn.sh test`, `cd frontend && npm run build && npx eslint src`.
+Tests:
+
+```bash
+docker compose exec db psql -U smartlibrary -c 'create database smartlibrary_test'   # once
+scripts/mvn.sh test          # unit tests + integration tests against smartlibrary_test (port 5433)
+cd frontend && npx eslint src && npm run build
+```
+
+Integration tests (`backend/src/test/.../it`) run the real loan rules and HTTP security against
+PostgreSQL; set `TEST_DB_URL`/`TEST_DB_USERNAME`/`TEST_DB_PASSWORD` to point elsewhere. They are
+skipped when no test database is reachable. GitHub Actions (`.github/workflows/ci.yml`) runs the
+backend tests with a PostgreSQL service, the frontend lint/build, and the Docker image builds on
+every push and pull request.
 
 ## Screens
 
@@ -60,6 +72,8 @@ Tests: `scripts/mvn.sh test`, `cd frontend && npm run build && npx eslint src`.
 | `/staff` | Admin / Librarian / Staff | Dashboard, circulation desk, catalog, patrons, holds, fines, attendance, gate, stocktake, reports, users, audit |
 | `/opac` (`/opac?kiosk=1` on kiosks) | Public | Catalog search with live availability; kiosk mode adds on-screen keyboard and auto-reset |
 | `/kiosk/attendance` | KIOSK device | Time-in/out by RFID, barcode or virtual keyboard; stand-by info board/video; offline queue |
+| `/kiosk/selfcheck` | KIOSK device | Self-checkout: card + PIN, borrow and renew by RFID pad or scanner, returns, printable slip |
+| `/my/forgot-pin` | Patrons | Reset a forgotten PIN with a code e-mailed to the address on record |
 | `/my` | Patrons | Loans, renewals, reservations, fines, PIN change, download own data (the "mobile app" as a responsive web app) |
 | `/privacy` | Public | Privacy notice (Data Privacy Act, RA 10173) |
 
@@ -131,6 +145,11 @@ A title is either **school-owned** or **commercial**, never both:
 - **Back up the `files` volume together with the database.**
 
 ## Hardware integration
+
+- **Printing**: Labels & ID cards (Collection menu) makes A4 PDFs for Avery L7160 barcode labels
+  (21/sheet), L7651 spine labels (65/sheet) and CR80 patron ID cards (10/sheet). Receipts and the
+  self-checkout slip are sized for 80 mm thermal printers; start the kiosk browser with
+  `--kiosk-printing` to print them without the print dialog.
 
 - **Barcode scanners / RFID card readers / UHF desk pads** in keyboard-wedge mode work everywhere
   there is a scan box (circulation desk, stocktake, attendance kiosk).

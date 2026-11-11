@@ -28,6 +28,8 @@ docker compose up -d --build    # db, api, web, backup
 | GATE | RFID security gate middleware (device token) |
 
 - **Add user** for people, **Add device** for kiosks and gates.
+- A password you set for a person (new account or reset) is **temporary**: they must choose their own
+  at the next sign-in. Device passwords stay as set.
 - **Sign-in protection**: lock an account after N failed attempts for M minutes; **Unlock** from the list.
 - Disable accounts of staff who leave instead of deleting them, so the audit trail stays readable.
 - Gate device tokens are long-lived. To stop one (gate PC replaced or stolen), open the device and press
@@ -56,7 +58,7 @@ docker compose up -d --build    # db, api, web, backup
 | Section | What it controls |
 |---------|------------------|
 | Library profile | System name, library and school name, short name, address, phone, e-mail, website, receipt header and footer. Used on every screen, receipts, PDF reports, e-mails, kiosks and SIP2 stations |
-| Kiosks | OPAC kiosk reset time (default 90 s); attendance kiosk repeat-tap window (default 15 s) |
+| Kiosks | OPAC kiosk reset time (default 90 s); attendance kiosk repeat-tap window (default 15 s); self-checkout: require PIN (default on), allow returns (default on) |
 | Sign-in sessions | Access token minutes (15), "stay signed in" days (7), gate device token days (365). Once saved here, these replace the `JWT_*` environment values |
 | Upload limits | E-books (100 MB), announcement recordings (10 MB), patron photos (5 MB); never more than 500 MB |
 
@@ -144,4 +146,13 @@ settings change, privacy action, SIP2 station action and offline upload, with th
 - Export the filtered list as Excel (CSV) or PDF (up to 10,000 rows).
 
 ## 13. Kiosks
-See [kiosk-lockdown.md](kiosk-lockdown.md) for setting up OPAC and attendance kiosk PCs.
+See [kiosk-lockdown.md](kiosk-lockdown.md) for setting up OPAC, attendance and self-checkout kiosk PCs.
+
+## 14. Patron PIN resets
+Patrons reset a forgotten PIN at `/my/forgot-pin` with a 6-digit code e-mailed to the address on their
+record (valid 15 minutes, 5 tries, at most 3 codes per hour). This needs e-mail set up under
+Notifications; without it, staff set a new PIN on the patron's page.
+
+## 15. Automated tests
+`scripts/mvn.sh test` runs unit tests and integration tests (loan rules, fines, holds, security) against
+the `smartlibrary_test` database; GitHub Actions runs them on every push. See the README.

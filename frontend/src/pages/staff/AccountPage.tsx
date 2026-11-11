@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, logout } from '../../api/client'
+import { useSession } from '../../auth/AuthContext'
 import { Field } from '../../components/ui'
 import { errorText, useToast } from '../../components/Toast'
 
@@ -10,6 +11,7 @@ export function AccountPage() {
   const [confirm, setConfirm] = useState('')
   const toast = useToast()
   const navigate = useNavigate()
+  const mustChange = useSession()?.user.mustChangePassword
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -27,6 +29,9 @@ export function AccountPage() {
   return (
     <>
       <div className="page-head"><h1>My account</h1></div>
+      {mustChange && <div className="alert warn" style={{ maxWidth: 480, marginBottom: 16 }}>
+        <strong>Choose your own password.</strong> Your password was set by an administrator. Enter it as the current
+        password, then choose a new one to continue.</div>}
       <form className="card stack" style={{ maxWidth: 480 }} onSubmit={submit}>
         <h2>Change password</h2>
         <Field label="Current password">

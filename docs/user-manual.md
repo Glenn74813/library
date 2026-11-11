@@ -18,7 +18,8 @@ administrator, for example `https://library.zscmst.edu.ph`.
 
 ### 1.1 Signing in
 Open `/login`, enter your username and password. After several wrong passwords the account is
-locked for a while; ask an administrator to unlock it. Change your password under **Account**
+locked for a while; ask an administrator to unlock it. Forgot your password? An administrator sets a
+temporary one; at the next sign-in you must choose your own before doing anything else. Change your password under **Account**
 (bottom of the side menu).
 
 ### 1.2 Dashboard
@@ -77,6 +78,15 @@ If the server cannot be reached, the desk switches to **Offline mode** by itself
 (reprint any time), or **Waive** with a reason (librarian). Manual charges (damaged item, lost card)
 can be added from the patron's page.
 
+### 1.7a Labels and ID cards
+**Collection → Labels & ID cards**
+- **Item labels**: barcode labels (Avery L7160, 21 per sheet) or spine labels with the call number
+  (Avery L7651, 65 per sheet). Scan the barcodes, or pick "copies added since" for a batch of new books.
+  *Skip labels* reuses a partly used sheet. A record's copy list also has **Print labels…**.
+- **Patron ID cards**: bank-card size, 10 per A4 sheet, with photo, card number and barcode. Print
+  by card numbers, category, program or registration date; or **ID card** on a patron's page.
+- Print at **100% / Actual size**, not "Fit to page".
+
 ### 1.8 Catalog
 **Collection → Catalog**
 
@@ -114,10 +124,20 @@ RFID pad or camera), then open the report: *missing*, *misplaced*, *unexpected s
 Closing the session can mark unscanned items MISSING; scanned LOST/MISSING items become AVAILABLE.
 **Download report…** as Excel or PDF.
 
+### 1.12a Self-checkout kiosk
+Patrons borrow on their own at `/kiosk/selfcheck`: tap or scan the card, enter the PIN, then place
+each item on the RFID pad or scan it. The same loan rules apply as at the desk, but nothing can be
+overridden: anything refused is sent to the desk. Patrons can also renew there, and return items if
+that is allowed: the kiosk checks the item in, and the patron leaves it on the return cart. Staff then
+shelve each one, or put it on the hold shelf if a reservation is waiting (the Holds page shows which).
+A printable slip lists the due dates.
+
 ### 1.13 Reports
 **Security & reports → Reports**: choose the period, view circulation and visitor charts, top
 borrowers and titles, and export loans, overdue, fines, collection, patrons, attendance and gate
 events. Use the format picker to choose **Excel (CSV)** or **PDF**.
+The **E-book usage** section shows how often school-owned e-books were opened, by how many patrons,
+from which programs, and the most-read titles.
 
 ---
 
@@ -134,7 +154,8 @@ Sign in with your card number and PIN (get the PIN at the desk). You can:
 - **reserve** a title, or **book** it for a pickup date from the availability calendar;
 - see fines and receipts;
 - read school-owned e-books;
-- change your PIN;
+- change your PIN (forgot it? **Forgot PIN?** on the sign-in page e-mails you a code, if the library
+  has your e-mail address);
 - **Download my data**: a copy of everything the library keeps about you.
 
 ### 2.3 Attendance kiosk

@@ -25,11 +25,14 @@ import { UsersPage } from './pages/staff/UsersPage'
 import { AuditPage } from './pages/staff/AuditPage'
 import { PrivacyPage } from './pages/staff/PrivacyPage'
 import { SystemSettingsPage } from './pages/staff/SystemSettingsPage'
+import { LabelsPage } from './pages/staff/LabelsPage'
 import { PrivacyNotice } from './pages/public/PrivacyNotice'
 import { AccountPage } from './pages/staff/AccountPage'
 import { OpacKiosk } from './pages/opac/OpacKiosk'
 import { AttendanceKiosk } from './pages/kiosk/AttendanceKiosk'
+import { SelfCheckKiosk } from './pages/kiosk/SelfCheckKiosk'
 import { PatronLogin } from './pages/portal/PatronLogin'
+import { ForgotPin } from './pages/portal/ForgotPin'
 import { PatronPortal } from './pages/portal/PatronPortal'
 
 // The reader pulls in PDF.js and epub.js, so it is only downloaded when a book is opened.
@@ -64,12 +67,15 @@ export default function App() {
         <Route path="audit" element={<AuditPage />} />
         <Route path="privacy" element={<PrivacyPage />} />
         <Route path="system" element={<SystemSettingsPage />} />
+        <Route path="labels" element={<LabelsPage />} />
         <Route path="account" element={<AccountPage />} />
       </Route>
       <Route path="/privacy" element={<PrivacyNotice />} />
       <Route path="/opac" element={<OpacKiosk />} />
       <Route path="/kiosk/attendance" element={<AttendanceKiosk />} />
+      <Route path="/kiosk/selfcheck" element={<SelfCheckKiosk />} />
       <Route path="/my/login" element={<PatronLogin />} />
+      <Route path="/my/forgot-pin" element={<ForgotPin />} />
       <Route path="/my" element={<PatronPortal />} />
       <Route path="/read/:recordId" element={<Suspense fallback={<div className="center-page muted">Opening reader…</div>}><EbookReader /></Suspense>} />
       <Route path="*" element={<Navigate to="/" replace />} />

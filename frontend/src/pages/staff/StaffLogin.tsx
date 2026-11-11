@@ -46,13 +46,12 @@ export function StaffLogin() {
         <Field label="Username">
           <input autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus />
         </Field>
-        <Field label="Password">
+        <Field label="Password" hint="Forgot it? An administrator can set a temporary one under Users & devices">
           <input type="password" autoComplete="current-password" value={password}
             onChange={(e) => setPassword(e.target.value)} required />
         </Field>
         <button className="btn primary block" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
         <nav className="auth-links" aria-label="Other sign-in options">
-          <Link to="/my/login"><Icon name="user" />Patron sign in</Link>
           <Link to="/opac"><Icon name="search" />Search the catalog</Link>
         </nav>
       </form>

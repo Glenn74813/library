@@ -7,11 +7,12 @@ screen. Do this on each kiosk PC after the library server is running over HTTPS.
 |-------|-----------------|
 | OPAC (catalog search) | `https://<server>/opac?kiosk=1` |
 | Attendance | `https://<server>/kiosk/attendance` |
+| Self-checkout | `https://<server>/kiosk/selfcheck` |
 
 ## 1. Accounts and sign-in
 
 1. In **Users & devices → Add device**, create one KIOSK account per kiosk (e.g. `kiosk-opac-1`).
-2. On the kiosk, open the attendance kiosk address once and sign in with that account. It stays
+2. On the kiosk, open the attendance or self-checkout address once and sign in with that account. It stays
    signed in and renews its own session. (The OPAC kiosk needs no sign-in.)
 
 ## 2. Windows 10/11: Assigned Access (recommended)
@@ -28,6 +29,9 @@ Alternatively, Edge kiosk mode from a shortcut:
 ```
 msedge.exe --kiosk https://<server>/opac?kiosk=1 --edge-kiosk-type=public-browsing --no-first-run
 ```
+
+For the self-checkout kiosk with a receipt printer, set the printer as Windows' default and add
+`--kiosk-printing` so the due-date slip prints without a dialog.
 
 ## 3. Linux (Ubuntu) with Chromium
 

@@ -84,8 +84,10 @@ public class UserController {
         if (users.existsByUsernameIgnoreCase(req.username())) {
             throw ApiException.conflict("Username already exists");
         }
-        AppUser user = users.save(new AppUser(req.username().trim(), passwordEncoder.encode(req.password()),
-                req.fullName().trim(), req.role()));
+        AppUser user = new AppUser(req.username().trim(), passwordEncoder.encode(req.password()),
+                req.fullName().trim(), req.role());
+        user.setMustChangePassword(user.isPerson());
+        user = users.save(user);
         audit.record("USER_CREATE", user.getUsername() + " (" + user.getRole() + ")");
         return UserDto.of(user);
     }
@@ -99,6 +101,8 @@ public class UserController {
         user.setEnabled(req.enabled());
         if (req.password() != null && !req.password().isBlank()) {
             user.setPasswordHash(passwordEncoder.encode(req.password()));
+            // A password set by an administrator is temporary for people; devices keep theirs.
+            user.setMustChangePassword(user.isPerson());
             user.unlock();
             tokenService.revokeAll(TokenService.SubjectType.USER, user.getId());
         }

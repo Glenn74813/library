@@ -122,7 +122,8 @@ public class AuthController {
             }
             throw new BadCredentialsException("Invalid card number or PIN");
         }
-        if (patron.getPinLockedUntil() != null) {
+        // A correct PIN clears earlier failed attempts.
+        if (patron.getPinFailures() > 0 || patron.getPinLockedUntil() != null) {
             patron.unlockPin();
             patrons.save(patron);
         }
@@ -159,7 +160,8 @@ public class AuthController {
         Number patronId = jwt.getClaim("patronId");
         return new TokenService.PrincipalInfo(jwt.getSubject(), jwt.getClaimAsString("username"),
                 jwt.getClaimAsString("name"), jwt.getClaimAsStringList("roles") == null ? List.of()
-                : jwt.getClaimAsStringList("roles"), patronId == null ? null : patronId.longValue());
+                : jwt.getClaimAsStringList("roles"), patronId == null ? null : patronId.longValue(),
+                Boolean.TRUE.equals(jwt.getClaim(PasswordChangeFilter.CLAIM)));
     }
 
     @PostMapping("/change-password")
@@ -175,7 +177,11 @@ public class AuthController {
         if (!passwordEncoder.matches(req.currentPassword(), user.getPasswordHash())) {
             throw ApiException.badRequest("Current password is incorrect");
         }
+        if (passwordEncoder.matches(req.newPassword(), user.getPasswordHash())) {
+            throw ApiException.badRequest("Choose a password different from the current one");
+        }
         user.setPasswordHash(passwordEncoder.encode(req.newPassword()));
+        user.setMustChangePassword(false);
         tokens.revokeAll(TokenService.SubjectType.USER, user.getId());
         audit.record(user.getUsername(), "PASSWORD_CHANGE", null);
     }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { api, download, qs, releaseHold } from '../../api/client'
+import { api, download, openPdf, qs, releaseHold } from '../../api/client'
 import type { BibRecord, Fine, Hold, Loan, Page, PatronSummary, Receipt } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { PatronFormModal } from '../../components/PatronForm'
@@ -135,6 +135,8 @@ export function PatronDetailPage() {
         <div className="row">
           <button className="btn" onClick={() => navigate('/staff/patrons')}><Icon name="chevron-left" />Back</button>
           <button className="btn" onClick={() => setPinOpen(true)}>{p.hasPin ? 'Reset PIN' : 'Set portal PIN'}</button>
+          <button className="btn" onClick={() => openPdf(`/api/labels/patron-cards${qs({ cards: p.cardNumber })}`).catch((e) => toast(errorText(e), 'error'))}>
+            <Icon name="credit-card" />ID card</button>
           <button className="btn" onClick={() => setHoldOpen(true)}>Reserve / book</button>
           <select className="btn" style={{ width: 'auto' }} value="" aria-label="Data privacy" onChange={(e) => {
             if (e.target.value === 'export') void download(`/api/patrons/${p.id}/data-export`, 'patron-data.json')

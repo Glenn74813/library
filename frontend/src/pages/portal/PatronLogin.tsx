@@ -40,13 +40,13 @@ export function PatronLogin() {
         <div className="school">{lib.institution || lib.name}</div>
         <ErrorAlert error={error} />
         <Field label="Library card / ID number"><input value={card} onChange={(e) => setCard(e.target.value)} autoComplete="username" required autoFocus /></Field>
-        <Field label="PIN" hint="Get your PIN at the circulation desk">
+        <Field label="PIN" hint="New patrons get a PIN at the circulation desk">
           <input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="current-password" required />
         </Field>
         <button className="btn primary block" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
         <nav className="auth-links" aria-label="Other options">
+          <Link to="/my/forgot-pin"><Icon name="key" />Forgot PIN?</Link>
           <Link to="/opac"><Icon name="search" />Search the catalog</Link>
-          <Link to="/login"><Icon name="briefcase" />Staff sign in</Link>
         </nav>
         <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>By signing in you agree to the library's <Link to="/privacy">privacy notice</Link>.</p>
       </form>

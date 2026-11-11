@@ -6,6 +6,8 @@ export interface Principal {
   displayName: string
   roles: string[]
   patronId: number | null
+  /** Signed in with a temporary password set by an administrator: must choose a new one first. */
+  mustChangePassword?: boolean
 }
 
 export interface AuthResponse {

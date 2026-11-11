@@ -3,7 +3,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, download, logout, qs } from '../../api/client'
 import type { BibRecord, Ebook, Fine, Hold, OpacDetail, Page, PatronSummary } from '../../api/types'
 import { BookModal } from '../../components/BookModal'
-import { hasRole, useSession } from '../../auth/AuthContext'
+import { hasRole, usePatronSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
 import { EbookBadge, ErrorAlert, Field, Pager, Stat, StatusBadge, Table, Tabs } from '../../components/ui'
 import { fmtBytes, fmtDate, fmtMoney } from '../../format'
@@ -15,7 +15,7 @@ type Tab = 'loans' | 'holds' | 'ebooks' | 'fines' | 'search' | 'account'
 
 /** Patron self-service portal - the "mobile app" as a responsive web app. */
 export function PatronPortal() {
-  const session = useSession()
+  const session = usePatronSession()
   const [params, setParams] = useSearchParams()
   const [tab, setTab] = useState<Tab>('loans')
   const toast = useToast()

@@ -1,5 +1,6 @@
 package ph.edu.zscmst.library.patron;
 
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -33,6 +34,17 @@ public interface PatronRepository extends JpaRepository<Patron, Long> {
     Page<Patron> search(String q, Pageable pageable);
 
     long countByAnonymizedAtIsNull();
+
+    /** Patrons for ID-card printing; null filters match everyone. */
+    @Query("""
+            select p from Patron p
+            where p.anonymizedAt is null
+              and (:categoryId is null or p.category.id = :categoryId)
+              and (:courseId is null or p.course.id = :courseId)
+              and p.createdAt >= :since
+            order by p.lastName, p.firstName
+            """)
+    List<Patron> forCards(Long categoryId, Long courseId, java.time.Instant since);
 
     boolean existsByCategoryId(Long categoryId);
 

@@ -27,6 +27,7 @@ public class AppUser {
     private Instant lockedUntil;
     private Instant createdAt = Instant.now();
     private int tokenVersion;
+    private boolean mustChangePassword;
 
     protected AppUser() {
     }
@@ -71,4 +72,10 @@ public class AppUser {
 
     /** Invalidates every device token issued to this account so far. */
     public void revokeDeviceTokens() { tokenVersion++; }
+
+    public boolean isMustChangePassword() { return mustChangePassword; }
+    public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
+
+    /** People (not kiosk or gate devices) choose their own password after an administrator sets one. */
+    public boolean isPerson() { return role != Role.KIOSK && role != Role.GATE; }
 }

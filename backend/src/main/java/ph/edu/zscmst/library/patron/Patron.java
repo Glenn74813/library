@@ -90,6 +90,7 @@ public class Patron {
     public Instant getCreatedAt() { return createdAt; }
     public boolean isPinLocked(Instant now) { return pinLockedUntil != null && pinLockedUntil.isAfter(now); }
     public Instant getPinLockedUntil() { return pinLockedUntil; }
+    public int getPinFailures() { return pinFailures; }
 
     public void pinFailed(int max, int lockMinutes, Instant now) {
         pinFailures++;
