@@ -74,7 +74,7 @@ export function OpacKiosk() {
             aria-label="Search the catalog" inputMode={kiosk ? 'none' : undefined} autoFocus={!kiosk} />
           <select value={field} onChange={(e) => setField(e.target.value)} aria-label="Search in">
             <option value="any">Keyword</option><option value="title">Title</option><option value="author">Author</option>
-            <option value="subject">Subject</option><option value="isbn">ISBN</option><option value="callno">Call no.</option>
+            <option value="subject">Subject</option><option value="isbn">ISBN</option><option value="callno">Call no.</option><option value="barcode">Barcode</option>
           </select>
           <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Material type">
             <option value="">All types</option>{MATERIAL_TYPES.map((t) => <option key={t} value={t}>{label(t)}</option>)}

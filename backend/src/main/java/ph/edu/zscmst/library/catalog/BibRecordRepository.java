@@ -20,6 +20,8 @@ public interface BibRecordRepository extends JpaRepository<BibRecord, Long> {
                 OR (:field = 'subject' AND r.subjects ILIKE '%' || :q || '%')
                 OR (:field = 'isbn' AND replace(r.isbn, '-', '') = replace(:q, '-', ''))
                 OR (:field = 'callno' AND r.call_number ILIKE :q || '%')
+                OR (:field IN ('barcode', 'any') AND EXISTS (SELECT 1 FROM item i WHERE i.record_id = r.id
+                        AND (lower(i.barcode) = lower(:q) OR lower(i.rfid_epc) = lower(:q))))
                 OR (:field = 'any' AND (r.search_vector @@ websearch_to_tsquery('simple', :q)
                                         OR r.title ILIKE '%' || :q || '%'
                                         OR r.authors ILIKE '%' || :q || '%'
@@ -29,7 +31,8 @@ public interface BibRecordRepository extends JpaRepository<BibRecord, Long> {
             """;
 
     /**
-     * Full-text search with relevance ranking. {@code field} is one of any/title/author/subject/isbn/callno;
+     * Full-text search with relevance ranking. {@code field} is one of any/title/author/subject/isbn/callno/barcode
+     * (a copy's barcode or RFID tag, which "any" also matches);
      * empty {@code q} or {@code type} disables that filter.
      */
     @Query(value = "SELECT r.* FROM bib_record r" + SEARCH_WHERE + """

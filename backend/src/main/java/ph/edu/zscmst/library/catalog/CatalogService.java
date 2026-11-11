@@ -33,7 +33,7 @@ import ph.edu.zscmst.library.digital.DigitalService.DigitalSummary;
 @Service
 public class CatalogService {
 
-    private static final Set<String> FIELDS = Set.of("any", "title", "author", "subject", "isbn", "callno");
+    private static final Set<String> FIELDS = Set.of("any", "title", "author", "subject", "isbn", "callno", "barcode");
 
     private final BibRecordRepository records;
     private final ItemRepository items;

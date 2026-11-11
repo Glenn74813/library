@@ -9,6 +9,7 @@ import { label } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
+import { CameraScanButton } from '../../components/CameraScan'
 
 export function CatalogPage() {
   const [q, setQ] = useState('')
@@ -46,11 +47,15 @@ export function CatalogPage() {
       </div>
       <div className="card">
         <div className="form-grid" style={{ marginBottom: 12 }}>
-          <input className="span-all" type="search" placeholder="Search title, author, subject, ISBN, call number…" value={q}
-            onChange={(e) => { setQ(e.target.value); setPage(0) }} aria-label="Search catalog" />
+          <div className="input-group span-all">
+            <input type="search" placeholder="Search title, author, subject, ISBN, call number, or scan a copy's barcode / RFID…" value={q}
+              onChange={(e) => { setQ(e.target.value); setPage(0) }} aria-label="Search catalog" />
+            <CameraScanButton title="Scan a copy's barcode" onScan={(t) => { setQ(t); setPage(0) }} />
+          </div>
           <select value={field} onChange={(e) => { setField(e.target.value); setPage(0) }} aria-label="Search field">
             <option value="any">Keyword</option><option value="title">Title</option><option value="author">Author</option>
             <option value="subject">Subject</option><option value="isbn">ISBN</option><option value="callno">Call number</option>
+            <option value="barcode">Copy barcode / RFID</option>
           </select>
           <select value={type} onChange={(e) => { setType(e.target.value); setPage(0) }} aria-label="Material type">
             <option value="">All material types</option>

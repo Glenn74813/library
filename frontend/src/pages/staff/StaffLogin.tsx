@@ -1,11 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { login, logout } from '../../api/client'
 import { STAFF_ROLES } from '../../auth/AuthContext'
 import { ErrorAlert, Field } from '../../components/ui'
 import { errorText } from '../../components/Toast'
 import { Logo } from '../../components/Logo'
-import { Icon } from '../../components/Icon'
 import { useLibrary } from '../../api/library'
 
 export function StaffLogin() {
@@ -51,9 +50,6 @@ export function StaffLogin() {
             onChange={(e) => setPassword(e.target.value)} required />
         </Field>
         <button className="btn primary block" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-        <nav className="auth-links" aria-label="Other sign-in options">
-          <Link to="/opac"><Icon name="search" />Search the catalog</Link>
-        </nav>
       </form>
     </div>
   )

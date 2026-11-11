@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { StaffLayout } from './components/StaffLayout'
-import { Landing } from './pages/Landing'
 import { StaffLogin } from './pages/staff/StaffLogin'
 import { DashboardPage } from './pages/staff/DashboardPage'
 import { CirculationPage } from './pages/staff/CirculationPage'
@@ -41,7 +40,8 @@ const EbookReader = lazy(() => import('./pages/reader/EbookReader').then((m) => 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Landing />} />
+      {/* The root opens the staff app (its sign-in page when nobody is signed in); patrons use /my and /opac. */}
+      <Route path="/" element={<Navigate to="/staff" replace />} />
       <Route path="/login" element={<StaffLogin />} />
       <Route path="/staff" element={<StaffLayout />}>
         <Route index element={<DashboardPage />} />
@@ -78,7 +78,7 @@ export default function App() {
       <Route path="/my/forgot-pin" element={<ForgotPin />} />
       <Route path="/my" element={<PatronPortal />} />
       <Route path="/read/:recordId" element={<Suspense fallback={<div className="center-page muted">Opening reader…</div>}><EbookReader /></Suspense>} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/staff" replace />} />
     </Routes>
   )
 }

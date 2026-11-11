@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
 import { Logo } from '../../components/Logo'
 import { ErrorAlert } from '../../components/ui'
@@ -10,6 +10,7 @@ interface Notice { text: string; officer: string; contact: string }
 /** Public privacy notice (Data Privacy Act, RA 10173), linked from the OPAC, kiosk and patron sign-in. */
 export function PrivacyNotice() {
   const lib = useLibrary()
+  const navigate = useNavigate()
   const { data, error } = useAsync(() => api<Notice>('/api/opac/privacy', { anonymous: true }), [])
   return (
     <div className="center-page">
@@ -25,7 +26,7 @@ export function PrivacyNotice() {
               {data.contact.includes('@') ? <a href={`mailto:${data.contact}`}>{data.contact}</a> : data.contact}</p>
           )}
         </>}
-        <div className="row end"><Link className="btn" to="/">Back</Link></div>
+        <div className="row end"><button className="btn" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/my/login'))}>Back</button></div>
       </div>
     </div>
   )

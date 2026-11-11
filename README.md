@@ -28,7 +28,8 @@ cp .env.example .env        # then edit JWT_SECRET, DB_PASSWORD, ADMIN_PASSWORD
 docker compose up -d --build
 ```
 
-- Web app: http://localhost:8081 — sign in as `admin` / `ADMIN_PASSWORD` and **change the password**.
+- Web app: http://localhost:8081 opens the staff sign-in — sign in as `admin` / `ADMIN_PASSWORD` and **change the password**.
+  Patrons use `/my` (My Library) and `/opac` (catalog).
 - API: http://localhost:8080/api, health at `/actuator/health`.
 - PostgreSQL is published on host port `5433` (override with `DB_HOST_PORT`).
 - SIP2 (self-check / RFID stations) listens on TCP `6001`. Keep it on the library LAN.

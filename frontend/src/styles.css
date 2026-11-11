@@ -230,7 +230,7 @@ img { max-width: 100%; }
 }
 .card + .card { margin-top: 16px; }
 /* Cards laid out by a grid are spaced by the grid gap only, so rows line up exactly. */
-.grid > .card, .results > .card, .tiles > .card, .stack > .card, .stats > * { margin-top: 0; }
+.grid > .card, .results > .card, .stack > .card, .stats > * { margin-top: 0; }
 .card > h2:first-child, .card > h3:first-child { margin-top: 0; }
 
 .grid { display: grid; gap: 16px; align-items: stretch; }
@@ -542,11 +542,6 @@ table.data .empty { text-align: center; color: var(--muted); padding: 24px; }
 .center-page { background: var(--bg); }
 .auth-card h1 { text-align: center; }
 
-.landing { width: min(100%, 880px); }
-.landing .tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); margin-top: 16px; }
-.landing .tile { display: grid; gap: 6px; padding: 18px; text-decoration: none; color: var(--text); }
-.landing .tile:hover { border-color: var(--primary); }
-.landing .tile .emoji { font-size: 1.8rem; }
 
 /* ---------------------------------------------------------------- print (receipts) */
 
@@ -640,10 +635,6 @@ table.data .empty { text-align: center; color: var(--muted); padding: 24px; }
 .icon { width: 1.15em; height: 1.15em; flex: none; vertical-align: -0.2em; }
 .nav .section .icon { width: 14px; height: 14px; color: var(--accent); }
 .icon-btn .icon { width: 22px; height: 22px; }
-.landing .tile .tile-icon { width: 30px; height: 30px; color: var(--primary); }
-.landing .hero { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.landing .hero .logo-img { width: clamp(72px, 18vw, 120px); height: clamp(72px, 18vw, 120px); }
-.landing .tile { border-top: 3px solid var(--accent); }
 .osk-key .icon { width: 1.2em; height: 1.2em; }
 
 .logo-img { display: block; object-fit: contain; flex: none; }
