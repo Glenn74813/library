@@ -1,0 +1,205 @@
+package ph.edu.zscmst.library.catalog;
+
+import java.time.Instant;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import ph.edu.zscmst.library.catalog.CatalogDtos.Availability;
+import ph.edu.zscmst.library.catalog.CatalogDtos.ItemDto;
+import ph.edu.zscmst.library.catalog.CatalogDtos.ItemRequest;
+import ph.edu.zscmst.library.catalog.CatalogDtos.RecordDetailDto;
+import ph.edu.zscmst.library.catalog.CatalogDtos.RecordDto;
+import ph.edu.zscmst.library.catalog.CatalogDtos.RecordRequest;
+import ph.edu.zscmst.library.circulation.LoanRepository;
+import ph.edu.zscmst.library.common.ApiException;
+import ph.edu.zscmst.library.common.AuditService;
+import ph.edu.zscmst.library.digital.DigitalService;
+import ph.edu.zscmst.library.digital.DigitalService.DigitalSummary;
+
+@Service
+public class CatalogService {
+
+    private static final Set<String> FIELDS = Set.of("any", "title", "author", "subject", "isbn", "callno");
+
+    private final BibRecordRepository records;
+    private final ItemRepository items;
+    private final LoanRepository loans;
+    private final AuditService audit;
+    private final DigitalService digital;
+
+    public CatalogService(BibRecordRepository records, ItemRepository items, LoanRepository loans,
+                          AuditService audit, DigitalService digital) {
+        this.records = records;
+        this.items = items;
+        this.loans = loans;
+        this.audit = audit;
+        this.digital = digital;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<RecordDto> search(String q, String field, MaterialType type, Pageable pageable) {
+        String f = field == null || !FIELDS.contains(field) ? "any" : field;
+        Page<BibRecord> page = records.search(q == null ? "" : q.trim(), f, type == null ? "" : type.name(), pageable);
+        Map<Long, Availability> availability = availability(page.map(BibRecord::getId).getContent());
+        Map<Long, DigitalSummary> ebooks = digital.summaries(page.getContent());
+        return page.map(r -> RecordDto.of(r, availability.getOrDefault(r.getId(), Availability.NONE), ebooks.get(r.getId())));
+    }
+
+    @Transactional(readOnly = true)
+    public List<RecordDto> newArrivals() {
+        List<BibRecord> list = records.findTop12ByOrderByCreatedAtDesc();
+        Map<Long, Availability> availability = availability(list.stream().map(BibRecord::getId).toList());
+        Map<Long, DigitalSummary> ebooks = digital.summaries(list);
+        return list.stream().map(r -> RecordDto.of(r, availability.getOrDefault(r.getId(), Availability.NONE),
+                ebooks.get(r.getId()))).toList();
+    }
+
+    public Map<Long, Availability> availability(Collection<Long> recordIds) {
+        Map<Long, int[]> counts = new HashMap<>();
+        if (recordIds.isEmpty()) return Map.of();
+        for (Object[] row : items.countByRecordAndStatus(recordIds)) {
+            Long id = (Long) row[0];
+            ItemStatus status = (ItemStatus) row[1];
+            int n = ((Number) row[2]).intValue();
+            int[] c = counts.computeIfAbsent(id, k -> new int[2]);
+            if (status != ItemStatus.WITHDRAWN) c[0] += n;
+            if (status == ItemStatus.AVAILABLE) c[1] += n;
+        }
+        Map<Long, Availability> result = new HashMap<>();
+        counts.forEach((id, c) -> result.put(id, new Availability(c[0], c[1])));
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public BibRecord getRecord(Long id) {
+        return records.findById(id).orElseThrow(() -> ApiException.notFound("Record"));
+    }
+
+    @Transactional(readOnly = true)
+    public RecordDetailDto detail(Long id) {
+        BibRecord r = getRecord(id);
+        List<Item> list = items.findByRecordIdOrderByBarcodeAsc(id);
+        Map<Long, Instant> due = dueDates(list);
+        Availability a = availability(List.of(id)).getOrDefault(id, Availability.NONE);
+        return new RecordDetailDto(RecordDto.of(r, a, digital.summaries(List.of(r)).get(id)),
+                list.stream().map(i -> ItemDto.of(i, due.get(i.getId()))).toList());
+    }
+
+    public Map<Long, Instant> dueDates(List<Item> list) {
+        List<Long> onLoan = list.stream().filter(i -> i.getStatus() == ItemStatus.ON_LOAN).map(Item::getId).toList();
+        Map<Long, Instant> due = new HashMap<>();
+        if (!onLoan.isEmpty()) {
+            loans.findActiveByItemIds(onLoan).forEach(l -> due.put(l.getItem().getId(), l.getDueAt()));
+        }
+        return due;
+    }
+
+    @Transactional
+    public RecordDto createRecord(RecordRequest req) {
+        BibRecord r = new BibRecord();
+        apply(r, req);
+        r = records.save(r);
+        audit.record("RECORD_CREATE", r.getId() + " " + r.getTitle());
+        return RecordDto.of(r, Availability.NONE);
+    }
+
+    @Transactional
+    public RecordDto updateRecord(Long id, RecordRequest req) {
+        BibRecord r = getRecord(id);
+        apply(r, req);
+        records.flush();
+        audit.record("RECORD_UPDATE", r.getId() + " " + r.getTitle());
+        return RecordDto.of(r, availability(List.of(id)).getOrDefault(id, Availability.NONE));
+    }
+
+    @Transactional
+    public void deleteRecord(Long id) {
+        BibRecord r = getRecord(id);
+        if (items.existsByRecordIdAndStatus(id, ItemStatus.ON_LOAN)) {
+            throw ApiException.conflict("Record has copies on loan");
+        }
+        digital.removeFile(id);
+        records.delete(r);
+        records.flush();
+        audit.record("RECORD_DELETE", id + " " + r.getTitle());
+    }
+
+    private static void apply(BibRecord r, RecordRequest req) {
+        r.setTitle(req.title().trim());
+        r.setSubtitle(trim(req.subtitle()));
+        r.setAuthors(trim(req.authors()));
+        r.setIsbn(req.isbn() == null || req.isbn().isBlank() ? null : req.isbn().replace("-", "").trim());
+        r.setPublisher(trim(req.publisher()));
+        r.setPublicationYear(req.publicationYear());
+        r.setEdition(trim(req.edition()));
+        r.setSubjects(trim(req.subjects()));
+        r.setCallNumber(trim(req.callNumber()));
+        r.setMaterialType(req.materialType());
+        r.setLanguage(trim(req.language()));
+        r.setSummary(trim(req.summary()));
+    }
+
+    @Transactional(readOnly = true)
+    public ItemDto lookupItem(String code) {
+        Item i = items.findByIdentifier(code.trim()).orElseThrow(() -> ApiException.notFound("Item"));
+        return ItemDto.of(i, dueDates(List.of(i)).get(i.getId()));
+    }
+
+    @Transactional
+    public ItemDto addItem(Long recordId, ItemRequest req) {
+        Item i = new Item(getRecord(recordId), req.barcode().trim());
+        applyItem(i, req, true);
+        i = items.save(i);
+        audit.record("ITEM_CREATE", i.getBarcode() + " -> record " + recordId);
+        return ItemDto.of(i, null);
+    }
+
+    @Transactional
+    public ItemDto updateItem(Long itemId, ItemRequest req) {
+        Item i = items.findById(itemId).orElseThrow(() -> ApiException.notFound("Item"));
+        i.setBarcode(req.barcode().trim());
+        applyItem(i, req, false);
+        items.flush();
+        audit.record("ITEM_UPDATE", i.getBarcode() + " status=" + i.getStatus());
+        return ItemDto.of(i, dueDates(List.of(i)).get(i.getId()));
+    }
+
+    @Transactional
+    public void deleteItem(Long itemId) {
+        Item i = items.findById(itemId).orElseThrow(() -> ApiException.notFound("Item"));
+        if (i.getStatus() == ItemStatus.ON_LOAN) {
+            throw ApiException.conflict("Item is on loan");
+        }
+        if (loans.existsByItemId(itemId)) {
+            throw ApiException.conflict("Item has circulation history; set its status to WITHDRAWN instead");
+        }
+        items.delete(i);
+        audit.record("ITEM_DELETE", i.getBarcode());
+    }
+
+    private static void applyItem(Item i, ItemRequest req, boolean isNew) {
+        i.setRfidEpc(trim(req.rfidEpc()) == null ? null : req.rfidEpc().trim().toUpperCase());
+        i.setLocation(trim(req.location()));
+        i.setAcquiredDate(req.acquiredDate());
+        i.setPrice(req.price());
+        i.setNotes(trim(req.notes()));
+        if (req.status() != null && req.status() != i.getStatus()) {
+            if (!req.status().isManual() || (!isNew && !i.getStatus().isManual())) {
+                throw ApiException.badRequest("Loan/hold status is managed by circulation");
+            }
+            i.setStatus(req.status());
+        }
+    }
+
+    private static String trim(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
+}
