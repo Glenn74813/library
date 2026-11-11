@@ -188,6 +188,8 @@ public class CatalogService {
     private static void applyItem(Item i, ItemRequest req, boolean isNew) {
         i.setRfidEpc(trim(req.rfidEpc()) == null ? null : req.rfidEpc().trim().toUpperCase());
         i.setLocation(trim(req.location()));
+        i.setAisle(trim(req.aisle()));
+        i.setShelf(trim(req.shelf()));
         i.setAcquiredDate(req.acquiredDate());
         i.setPrice(req.price());
         i.setNotes(trim(req.notes()));

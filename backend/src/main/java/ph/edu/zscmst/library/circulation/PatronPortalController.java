@@ -84,7 +84,12 @@ public class PatronPortalController {
     @PostMapping("/holds")
     @ResponseStatus(HttpStatus.CREATED)
     public HoldDto placeHold(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody RecordHoldBody req) {
-        return service.placeHold(patronId(jwt), req.recordId());
+        return service.placeHold(patronId(jwt), req.recordId(), req.pickupDate());
+    }
+
+    @GetMapping("/holds/calendar/{recordId}")
+    public CirculationDtos.BookingCalendar calendar(@AuthenticationPrincipal Jwt jwt, @PathVariable Long recordId) {
+        return service.bookingCalendar(recordId, patronId(jwt));
     }
 
     @DeleteMapping("/holds/{holdId}")

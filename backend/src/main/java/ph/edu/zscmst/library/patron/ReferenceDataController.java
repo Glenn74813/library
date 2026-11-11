@@ -5,6 +5,7 @@ import java.util.List;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -32,16 +33,17 @@ import ph.edu.zscmst.library.common.AuditService;
 public class ReferenceDataController {
 
     public record CategoryDto(Long id, String name, int loanDays, int maxLoans, int maxRenewals,
-                              BigDecimal finePerDay, BigDecimal maxUnpaidFines) {
+                              BigDecimal finePerDay, BigDecimal maxUnpaidFines, int holdPickupDays) {
         static CategoryDto of(PatronCategory c) {
             return new CategoryDto(c.getId(), c.getName(), c.getLoanDays(), c.getMaxLoans(), c.getMaxRenewals(),
-                    c.getFinePerDay(), c.getMaxUnpaidFines());
+                    c.getFinePerDay(), c.getMaxUnpaidFines(), c.getHoldPickupDays());
         }
     }
 
     public record CategoryRequest(@NotBlank @Size(max = 60) String name, @Min(1) int loanDays, @Min(0) int maxLoans,
                                   @Min(0) int maxRenewals, @NotNull @DecimalMin("0") BigDecimal finePerDay,
-                                  @NotNull @DecimalMin("0") BigDecimal maxUnpaidFines) {
+                                  @NotNull @DecimalMin("0") BigDecimal maxUnpaidFines,
+                                  @Min(1) @Max(30) int holdPickupDays) {
     }
 
     public record CourseDto(Long id, String code, String name) {
@@ -110,6 +112,7 @@ public class ReferenceDataController {
         c.setMaxRenewals(req.maxRenewals());
         c.setFinePerDay(req.finePerDay());
         c.setMaxUnpaidFines(req.maxUnpaidFines());
+        c.setHoldPickupDays(req.holdPickupDays());
     }
 
     @GetMapping("/courses")

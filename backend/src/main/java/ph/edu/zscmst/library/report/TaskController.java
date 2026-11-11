@@ -12,7 +12,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.ItemStatus;
+import ph.edu.zscmst.library.circulation.CirculationService;
 import ph.edu.zscmst.library.circulation.FineRepository;
+import ph.edu.zscmst.library.circulation.HoldRequest;
 import ph.edu.zscmst.library.circulation.HoldRequestRepository;
 import ph.edu.zscmst.library.circulation.HoldStatus;
 import ph.edu.zscmst.library.circulation.LoanRepository;
@@ -38,6 +40,7 @@ public class TaskController {
     private final LoanRepository loans;
     private final FineRepository fines;
     private final ItemRepository items;
+    private final CirculationService circulation;
     private final GateEventRepository gateEvents;
     private final StocktakeSessionRepository stocktakes;
     private final SettingsService settings;
@@ -45,7 +48,8 @@ public class TaskController {
 
     public TaskController(HoldRequestRepository holds, LoanRepository loans, FineRepository fines, ItemRepository items,
                           GateEventRepository gateEvents, StocktakeSessionRepository stocktakes,
-                          SettingsService settings, LibraryClock clock) {
+                          SettingsService settings, LibraryClock clock, CirculationService circulation) {
+        this.circulation = circulation;
         this.holds = holds;
         this.loans = loans;
         this.fines = fines;
@@ -54,6 +58,11 @@ public class TaskController {
         this.stocktakes = stocktakes;
         this.settings = settings;
         this.clock = clock;
+    }
+
+    private static String titles(List<HoldRequest> list) {
+        List<String> names = list.stream().map(h -> h.getRecord().getTitle()).distinct().toList();
+        return String.join(", ", names.subList(0, Math.min(3, names.size()))) + (names.size() > 3 ? " and more" : "");
     }
 
     @GetMapping("/api/tasks")
@@ -104,6 +113,24 @@ public class TaskController {
         if (ready > 0) {
             tasks.add(new Task("holds-ready", Severity.INFO, ready + " reserved item(s) on the hold shelf",
                     "Waiting for the patrons to pick them up.", ready, "/staff/holds"));
+        }
+        List<HoldRequest> risky = circulation.bookingsAtRisk(CirculationService.RISK_DAYS);
+        List<HoldRequest> waiting = risky.stream().filter(h -> h.getStatus() == HoldStatus.PENDING).toList();
+        List<HoldRequest> upcoming = risky.stream().filter(h -> h.getStatus() == HoldStatus.SCHEDULED).toList();
+        if (!waiting.isEmpty()) {
+            tasks.add(new Task("bookings-waiting", Severity.DANGER, waiting.size() + " booked patron(s) still waiting for a copy",
+                    "Pickup date has come but no copy is back: " + titles(waiting)
+                            + ". Contact the borrowers holding these titles.", waiting.size(), "/staff/holds"));
+        }
+        if (!upcoming.isEmpty()) {
+            tasks.add(new Task("bookings-at-risk", Severity.WARNING, upcoming.size() + " booking(s) at risk",
+                    "No copy on the shelf or due back in time for: " + titles(upcoming)
+                            + ". Remind the borrowers to return them.", upcoming.size(), "/staff/holds"));
+        }
+        long bookingsTomorrow = holds.countByStatusAndPickupDate(HoldStatus.SCHEDULED, today.plusDays(1));
+        if (bookingsTomorrow > 0) {
+            tasks.add(new Task("bookings-tomorrow", Severity.INFO, bookingsTomorrow + " booking(s) for pickup tomorrow",
+                    "Copies are set aside automatically in the morning.", bookingsTomorrow, "/staff/holds"));
         }
         long dueToday = loans.countByReturnedAtIsNullAndDueAtBetween(now, endOfToday);
         if (dueToday > 0) {

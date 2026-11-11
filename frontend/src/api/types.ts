@@ -41,6 +41,8 @@ export interface Category {
   maxRenewals: number
   finePerDay: number
   maxUnpaidFines: number
+  /** Days a reserved copy waits on the hold shelf for pickup. */
+  holdPickupDays: number
 }
 
 export interface Course {
@@ -140,7 +142,12 @@ export interface Item {
   callNumber: string | null
   barcode: string
   rfidEpc: string | null
+  /** Section / area, e.g. "Fiction Section". */
   location: string | null
+  aisle: string | null
+  shelf: string | null
+  /** "Fiction Section · Aisle 3 · Shelf 2" */
+  shelfLocation: string | null
   status: ItemStatus
   acquiredDate: string | null
   price: number | null
@@ -156,6 +163,9 @@ export interface RecordDetail {
 export interface OpacItem {
   barcode: string
   location: string | null
+  aisle: string | null
+  shelf: string | null
+  shelfLocation: string | null
   callNumber: string | null
   status: ItemStatus
   dueAt: string | null
@@ -197,7 +207,7 @@ export interface Loan {
   accruedFine: number
 }
 
-export type HoldStatus = 'PENDING' | 'READY' | 'FULFILLED' | 'CANCELLED' | 'EXPIRED'
+export type HoldStatus = 'SCHEDULED' | 'PENDING' | 'READY' | 'FULFILLED' | 'CANCELLED' | 'EXPIRED'
 
 export interface Hold {
   id: number
@@ -211,7 +221,13 @@ export interface Hold {
   readyAt: string | null
   expiresAt: string | null
   itemBarcode: string | null
+  /** Where the set-aside copy is shelved (to pull it for the hold shelf). */
+  itemShelfLocation: string | null
   queuePosition: number | null
+  /** Advance booking: the date the patron wants to pick the book up. */
+  pickupDate: string | null
+  /** Booking that may not get a copy in time (none on the shelf or due back before the date). */
+  atRisk: boolean
 }
 
 export type FineStatus = 'UNPAID' | 'PAID' | 'WAIVED'
@@ -253,6 +269,15 @@ export interface PatronSummary {
 export interface CheckoutResult {
   loan: Loan
   warnings: string[]
+  /** e.g. the loan was shortened because another patron booked the title */
+  notice: string | null
+}
+
+export interface BookingCalendar {
+  firstDate: string
+  lastDate: string
+  unavailable: string[]
+  copies: number
 }
 
 export interface CheckinResult {
@@ -269,7 +294,8 @@ export interface KioskConfig {
   exitMessage: string
   standbyMessages: string[]
   videoUrl: string
-  broadcast: { message: string; at: string } | null
+  /** Current announcement; `hasAudio` means kiosks play the preset's recording instead of speaking. */
+  broadcast: { message: string; at: string; presetId: string | null; hasAudio: boolean } | null
   voice: VoiceSettings
 }
 

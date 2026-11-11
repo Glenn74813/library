@@ -4,6 +4,7 @@ import { api, qs } from '../../api/client'
 import type { BibRecord, Fine, Loan, Page, PatronSummary, Receipt } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { PatronFormModal } from '../../components/PatronForm'
+import { BookModal } from '../../components/BookModal'
 import { ReceiptModal } from '../../components/ReceiptModal'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Pager, StatusBadge, Table, Tabs } from '../../components/ui'
@@ -89,7 +90,7 @@ export function PatronDetailPage() {
         <div className="row">
           <button className="btn" onClick={() => navigate('/staff/patrons')}><Icon name="chevron-left" />Back</button>
           <button className="btn" onClick={() => setPinOpen(true)}>{p.hasPin ? 'Reset PIN' : 'Set portal PIN'}</button>
-          <button className="btn" onClick={() => setHoldOpen(true)}>Place hold</button>
+          <button className="btn" onClick={() => setHoldOpen(true)}>Reserve / book</button>
           <button className="btn primary" onClick={() => setEditing(true)}>Edit</button>
         </div>
       </div>
@@ -132,8 +133,10 @@ export function PatronDetailPage() {
           { header: 'Title', render: (h) => h.title },
           { header: 'Status', render: (h) => <StatusBadge status={h.status} /> },
           { header: 'Placed', render: (h) => fmtDate(h.placedAt) },
-          { header: 'Info', render: (h) => h.status === 'READY' ? `Pick up by ${fmtDate(h.expiresAt)}` : h.queuePosition ? `Queue #${h.queuePosition}` : '—' },
-          { header: '', render: (h) => (h.status === 'PENDING' || h.status === 'READY') &&
+          { header: 'Info', render: (h) => h.status === 'READY' ? `Pick up by ${fmtDate(h.expiresAt)}`
+            : h.status === 'SCHEDULED' ? `Pickup on ${fmtDate(h.pickupDate)}`
+            : h.queuePosition ? `Queue #${h.queuePosition}` : '—' },
+          { header: '', render: (h) => (h.status === 'PENDING' || h.status === 'READY' || h.status === 'SCHEDULED') &&
             <button className="btn small danger" onClick={() => act(() => api(`/api/holds/${h.id}`, { method: 'DELETE' }), 'Hold cancelled')}>Cancel</button> },
         ]} />}
 
@@ -196,6 +199,7 @@ function HoldModal({ patronId, onClose, onSaved }: { patronId: number; onClose: 
   const toast = useToast()
   const { data } = useAsync(() => dq ? api<Page<BibRecord>>(`/api/catalog/records${qs({ q: dq, size: 10 })}`) : Promise.resolve(undefined), [dq])
   const [busy, setBusy] = useState(false)
+  const [booking, setBooking] = useState<BibRecord | null>(null)
   async function place(r: BibRecord) {
     if (busy) return
     setBusy(true)
@@ -210,15 +214,26 @@ function HoldModal({ patronId, onClose, onSaved }: { patronId: number; onClose: 
     }
   }
   return (
-    <Modal title="Place hold" onClose={onClose}>
+    <Modal title="Reserve or book a title" onClose={onClose}>
       <div className="stack">
         <input type="search" placeholder="Search title…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
         {data && <Table rows={data.content} rowKey={(r) => r.id} empty="No matches" columns={[
           { header: 'Title', render: (r) => <>{r.title}<div className="muted small">{r.authors}</div></> },
           { header: 'Available', render: (r) => `${r.availableCopies}/${r.totalCopies}` },
-          { header: '', render: (r) => <button className="btn small primary" disabled={busy} onClick={() => place(r)}>Hold</button> },
+          { header: '', render: (r) => <span className="row">
+            <button className="btn small primary" disabled={busy} onClick={() => place(r)}>Reserve</button>
+            <button className="btn small" onClick={() => setBooking(r)}>Book a date</button>
+          </span> },
         ]} />}
       </div>
+      {booking && <BookModal title={booking.title} calendarPath={`/api/holds/calendar?recordId=${booking.id}&patronId=${patronId}`}
+        onClose={() => setBooking(null)}
+        onBook={async (pickupDate) => {
+          await api('/api/holds', { body: { patronId, recordId: booking.id, pickupDate } })
+          toast(`Booked for ${fmtDate(pickupDate)}`)
+          setBooking(null)
+          onSaved()
+        }} />}
     </Modal>
   )
 }

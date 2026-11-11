@@ -21,15 +21,16 @@ export function SettingsPage() {
       <div className="card">
         <div className="page-head" style={{ marginBottom: 8 }}>
           <h2 style={{ margin: 0 }}>Patron categories (loan rules)</h2>
-          {canEdit && <button className="btn primary" onClick={() => setCat({ loanDays: 7, maxLoans: 3, maxRenewals: 1, finePerDay: 5, maxUnpaidFines: 100 })}><Icon name="plus" />Add</button>}
+          {canEdit && <button className="btn primary" onClick={() => setCat({ loanDays: 7, maxLoans: 3, maxRenewals: 1, finePerDay: 5, maxUnpaidFines: 100, holdPickupDays: 3 })}><Icon name="plus" />Add</button>}
         </div>
         <Table rows={categories} rowKey={(c) => c.id} onRowClick={canEdit ? setCat : undefined} columns={[
           { header: 'Category', render: (c) => <strong>{c.name}</strong> },
           { header: 'Loan period', render: (c) => `${c.loanDays} days` },
           { header: 'Max items', render: (c) => c.maxLoans },
           { header: 'Renewals', render: (c) => c.maxRenewals },
+          { header: 'Pickup window', render: (c) => `${c.holdPickupDays} day(s)` },
           { header: 'Fine / day', render: (c) => fmtMoney(c.finePerDay) },
-          { header: 'Block at unpaid', render: (c) => fmtMoney(c.maxUnpaidFines) },
+          { header: 'Unpaid fines limit', render: (c) => fmtMoney(c.maxUnpaidFines) },
         ]} />
       </div>
       <div className="card">
@@ -76,8 +77,10 @@ function CategoryModal({ value, onClose, onSaved }: { value: Partial<Category>; 
           <Field label="Loan period (days)"><input type="number" min={1} value={f.loanDays ?? ''} onChange={num('loanDays')} /></Field>
           <Field label="Max items on loan"><input type="number" min={0} value={f.maxLoans ?? ''} onChange={num('maxLoans')} /></Field>
           <Field label="Max renewals"><input type="number" min={0} value={f.maxRenewals ?? ''} onChange={num('maxRenewals')} /></Field>
-          <Field label="Overdue fine per day (PHP)"><input type="number" min={0} step="0.01" value={f.finePerDay ?? ''} onChange={num('finePerDay')} /></Field>
-          <Field label="Block borrowing above unpaid (PHP)"><input type="number" min={0} step="0.01" value={f.maxUnpaidFines ?? ''} onChange={num('maxUnpaidFines')} /></Field>
+          <Field label="Pickup window (days)" hint="How long a reserved or booked copy waits on the hold shelf before it is released">
+            <input type="number" min={1} max={30} value={f.holdPickupDays ?? ''} onChange={num('holdPickupDays')} /></Field>
+          <Field label="Overdue fine per day (PHP)" hint="Charged per late day when the item is returned; 0 = no fines"><input type="number" min={0} step="0.01" value={f.finePerDay ?? ''} onChange={num('finePerDay')} /></Field>
+          <Field label="Unpaid fines limit (PHP)" hint="New check-outs are refused while unpaid fines are above this amount"><input type="number" min={0} step="0.01" value={f.maxUnpaidFines ?? ''} onChange={num('maxUnpaidFines')} /></Field>
         </div>
       </div>
     </Modal>

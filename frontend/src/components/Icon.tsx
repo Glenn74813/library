@@ -15,6 +15,7 @@ const files = import.meta.glob<string>([
   '@feather/users.svg', '@feather/volume-2.svg', '@feather/x.svg', '@feather/eye.svg', '@feather/link.svg',
   '@feather/trash-2.svg', '@feather/zoom-in.svg', '@feather/zoom-out.svg', '@feather/arrow-left.svg',
   '@feather/tablet.svg', '@feather/lock.svg', '@feather/bell.svg', '@feather/check-circle.svg',
+  '@feather/music.svg', '@feather/play.svg', '@feather/mic.svg',
 ], { query: '?raw', import: 'default', eager: true })
 
 export type IconName =
@@ -22,7 +23,7 @@ export type IconName =
   | 'calendar' | 'chevron-left' | 'chevron-right' | 'clock' | 'credit-card' | 'delete' | 'download'
   | 'external-link' | 'file-text' | 'key' | 'log-out' | 'menu' | 'monitor' | 'package' | 'plus' | 'printer'
   | 'repeat' | 'search' | 'settings' | 'shield' | 'trending-up' | 'type' | 'upload' | 'user' | 'users'
-  | 'volume-2' | 'x' | 'eye' | 'link' | 'trash-2' | 'zoom-in' | 'zoom-out' | 'arrow-left' | 'tablet' | 'lock' | 'bell' | 'check-circle'
+  | 'volume-2' | 'x' | 'eye' | 'link' | 'trash-2' | 'zoom-in' | 'zoom-out' | 'arrow-left' | 'tablet' | 'lock' | 'bell' | 'check-circle' | 'music' | 'play' | 'mic'
 
 // name -> inner SVG markup (paths, circles, ...) so we can render with our own size and class.
 const ICONS: Record<string, string> = {}

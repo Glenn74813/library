@@ -23,10 +23,15 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.Resource;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.json.JsonMapper;
+import ph.edu.zscmst.library.gate.BroadcastService.Preset;
+
 
 import ph.edu.zscmst.library.catalog.Item;
 import ph.edu.zscmst.library.catalog.ItemRepository;
@@ -61,12 +66,9 @@ public class GateController {
     public record GateConfig(boolean emergencyMode, boolean alarmEnabled) {
     }
 
-    public record BroadcastRequest(@NotBlank @Size(max = 500) String message) {
+    public record BroadcastRequest(@NotBlank @Size(max = 500) String message, String presetId) {
     }
 
-    /** Ready-made announcement (evacuation, drill, closing...) shown as a button on the gate page. */
-    public record Preset(@NotBlank @Size(max = 40) String name, @NotBlank @Size(max = 500) String message) {
-    }
 
     public record EventDto(Long id, String gateId, GateEventType type, String epc, String barcode, String title,
                            Integer visitorCount, String message, Instant occurredAt) {
@@ -90,16 +92,16 @@ public class GateController {
     private final SettingsService settings;
     private final LibraryClock clock;
     private final AuditService audit;
-    private final JsonMapper json;
+    private final BroadcastService broadcasts;
 
     public GateController(GateEventRepository events, ItemRepository items, SettingsService settings,
-                          LibraryClock clock, AuditService audit, JsonMapper json) {
+                          LibraryClock clock, AuditService audit, BroadcastService broadcasts) {
         this.events = events;
         this.items = items;
         this.settings = settings;
         this.clock = clock;
         this.audit = audit;
-        this.json = json;
+        this.broadcasts = broadcasts;
     }
 
     private GateConfig config() {
@@ -214,8 +216,7 @@ public class GateController {
     @Transactional
     public void broadcast(@Valid @RequestBody BroadcastRequest req) {
         Instant now = Instant.now();
-        settings.put("broadcast.message", req.message().trim());
-        settings.put("broadcast.at", now.toString());
+        broadcasts.broadcast(req.message(), req.presetId());
         GateEvent e = new GateEvent("system", GateEventType.BROADCAST, now);
         e.setMessage(req.message().trim());
         events.save(e);
@@ -224,22 +225,37 @@ public class GateController {
 
     @GetMapping("/api/gate/presets")
     public List<Preset> presets() {
-        String raw = settings.get("broadcast.presets", "[]");
-        try {
-            return List.of(json.readValue(raw, Preset[].class));
-        } catch (JacksonException e) {
-            return List.of();
-        }
+        return broadcasts.presets();
     }
 
     @PutMapping("/api/gate/presets")
     @PreAuthorize("hasAnyRole('ADMIN','LIBRARIAN')")
     public List<Preset> updatePresets(@RequestBody @Size(max = 12, message = "at most 12 presets") List<@Valid Preset> presets) {
-        List<Preset> cleaned = presets.stream().map(p -> new Preset(p.name().trim(), p.message().trim())).toList();
-        settings.put("broadcast.presets", json.writeValueAsString(cleaned));
-        audit.record("BROADCAST_PRESETS", cleaned.size() + " preset(s): "
-                + String.join(", ", cleaned.stream().map(Preset::name).toList()));
-        return cleaned;
+        return broadcasts.update(presets);
+    }
+
+    @PostMapping(path = "/api/gate/presets/{id}/audio", consumes = "multipart/form-data")
+    @PreAuthorize("hasAnyRole('ADMIN','LIBRARIAN')")
+    public Preset uploadAudio(@PathVariable String id, @RequestPart("file") MultipartFile file) {
+        return broadcasts.attachAudio(id, file);
+    }
+
+    @DeleteMapping("/api/gate/presets/{id}/audio")
+    @PreAuthorize("hasAnyRole('ADMIN','LIBRARIAN')")
+    public Preset removeAudio(@PathVariable String id) {
+        return broadcasts.removeAudio(id);
+    }
+
+    /** Staff preview of a preset's recording. */
+    @GetMapping("/api/gate/presets/{id}/audio")
+    public ResponseEntity<Resource> presetAudio(@PathVariable String id) {
+        return broadcasts.presetAudio(id).response();
+    }
+
+    /** Recording of the announcement currently being broadcast (kiosks). */
+    @GetMapping("/api/kiosk/broadcast-audio")
+    public ResponseEntity<Resource> broadcastAudio() {
+        return broadcasts.currentAudio().response();
     }
 
     @GetMapping("/api/gate/voice")

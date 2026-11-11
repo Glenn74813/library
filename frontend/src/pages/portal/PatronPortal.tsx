@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, logout, qs } from '../../api/client'
-import type { BibRecord, Ebook, Fine, Hold, Page, PatronSummary } from '../../api/types'
+import type { BibRecord, Ebook, Fine, Hold, OpacDetail, Page, PatronSummary } from '../../api/types'
+import { BookModal } from '../../components/BookModal'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
 import { EbookBadge, ErrorAlert, Field, Pager, Stat, StatusBadge, Table, Tabs } from '../../components/ui'
@@ -24,6 +25,7 @@ export function PatronPortal() {
     () => isPatron ? api<PatronSummary>('/api/me') : Promise.resolve(undefined), [isPatron])
 
   const handledReserve = useRef<string | null>(null)
+  const [booking, setBooking] = useState<{ id: number; title: string } | null>(null)
 
   // Arrived from the OPAC "Reserve" button.
   useEffect(() => {
@@ -37,7 +39,28 @@ export function PatronPortal() {
       .catch((e) => toast(errorText(e), 'error'))
   }, [isPatron]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!isPatron) return <Navigate to={`/my/login${params.get('reserve') ? `?reserve=${params.get('reserve')}` : ''}`} replace />
+  // Arrived from the OPAC "Book a date" button: open the date picker for that title.
+  useEffect(() => {
+    const book = params.get('book')
+    if (!isPatron || !book) return
+    setParams({}, { replace: true })
+    api<OpacDetail>(`/api/opac/records/${book}`, { anonymous: true })
+      .then((d) => setBooking({ id: d.record.id, title: d.record.title }))
+      .catch((e) => toast(errorText(e), 'error'))
+  }, [isPatron]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!isPatron) {
+    const link = params.get('reserve') ? `/my?reserve=${params.get('reserve')}` : params.get('book') ? `/my?book=${params.get('book')}` : null
+    return <Navigate to={`/my/login${link ? `?next=${encodeURIComponent(link)}` : ''}`} replace />
+  }
+
+  async function book(recordId: number, pickupDate: string) {
+    await api('/api/me/holds', { body: { recordId, pickupDate } })
+    toast(`Booked for ${fmtDate(pickupDate)} — we will have it ready that morning`)
+    setBooking(null)
+    setTab('holds')
+    void reload()
+  }
 
   async function act(fn: () => Promise<unknown>, ok: string) {
     try { await fn(); toast(ok); void reload() } catch (e) { toast(errorText(e), 'error') }
@@ -80,9 +103,11 @@ export function PatronPortal() {
           {tab === 'holds' && <HoldsTab onChange={reload} />}
           {tab === 'ebooks' && <EbooksTab />}
           {tab === 'fines' && <FinesTab />}
-          {tab === 'search' && <SearchTab onReserved={() => { setTab('holds'); void reload() }} />}
+          {tab === 'search' && <SearchTab onReserved={() => { setTab('holds'); void reload() }} onBook={(r) => setBooking({ id: r.id, title: r.title })} />}
           {tab === 'account' && <AccountTab />}
         </>}
+        {booking && <BookModal title={booking.title} calendarPath={`/api/me/holds/calendar/${booking.id}`}
+          onBook={(d) => book(booking.id, d)} onClose={() => setBooking(null)} />}
       </main>
     </div>
   )
@@ -101,8 +126,10 @@ function HoldsTab({ onChange }: { onChange: () => void }) {
       <Table rows={data} rowKey={(h) => h.id} empty="No reservations" columns={[
         { header: 'Title', render: (h) => <strong>{h.title}</strong> },
         { header: 'Status', render: (h) => <StatusBadge status={h.status} /> },
-        { header: 'Info', render: (h) => h.status === 'READY' ? `Pick up by ${fmtDate(h.expiresAt)}` : h.queuePosition ? `#${h.queuePosition} in line` : fmtDate(h.placedAt) },
-        { header: '', render: (h) => (h.status === 'PENDING' || h.status === 'READY') && <button className="btn small danger" onClick={() => cancel(h)}>Cancel</button> },
+        { header: 'Info', render: (h) => h.status === 'READY' ? `Pick up by ${fmtDate(h.expiresAt)}`
+          : h.status === 'SCHEDULED' ? `Pickup on ${fmtDate(h.pickupDate)}`
+          : h.queuePosition ? `#${h.queuePosition} in line` : fmtDate(h.placedAt) },
+        { header: '', render: (h) => (h.status === 'PENDING' || h.status === 'READY' || h.status === 'SCHEDULED') && <button className="btn small danger" onClick={() => cancel(h)}>Cancel</button> },
       ]} />
     </div>
   )
@@ -152,7 +179,7 @@ function FinesTab() {
   )
 }
 
-function SearchTab({ onReserved }: { onReserved: () => void }) {
+function SearchTab({ onReserved, onBook }: { onReserved: () => void; onBook: (r: BibRecord) => void }) {
   const [input, setInput] = useState('')
   const [q, setQ] = useState('')
   const toast = useToast()
@@ -174,7 +201,10 @@ function SearchTab({ onReserved }: { onReserved: () => void }) {
       {data && <Table rows={data.content} rowKey={(r) => r.id} empty="No titles found" columns={[
         { header: 'Title', render: (r) => <><strong>{r.title}</strong><div className="muted small">{r.authors}</div></> },
         { header: 'Available', render: (r) => <span className={`badge ${r.availableCopies ? 'ok' : 'warn'}`}>{r.availableCopies}/{r.totalCopies}</span> },
-        { header: '', render: (r) => r.totalCopies > 0 && <button className="btn small primary" disabled={busy !== null} onClick={() => reserve(r)}>{busy === r.id ? 'Reserving…' : 'Reserve'}</button> },
+        { header: '', render: (r) => r.totalCopies > 0 && <span className="row">
+          <button className="btn small primary" disabled={busy !== null} onClick={() => reserve(r)}>{busy === r.id ? 'Reserving…' : 'Reserve'}</button>
+          <button className="btn small" onClick={() => onBook(r)}>Book a date</button>
+        </span> },
       ]} />}
     </div>
   )

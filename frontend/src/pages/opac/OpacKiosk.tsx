@@ -103,7 +103,7 @@ function OpacDetailModal({ id, kiosk, onClose }: { id: number; kiosk: boolean; o
         {!kiosk && r?.ebook?.kind === 'SCHOOL_OWNED' && <Link className="btn primary" to={`/read/${r.id}`}><Icon name="book-open" />Read e-book</Link>}
         {!kiosk && r?.ebook?.kind === 'COMMERCIAL' && <a className="btn" href={r.ebook.externalUrl!} target="_blank" rel="noopener noreferrer">
           <Icon name="external-link" />Open on {r.ebook.provider ?? 'provider'}</a>}
-        {!kiosk && r && r.totalCopies > 0 && <Link className="btn primary" to={`/my?reserve=${r.id}`}>Reserve this title</Link>}
+
         <button className="btn" onClick={onClose}>Close</button></>}>
       {r && (
         <div className="stack">
@@ -116,9 +116,20 @@ function OpacDetailModal({ id, kiosk, onClose }: { id: number; kiosk: boolean; o
           {r.summary && <p>{r.summary}</p>}
           <h3>Copies</h3>
           <Table rows={data!.items} rowKey={(i) => i.barcode} empty="The library has no copies yet" columns={[
-            { header: 'Location', render: (i) => i.location ?? '—' },
+            { header: 'Where to find it', render: (i) => i.shelfLocation ? <strong>{i.shelfLocation}</strong> : '—' },
             { header: 'Call number', render: (i) => <span className="mono">{i.callNumber ?? '—'}</span> },
-            { header: 'Status', render: (i) => <><StatusBadge status={i.status} />{i.dueAt && <span className="small muted"> due {fmtDate(i.dueAt)}</span>}</> },
+            { header: 'Status', render: (i) => (
+              <div className="copy-status">
+                <span><StatusBadge status={i.status} />{i.dueAt && <span className="small muted"> due {fmtDate(i.dueAt)}</span>}</span>
+                {!kiosk && (i.status === 'AVAILABLE' || i.status === 'ON_LOAN' || i.status === 'ON_HOLD') && (
+                  <span className="row">
+                    <Link className="btn small primary" to={`/my?reserve=${r.id}`}
+                      title={i.status === 'AVAILABLE' ? 'We set a copy aside for you to pick up' : 'Join the line for the next returned copy'}>Reserve</Link>
+                    {i.status !== 'AVAILABLE' && <Link className="btn small" to={`/my?book=${r.id}`} title="Choose the day you want to pick it up">Book a date</Link>}
+                  </span>
+                )}
+              </div>
+            ) },
           ]} />
           {kiosk && <p className="muted small">To reserve{r.ebook ? ' or read this e-book' : ''}, sign in to My Library on your phone or ask at the circulation desk.</p>}
           {!kiosk && r.ebook?.kind === 'SCHOOL_OWNED' && <p className="muted small" style={{ margin: 0 }}>School-owned e-book: free to read for signed-in patrons.</p>}

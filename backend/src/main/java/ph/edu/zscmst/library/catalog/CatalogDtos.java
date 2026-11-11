@@ -56,18 +56,21 @@ public final class CatalogDtos {
     }
 
     public record ItemDto(Long id, Long recordId, String title, String callNumber, String barcode, String rfidEpc,
-                          String location, ItemStatus status, LocalDate acquiredDate, BigDecimal price, String notes,
-                          Instant dueAt) {
+                          String location, String aisle, String shelf, String shelfLocation, ItemStatus status,
+                          LocalDate acquiredDate, BigDecimal price, String notes, Instant dueAt) {
         public static ItemDto of(Item i, Instant dueAt) {
             BibRecord r = i.getRecord();
             return new ItemDto(i.getId(), r.getId(), r.getTitle(), r.getCallNumber(), i.getBarcode(), i.getRfidEpc(),
-                    i.getLocation(), i.getStatus(), i.getAcquiredDate(), i.getPrice(), i.getNotes(), dueAt);
+                    i.getLocation(), i.getAisle(), i.getShelf(), i.getShelfLocation(), i.getStatus(), i.getAcquiredDate(),
+                    i.getPrice(), i.getNotes(), dueAt);
         }
     }
 
     public record ItemRequest(@NotBlank @Size(max = 50) String barcode,
                               @Size(max = 64) String rfidEpc,
                               @Size(max = 100) String location,
+                              @Size(max = 20) String aisle,
+                              @Size(max = 20) String shelf,
                               ItemStatus status,
                               LocalDate acquiredDate,
                               BigDecimal price,
@@ -75,7 +78,8 @@ public final class CatalogDtos {
     }
 
     /** Public view used by OPAC kiosks: no internal identifiers beyond what a patron needs. */
-    public record OpacItemDto(String barcode, String location, String callNumber, ItemStatus status, Instant dueAt) {
+    public record OpacItemDto(String barcode, String location, String aisle, String shelf, String shelfLocation,
+                              String callNumber, ItemStatus status, Instant dueAt) {
     }
 
     public record OpacDetailDto(RecordDto record, List<OpacItemDto> items) {

@@ -126,14 +126,16 @@ export function Stat({ label: text, value, tone }: { label: string; value: React
 
 const STATUS_TONE: Record<string, string> = {
   AVAILABLE: 'ok', ON_LOAN: 'info', ON_HOLD: 'warn', LOST: 'bad', MISSING: 'bad', DAMAGED: 'warn',
-  WITHDRAWN: '', PENDING: 'info', READY: 'ok', FULFILLED: '', CANCELLED: '', EXPIRED: 'warn',
+  WITHDRAWN: '', SCHEDULED: 'info', PENDING: 'info', READY: 'ok', FULFILLED: '', CANCELLED: '', EXPIRED: 'warn',
   UNPAID: 'bad', PAID: 'ok', WAIVED: '', ALARM: 'bad', TAMPER: 'bad', POWER_LOSS: 'warn',
   POWER_RESTORED: 'ok', VISITOR: 'info', EMERGENCY_ON: 'bad', EMERGENCY_OFF: 'ok', BROADCAST: 'warn',
   IN: 'ok', OUT: 'info', OK: 'ok', CHECK: 'warn', MISPLACED: 'warn', UNKNOWN: 'bad', DUPLICATE: '',
 }
 
+const STATUS_TEXT: Record<string, string> = { SCHEDULED: 'Booked', PENDING: 'Waiting', READY: 'Ready for pickup' }
+
 export function StatusBadge({ status }: { status: string }) {
-  return <span className={`badge ${STATUS_TONE[status] ?? ''}`}>{label(status)}</span>
+  return <span className={`badge ${STATUS_TONE[status] ?? ''}`}>{STATUS_TEXT[status] ?? label(status)}</span>
 }
 
 export function Tabs<T extends string>({ tabs, value, onChange }: {

@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import ph.edu.zscmst.library.circulation.CirculationDtos.BookingCalendar;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckinRequest;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckinResult;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckoutRequest;
@@ -99,7 +100,13 @@ public class CirculationController {
     @PostMapping("/holds")
     @ResponseStatus(HttpStatus.CREATED)
     public HoldDto placeHold(@Valid @RequestBody HoldRequestBody req) {
-        return service.placeHold(req.patronId(), req.recordId());
+        return service.placeHold(req.patronId(), req.recordId(), req.pickupDate());
+    }
+
+    /** Dates the patron cannot book for this title (all copies booked around them). */
+    @GetMapping("/holds/calendar")
+    public BookingCalendar calendar(@RequestParam Long recordId, @RequestParam Long patronId) {
+        return service.bookingCalendar(recordId, patronId);
     }
 
     @DeleteMapping("/holds/{id}")

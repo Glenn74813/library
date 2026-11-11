@@ -18,6 +18,7 @@ import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.LibraryClock;
 import ph.edu.zscmst.library.common.SettingsService;
 import ph.edu.zscmst.library.common.VoiceSettings;
+import ph.edu.zscmst.library.gate.BroadcastService;
 import ph.edu.zscmst.library.patron.Patron;
 import ph.edu.zscmst.library.patron.PatronRepository;
 
@@ -29,7 +30,7 @@ public class AttendanceService {
                               List<String> standbyMessages, String videoUrl, Broadcast broadcast, VoiceSettings voice) {
     }
 
-    public record Broadcast(String message, Instant at) {
+    public record Broadcast(String message, Instant at, String presetId, boolean hasAudio) {
     }
 
     public record TapRequest(String code, EntryMethod method, Instant timestamp) {
@@ -63,9 +64,11 @@ public class AttendanceService {
     private final PatronRepository patrons;
     private final SettingsService settings;
     private final LibraryClock clock;
+    private final BroadcastService broadcasts;
 
     public AttendanceService(AttendanceLogRepository logs, PatronRepository patrons, SettingsService settings,
-                             LibraryClock clock) {
+                             LibraryClock clock, BroadcastService broadcasts) {
+        this.broadcasts = broadcasts;
         this.logs = logs;
         this.patrons = patrons;
         this.settings = settings;
@@ -74,9 +77,8 @@ public class AttendanceService {
 
     public KioskConfig config() {
         Map<String, String> k = settings.getByPrefix("kiosk.");
-        String broadcastAt = settings.get("broadcast.at", "");
-        Broadcast broadcast = broadcastAt.isBlank() ? null
-                : new Broadcast(settings.get("broadcast.message", ""), Instant.parse(broadcastAt));
+        BroadcastService.CurrentBroadcast c = broadcasts.current();
+        Broadcast broadcast = c == null ? null : new Broadcast(c.message(), c.at(), c.presetId(), c.hasAudio());
         return new KioskConfig(k.getOrDefault("mode", "ATTENDANCE"), Boolean.parseBoolean(k.get("singleTap")),
                 k.getOrDefault("entryMessage", ""), k.getOrDefault("exitMessage", ""),
                 Arrays.stream(k.getOrDefault("standbyMessages", "").split("\\|"))

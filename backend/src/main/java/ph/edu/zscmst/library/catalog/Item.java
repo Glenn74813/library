@@ -3,6 +3,8 @@ package ph.edu.zscmst.library.catalog;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -29,6 +31,8 @@ public class Item {
     private String barcode;
     private String rfidEpc;
     private String location;
+    private String aisle;
+    private String shelf;
     @Enumerated(EnumType.STRING)
     private ItemStatus status = ItemStatus.AVAILABLE;
     private LocalDate acquiredDate;
@@ -52,6 +56,20 @@ public class Item {
     public void setRfidEpc(String rfidEpc) { this.rfidEpc = rfidEpc; }
     public String getLocation() { return location; }
     public void setLocation(String location) { this.location = location; }
+    public String getAisle() { return aisle; }
+    public void setAisle(String aisle) { this.aisle = aisle; }
+    public String getShelf() { return shelf; }
+    public void setShelf(String shelf) { this.shelf = shelf; }
+
+    /** Human-readable place on the floor, e.g. "Fiction Section · Aisle 3 · Shelf 2". */
+    public String getShelfLocation() {
+        List<String> parts = new ArrayList<>();
+        if (location != null) parts.add(location);
+        if (aisle != null) parts.add("Aisle " + aisle);
+        if (shelf != null) parts.add("Shelf " + shelf);
+        return parts.isEmpty() ? null : String.join(" · ", parts);
+    }
+
     public ItemStatus getStatus() { return status; }
     public void setStatus(ItemStatus status) { this.status = status; }
     public LocalDate getAcquiredDate() { return acquiredDate; }

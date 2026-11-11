@@ -128,7 +128,7 @@ public class ReportController {
                     fines.findAll().stream().map(this::fineRow).toList());
             case "collection" -> Csv.download("collection-" + clock.today() + ".csv",
                     List.of("Barcode", "RFID EPC", "Title", "Authors", "ISBN", "Call Number", "Type", "Location",
-                            "Status", "Acquired", "Price"),
+                            "Aisle", "Shelf", "Status", "Acquired", "Price"),
                     items.findAll().stream().map(this::itemRow).toList());
             case "patrons" -> Csv.download("patrons-" + clock.today() + ".csv",
                     List.of("Card Number", "Last Name", "First Name", "Category", "Course", "Email", "Phone",
@@ -156,7 +156,8 @@ public class ReportController {
     private List<?> itemRow(Item i) {
         var r = i.getRecord();
         return Arrays.asList(i.getBarcode(), i.getRfidEpc(), r.getTitle(), r.getAuthors(), r.getIsbn(),
-                r.getCallNumber(), r.getMaterialType(), i.getLocation(), i.getStatus(), i.getAcquiredDate(),
+                r.getCallNumber(), r.getMaterialType(), i.getLocation(), i.getAisle(), i.getShelf(), i.getStatus(),
+                i.getAcquiredDate(),
                 i.getPrice());
     }
 

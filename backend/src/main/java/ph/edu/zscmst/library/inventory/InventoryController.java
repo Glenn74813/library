@@ -51,7 +51,7 @@ public class InventoryController {
     public record ReportItem(String barcode, String title, String callNumber, String location, ItemStatus status) {
         static ReportItem of(Item i) {
             return new ReportItem(i.getBarcode(), i.getRecord().getTitle(), i.getRecord().getCallNumber(),
-                    i.getLocation(), i.getStatus());
+                    i.getShelfLocation(), i.getStatus());
         }
     }
 

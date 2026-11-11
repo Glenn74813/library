@@ -54,7 +54,6 @@ app:
     password: ${ADMIN_PASSWORD:Admin@12345}
   library:
     timezone: ${LIBRARY_TIMEZONE:Asia/Manila}
-    hold-pickup-days: 3
     due-soon-days: 2
   storage:
     # Where uploaded e-book files are kept (outside the web root; served only through the API).

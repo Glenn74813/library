@@ -138,21 +138,30 @@ export function RecordPage() {
           <Table rows={items} rowKey={(i) => i.id} onRowClick={setEditingItem} empty="No copies yet" columns={[
             { header: 'Barcode', render: (i) => <span className="mono">{i.barcode}</span> },
             { header: 'RFID EPC', render: (i) => <span className="mono small">{i.rfidEpc ?? '—'}</span> },
-            { header: 'Location', render: (i) => i.location ?? '—' },
+            { header: 'Shelf location', render: (i) => i.shelfLocation ?? <span className="muted">Not set</span> },
             { header: 'Status', render: (i) => <><StatusBadge status={i.status} />{i.dueAt && <span className="small muted"> due {fmtDate(i.dueAt)}</span>}</> },
           ]} />
         </div>
       )}
-      {editingItem && <ItemModal recordId={Number(id)} item={editingItem} canDelete={canDelete}
+      {editingItem && <ItemModal recordId={Number(id)} item={editingItem} canDelete={canDelete} others={items.filter((x) => x.id !== editingItem.id)}
         onClose={() => setEditingItem(null)} onSaved={() => { setEditingItem(null); void load() }} />}
     </>
   )
 }
 
-function ItemModal({ recordId, item, canDelete, onClose, onSaved }: {
-  recordId: number; item: Partial<Item>; canDelete: boolean; onClose: () => void; onSaved: () => void
+const SECTIONS = ['General Circulation', 'Fiction Section', 'Filipiniana', 'Reference Section', 'Periodicals Section',
+  'Thesis & Research Section', 'Audio-Visual Room', 'Special Collections']
+
+function itemBody(i: Partial<Item>) {
+  return { barcode: i.barcode, rfidEpc: i.rfidEpc, location: i.location, aisle: i.aisle, shelf: i.shelf, status: i.status,
+    acquiredDate: i.acquiredDate || null, price: i.price ?? null, notes: i.notes }
+}
+
+function ItemModal({ recordId, item, canDelete, others, onClose, onSaved }: {
+  recordId: number; item: Partial<Item>; canDelete: boolean; others: Item[]; onClose: () => void; onSaved: () => void
 }) {
   const [f, setF] = useState<Partial<Item>>(item)
+  const [applyAll, setApplyAll] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const toast = useToast()
   const set = <K extends keyof Item>(k: K, v: Item[K] | null) => setF((x) => ({ ...x, [k]: v }))
@@ -160,12 +169,17 @@ function ItemModal({ recordId, item, canDelete, onClose, onSaved }: {
 
   async function save() {
     setError(null)
-    const body = { barcode: f.barcode, rfidEpc: f.rfidEpc, location: f.location, status: f.status,
-      acquiredDate: f.acquiredDate || null, price: f.price ?? null, notes: f.notes }
+    const body = itemBody(f)
     try {
       if (item.id) await api(`/api/catalog/items/${item.id}`, { method: 'PUT', body })
       else await api(`/api/catalog/records/${recordId}/items`, { body })
-      toast('Copy saved')
+      if (applyAll) {
+        // Same shelf for every copy of this title; other fields of those copies are kept as they are.
+        for (const o of others) {
+          await api(`/api/catalog/items/${o.id}`, { method: 'PUT', body: { ...itemBody(o), location: f.location, aisle: f.aisle, shelf: f.shelf } })
+        }
+      }
+      toast(applyAll && others.length ? `Location saved for all ${others.length + 1} copies` : 'Copy saved')
       onSaved()
     } catch (e) {
       setError(errorText(e))
@@ -194,7 +208,16 @@ function ItemModal({ recordId, item, canDelete, onClose, onSaved }: {
         <div className="form-grid">
           <Field label="Barcode *"><input className="mono" value={f.barcode ?? ''} onChange={(e) => set('barcode', e.target.value)} autoFocus /></Field>
           <Field label="RFID tag EPC" hint="Read with the tagging device"><input className="mono" value={f.rfidEpc ?? ''} onChange={(e) => set('rfidEpc', e.target.value)} /></Field>
-          <Field label="Location / shelf"><input value={f.location ?? ''} onChange={(e) => set('location', e.target.value)} /></Field>
+          <Field label="Section / area" hint="Pick or type a section">
+            <input list="sections" value={f.location ?? ''} onChange={(e) => set('location', e.target.value)} />
+            <datalist id="sections">{SECTIONS.map((s) => <option key={s} value={s} />)}</datalist>
+          </Field>
+          <Field label="Aisle" hint="e.g. 1, 3A"><input value={f.aisle ?? ''} maxLength={20} onChange={(e) => set('aisle', e.target.value)} /></Field>
+          <Field label="Shelf" hint="e.g. 2, top"><input value={f.shelf ?? ''} maxLength={20} onChange={(e) => set('shelf', e.target.value)} /></Field>
+          {others.length > 0 && (
+            <label className="check span-all"><input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} />
+              Use this section, aisle and shelf for all {others.length + 1} copies of this title</label>
+          )}
           <Field label="Status">
             <select value={f.status} disabled={circulating} onChange={(e) => set('status', e.target.value as Item['status'])}>
               {ITEM_STATUSES.filter((s) => circulating || (s !== 'ON_LOAN' && s !== 'ON_HOLD'))

@@ -61,7 +61,8 @@ public class OpacController {
         Map<Long, Instant> due = service.dueDates(list);
         Availability a = service.availability(List.of(id)).getOrDefault(id, Availability.NONE);
         return new OpacDetailDto(RecordDto.of(r, a, digital.summaries(List.of(r)).get(id)), list.stream()
-                .map(i -> new OpacItemDto(i.getBarcode(), i.getLocation(), r.getCallNumber(), i.getStatus(),
+                .map(i -> new OpacItemDto(i.getBarcode(), i.getLocation(), i.getAisle(), i.getShelf(), i.getShelfLocation(),
+                        r.getCallNumber(), i.getStatus(),
                         due.get(i.getId())))
                 .toList());
     }

@@ -1,6 +1,7 @@
 package ph.edu.zscmst.library.circulation;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -39,6 +40,8 @@ public class HoldRequest {
     private Instant placedAt = Instant.now();
     private Instant readyAt;
     private Instant expiresAt;
+    /** Requested pickup date for an advance booking; null for "next available copy". */
+    private LocalDate pickupDate;
 
     protected HoldRequest() {
     }
@@ -46,6 +49,13 @@ public class HoldRequest {
     public HoldRequest(BibRecord record, Patron patron) {
         this.record = record;
         this.patron = patron;
+    }
+
+    public static HoldRequest booking(BibRecord record, Patron patron, LocalDate pickupDate) {
+        HoldRequest h = new HoldRequest(record, patron);
+        h.status = HoldStatus.SCHEDULED;
+        h.pickupDate = pickupDate;
+        return h;
     }
 
     public void markReady(Item item, Instant now, Instant expiresAt) {
@@ -64,4 +74,5 @@ public class HoldRequest {
     public Instant getPlacedAt() { return placedAt; }
     public Instant getReadyAt() { return readyAt; }
     public Instant getExpiresAt() { return expiresAt; }
+    public LocalDate getPickupDate() { return pickupDate; }
 }

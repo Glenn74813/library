@@ -77,7 +77,9 @@ function Checkout({ addLog }: { addLog: (ok: boolean, t: string) => void }) {
         body: { patron: summary.patron.cardNumber, item: itemCode.trim(), override },
       })
       addLog(true, `OUT ${r.loan.barcode} "${r.loan.title}" → ${r.loan.patronName}, due ${fmtDate(r.loan.dueAt)}`
-        + (r.warnings.length ? ` (override: ${r.warnings.join('; ')})` : ''))
+        + (r.warnings.length ? ` (override: ${r.warnings.join('; ')})` : '')
+        + (r.notice ? ` — SHORT LOAN: ${r.notice}` : ''))
+      if (r.notice) toast(`Short loan — ${r.notice}. Tell the patron.`, 'warn')
       setItemCode('')
       await refresh()
     } catch (err) {

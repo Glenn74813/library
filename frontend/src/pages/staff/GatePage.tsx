@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { api, download, qs } from '../../api/client'
+import { useEffect, useRef, useState } from 'react'
+import { api, download, fetchBytes, qs } from '../../api/client'
 import type { GateEvent, GateEventType, GateSummary, Page, VoiceSettings } from '../../api/types'
 import { loadVoices, pickVoice, speak, speechSupported } from '../../speech'
 import { hasRole, useSession } from '../../auth/AuthContext'
@@ -9,7 +9,8 @@ import { daysAgo, fmtDateTime, isoDate, label } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
 
-interface Preset { name: string; message: string }
+/** Announcement preset; a recording (MP3...) is played on kiosks instead of text-to-speech. */
+interface Preset { id?: string; name: string; message: string; hasAudio?: boolean; audioFilename?: string | null }
 
 const TYPES: GateEventType[] = ['ALARM', 'TAMPER', 'POWER_LOSS', 'POWER_RESTORED', 'VISITOR', 'EMERGENCY_ON', 'EMERGENCY_OFF', 'BROADCAST']
 
@@ -36,13 +37,13 @@ export function GatePage() {
     }
   }
 
-  const { data: presets, setData: setPresets } = useAsync(() => api<Preset[]>('/api/gate/presets'), [])
+  const { data: presets, setData: setPresets, reload: reloadPresets } = useAsync(() => api<Preset[]>('/api/gate/presets'), [])
   const [managing, setManaging] = useState(false)
 
-  async function broadcast(text: string) {
+  async function broadcast(text: string, presetId?: string) {
     if (!text.trim()) return
     try {
-      await api('/api/gate/broadcast', { body: { message: text } })
+      await api('/api/gate/broadcast', { body: { message: text, presetId } })
       toast('Announcement sent to library displays')
       setMessage('')
       void reload()
@@ -97,15 +98,15 @@ export function GatePage() {
             <div className="row actions-stretch">
               {presets.map((p) => (
                 <button key={p.name} className="btn" title={p.message}
-                  onClick={() => confirm(`Broadcast "${p.name}" to all library displays?\n\n${p.message}`) && broadcast(p.message)}>
-                  <Icon name="volume-2" />{p.name}</button>
+                  onClick={() => confirm(`Broadcast "${p.name}" to all library displays?\n\n${p.message}`) && broadcast(p.message, p.id)}>
+                  <Icon name={p.hasAudio ? 'music' : 'volume-2'} />{p.name}</button>
               ))}
             </div>
           ) : <p className="muted small" style={{ margin: 0 }}>No presets yet.</p>}
         </div>
       </div>
       <VoiceCard canEdit={canEdit} />
-      {managing && presets && <PresetsModal value={presets} onClose={() => setManaging(false)}
+      {managing && presets && <PresetsModal value={presets} onClose={() => { setManaging(false); void reloadPresets() }}
         onSaved={(p) => { setPresets(p); setManaging(false) }} />}
       <div className="card">
         <h2>Event log</h2>
@@ -166,7 +167,8 @@ function PresetsModal({ value, onClose, onSaved }: { value: Preset[]; onClose: (
       <div className="stack">
         <ErrorAlert error={error} />
         <p className="muted small" style={{ margin: 0 }}>Each preset becomes a button on the Security gate page. The message is shown on every
-          kiosk/display and read aloud. Up to 12 presets.</p>
+          kiosk/display and read aloud. Attach a recording (e.g. read in Filipino by a staff member) to play it instead of the
+          computer voice. Up to 12 presets.</p>
         {list.map((p, i) => (
           <div key={i} className="card stack" style={{ padding: 12 }}>
             <div className="form-grid">
@@ -177,6 +179,7 @@ function PresetsModal({ value, onClose, onSaved }: { value: Preset[]; onClose: (
                 <textarea value={p.message} maxLength={500} onChange={(e) => set(i, 'message', e.target.value)} />
               </Field>
             </div>
+            <Recording preset={p} onChange={(u) => setList((l) => l.map((x, j) => (j === i ? { ...x, hasAudio: u.hasAudio, audioFilename: u.audioFilename } : x)))} />
             <div className="row end">
               <button className="btn small" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up">Move up</button>
               <button className="btn small" disabled={i === list.length - 1} onClick={() => move(i, 1)} aria-label="Move down">Move down</button>
@@ -186,6 +189,160 @@ function PresetsModal({ value, onClose, onSaved }: { value: Preset[]; onClose: (
         ))}
       </div>
     </Modal>
+  )
+}
+
+const MAX_RECORD_SECONDS = 90
+
+/** Upload, record (microphone), play or remove the recorded audio of one saved preset. */
+function Recording({ preset, onChange }: { preset: Preset; onChange: (p: Preset) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const recorder = useRef<MediaRecorder | null>(null)
+  const timer = useRef<number>(0)
+  const [busy, setBusy] = useState(false)
+  const [playing, setPlaying] = useState(false)
+  const [recording, setRecording] = useState(false)
+  const [seconds, setSeconds] = useState(0)
+  const [take, setTake] = useState<{ blob: Blob; url: string } | null>(null)
+  const toast = useToast()
+  const canRecord = typeof window !== 'undefined' && 'MediaRecorder' in window && !!navigator.mediaDevices?.getUserMedia
+
+  useEffect(() => () => {
+    audioRef.current?.pause()
+    window.clearInterval(timer.current)
+    recorder.current?.stream.getTracks().forEach((t) => t.stop())
+  }, [])
+
+  if (!preset.id) {
+    return <p className="muted small" style={{ margin: 0 }}><Icon name="mic" /> Save presets first, then attach a recording to this one.</p>
+  }
+
+  async function upload(file: Blob, name: string) {
+    if (file.size > 10 * 1024 * 1024) return toast('Recording is too large (limit 10 MB)', 'error')
+    const fd = new FormData()
+    fd.append('file', file, name)
+    setBusy(true)
+    try {
+      onChange(await api<Preset>(`/api/gate/presets/${preset.id}/audio`, { body: fd }))
+      toast('Recording saved to this preset')
+      discardTake()
+    } catch (e) {
+      toast(errorText(e), 'error')
+    } finally {
+      setBusy(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      const type = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((t) => MediaRecorder.isTypeSupported(t))
+      const rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined)
+      const chunks: Blob[] = []
+      rec.ondataavailable = (e) => e.data.size && chunks.push(e.data)
+      rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop())
+        window.clearInterval(timer.current)
+        setRecording(false)
+        const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' })
+        if (blob.size) setTake({ blob, url: URL.createObjectURL(blob) })
+      }
+      recorder.current = rec
+      discardTake()
+      rec.start()
+      setSeconds(0)
+      setRecording(true)
+      timer.current = window.setInterval(() => setSeconds((s) => {
+        if (s + 1 >= MAX_RECORD_SECONDS && rec.state === 'recording') rec.stop()
+        return s + 1
+      }), 1000)
+    } catch (e) {
+      const denied = e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'SecurityError')
+      toast(denied ? 'Microphone access was blocked. Allow the microphone for this site and try again.' : errorText(e), 'error')
+    }
+  }
+
+  function stopRecording() {
+    if (recorder.current?.state === 'recording') recorder.current.stop()
+  }
+
+  function discardTake() {
+    setTake((t) => { if (t) URL.revokeObjectURL(t.url); return null })
+  }
+
+  function playUrl(url: string, revoke: boolean) {
+    audioRef.current?.pause()
+    const a = new Audio(url)
+    audioRef.current = a
+    a.onended = () => { setPlaying(false); if (revoke) URL.revokeObjectURL(url) }
+    setPlaying(true)
+    return a.play()
+  }
+
+  async function playSaved() {
+    if (playing) { audioRef.current?.pause(); setPlaying(false); return }
+    try {
+      const { data, contentType } = await fetchBytes(`/api/gate/presets/${preset.id}/audio`)
+      await playUrl(URL.createObjectURL(new Blob([data], { type: contentType })), true)
+    } catch (e) {
+      setPlaying(false)
+      toast(errorText(e), 'error')
+    }
+  }
+
+  async function remove() {
+    if (!confirm('Remove this recording? Kiosks will read the message with the computer voice instead.')) return
+    try {
+      onChange(await api<Preset>(`/api/gate/presets/${preset.id}/audio`, { method: 'DELETE' }))
+    } catch (e) {
+      toast(errorText(e), 'error')
+    }
+  }
+
+  const mmss = (n: number) => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`
+  const ext = take?.blob.type.includes('mp4') ? 'm4a' : 'webm'
+
+  return (
+    <div className="recording">
+      <input ref={fileRef} type="file" hidden accept="audio/mpeg,.mp3,audio/wav,.wav,audio/ogg,.ogg,audio/mp4,.m4a,audio/webm,.webm"
+        onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], e.target.files[0].name)} />
+      <Icon name={preset.hasAudio ? 'music' : 'mic'} className="recording-icon" />
+
+      {recording ? (
+        <>
+          <span className="recording-name"><span className="rec-dot" aria-hidden /> <strong>Recording…</strong> {mmss(seconds)}
+            <span className="muted"> (max {mmss(MAX_RECORD_SECONDS)})</span></span>
+          <span className="row"><button className="btn small danger solid" onClick={stopRecording}>Stop</button></span>
+        </>
+      ) : take ? (
+        <>
+          <span className="recording-name"><strong>New recording</strong> · {mmss(seconds)} — listen, then save or record again</span>
+          <span className="row">
+            <button className="btn small" onClick={() => void playUrl(take.url, false)}><Icon name="play" />Play</button>
+            <button className="btn small" onClick={startRecording}><Icon name="mic" />Again</button>
+            <button className="btn small" onClick={discardTake}>Discard</button>
+            <button className="btn small primary" disabled={busy}
+              onClick={() => void upload(take.blob, `${preset.name.replace(/[^\w-]+/g, '-').toLowerCase()}-recording.${ext}`)}>
+              {busy ? 'Saving…' : 'Save recording'}</button>
+          </span>
+        </>
+      ) : (
+        <>
+          <span className="recording-name">
+            {preset.hasAudio ? <><strong>Recording:</strong> {preset.audioFilename}</> : <span className="muted">No recording — computer voice reads the message</span>}
+          </span>
+          <span className="row">
+            {preset.hasAudio && <button className="btn small" onClick={playSaved}><Icon name="play" />{playing ? 'Stop' : 'Play'}</button>}
+            {canRecord && <button className="btn small" onClick={startRecording}><Icon name="mic" />Record</button>}
+            <button className="btn small" disabled={busy} onClick={() => fileRef.current?.click()}>
+              <Icon name="upload" />{busy ? 'Uploading…' : preset.hasAudio ? 'Replace file' : 'Upload MP3'}</button>
+            {preset.hasAudio && <button className="btn small danger" onClick={remove}>Remove</button>}
+          </span>
+        </>
+      )}
+    </div>
   )
 }
 

@@ -1,10 +1,14 @@
 package ph.edu.zscmst.library.catalog;
 
 import java.util.List;
+import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
 public interface BibRecordRepository extends JpaRepository<BibRecord, Long> {
@@ -39,4 +43,9 @@ public interface BibRecordRepository extends JpaRepository<BibRecord, Long> {
     Page<BibRecord> search(String q, String field, String type, Pageable pageable);
 
     List<BibRecord> findTop12ByOrderByCreatedAtDesc();
+
+    /** Row lock used to serialise bookings of one title. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from BibRecord r where r.id = :id")
+    Optional<BibRecord> findByIdForUpdate(Long id);
 }
