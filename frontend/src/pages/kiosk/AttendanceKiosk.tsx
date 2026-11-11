@@ -4,7 +4,7 @@ import type { EntryMethod, KioskConfig, TapResult } from '../../api/types'
 import { useKioskSession } from '../../auth/AuthContext'
 import { BroadcastOverlay } from '../../components/BroadcastOverlay'
 import { applyKey, OnScreenKeyboard } from '../../components/OnScreenKeyboard'
-import { ErrorAlert, Field } from '../../components/ui'
+import { ErrorAlert, Field, PasswordInput } from '../../components/ui'
 import { errorText } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
 import { Logo } from '../../components/Logo'
@@ -63,7 +63,7 @@ export function KioskSetup({ title = 'Attendance kiosk setup' }: { title?: strin
         <p className="muted small" style={{ textAlign: 'center' }}>Sign in once with the kiosk device account. The kiosk stays signed in.</p>
         <ErrorAlert error={error} />
         <Field label="Kiosk username"><input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" required /></Field>
-        <Field label="Password"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
+        <Field label="Password"><PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
         <button className="btn primary block">Start kiosk</button>
       </form>
     </div>

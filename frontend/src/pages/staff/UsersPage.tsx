@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api } from '../../api/client'
 import type { Role, User } from '../../api/types'
 import { errorText, useToast } from '../../components/Toast'
-import { ErrorAlert, Field, Modal, Table } from '../../components/ui'
+import { ErrorAlert, Field, Modal, Table, PasswordInput } from '../../components/ui'
 import { fmtDate } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
@@ -124,7 +124,7 @@ function UserModal({ value, onClose, onSaved }: { value: Partial<User>; onClose:
             </select>
           </Field>
           <Field label={f.id ? 'Temporary password (leave empty to keep)' : 'Temporary password'} hint="At least 8 characters. It is temporary: the person must choose their own at next sign-in">
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+            <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
           </Field>
           {f.id && <Field label="Status" as="div">
             <label className="check"><input type="checkbox" checked={!!f.enabled} onChange={(e) => setF({ ...f, enabled: e.target.checked })} /> Account enabled</label>
@@ -220,7 +220,7 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
           </Field>
           {!isGate && (
             <Field label={f.id ? 'New password (leave empty to keep)' : 'Password'} hint="Entered once on the kiosk's setup screen">
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+              <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
             </Field>
           )}
           {f.id && <Field label="Status" as="div">

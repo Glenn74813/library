@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type InputHTMLAttributes, type ReactNode } from 'react'
 import type { DigitalSummary, Page } from '../api/types'
 import { label } from '../format'
 import { Icon } from './Icon'
@@ -195,5 +195,19 @@ export function ExportMenu({ path, name, label = 'Export…' }: { path: string; 
       <option value="csv">Excel (CSV)</option>
       <option value="pdf">PDF</option>
     </select>
+  )
+}
+
+/** Password or PIN box with an eye button that shows or hides what was typed. */
+export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  const [shown, setShown] = useState(false)
+  return (
+    <span className="password-input">
+      <input {...props} type={shown ? 'text' : 'password'} />
+      <button type="button" className="password-eye" onClick={() => setShown((v) => !v)} tabIndex={-1}
+        aria-label={shown ? 'Hide password' : 'Show password'} aria-pressed={shown} title={shown ? 'Hide' : 'Show'}>
+        <Icon name={shown ? 'eye-off' : 'eye'} />
+      </button>
+    </span>
   )
 }

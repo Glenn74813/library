@@ -4,7 +4,7 @@ import { api } from '../../api/client'
 import { useLibrary } from '../../api/library'
 import { Logo } from '../../components/Logo'
 import { errorText, useToast } from '../../components/Toast'
-import { ErrorAlert, Field } from '../../components/ui'
+import { ErrorAlert, Field, PasswordInput } from '../../components/ui'
 
 /** Patron "Forgot PIN": e-mail a one-time code, then set a new PIN with it. */
 export function ForgotPin() {
@@ -57,8 +57,8 @@ export function ForgotPin() {
         </> : <>
           {info && <div className="alert">{info}</div>}
           <Field label="6-digit code"><input inputMode="numeric" pattern="\d{6}" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} required autoFocus /></Field>
-          <Field label="New PIN (4–8 digits)"><input type="password" inputMode="numeric" pattern="\d{4,8}" value={pin} onChange={(e) => setPin(e.target.value)} required /></Field>
-          <Field label="New PIN again"><input type="password" inputMode="numeric" pattern="\d{4,8}" value={pin2} onChange={(e) => setPin2(e.target.value)} required /></Field>
+          <Field label="New PIN (4–8 digits)"><PasswordInput inputMode="numeric" pattern="\d{4,8}" value={pin} onChange={(e) => setPin(e.target.value)} required /></Field>
+          <Field label="New PIN again"><PasswordInput inputMode="numeric" pattern="\d{4,8}" value={pin2} onChange={(e) => setPin2(e.target.value)} required /></Field>
           <button className="btn primary block" disabled={busy}>{busy ? 'Saving…' : 'Set new PIN'}</button>
           <button type="button" className="btn block" onClick={() => { setStep('request'); setInfo(null) }}>Send another code</button>
         </>}

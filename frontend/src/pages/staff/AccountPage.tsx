@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, logout } from '../../api/client'
 import { useSession } from '../../auth/AuthContext'
-import { Field } from '../../components/ui'
+import { Field, PasswordInput } from '../../components/ui'
 import { errorText, useToast } from '../../components/Toast'
 
 export function AccountPage() {
@@ -35,13 +35,13 @@ export function AccountPage() {
       <form className="card stack" style={{ maxWidth: 480 }} onSubmit={submit}>
         <h2>Change password</h2>
         <Field label="Current password">
-          <input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
+          <PasswordInput autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
         </Field>
         <Field label="New password" hint="At least 8 characters">
-          <input type="password" autoComplete="new-password" minLength={8} value={next} onChange={(e) => setNext(e.target.value)} required />
+          <PasswordInput autoComplete="new-password" minLength={8} value={next} onChange={(e) => setNext(e.target.value)} required />
         </Field>
         <Field label="Confirm new password">
-          <input type="password" autoComplete="new-password" minLength={8} value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+          <PasswordInput autoComplete="new-password" minLength={8} value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
         </Field>
         <div className="row end"><button className="btn primary">Change password</button></div>
       </form>

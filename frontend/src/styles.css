@@ -814,3 +814,14 @@ button.card.choice.selected { border-color: var(--primary); box-shadow: 0 0 0 2p
 .selfcheck .lines { display: grid; gap: 8px; max-height: 50vh; overflow: auto; }
 .selfcheck .loan-row { padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: nowrap; }
 .selfcheck .overdue { color: var(--danger); font-weight: 600; }
+
+/* Password / PIN box with a show-hide eye button inside its right edge. */
+.password-input { position: relative; display: block; }
+.password-input > input { width: 100%; padding-right: 44px; }
+.password-input > .password-eye {
+  position: absolute; top: 50%; right: 4px; transform: translateY(-50%);
+  width: 36px; height: 36px; display: grid; place-items: center;
+  border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer;
+}
+.password-input > .password-eye:hover { color: var(--primary); background: var(--primary-soft, rgba(0, 0, 0, 0.05)); }
+.password-input > .password-eye svg { width: 18px; height: 18px; }

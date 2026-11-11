@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { patronLogin } from '../../api/client'
-import { ErrorAlert, Field } from '../../components/ui'
+import { ErrorAlert, Field, PasswordInput } from '../../components/ui'
 import { errorText } from '../../components/Toast'
 import { Logo } from '../../components/Logo'
 import { Icon } from '../../components/Icon'
@@ -41,7 +41,7 @@ export function PatronLogin() {
         <ErrorAlert error={error} />
         <Field label="Library card / ID number"><input value={card} onChange={(e) => setCard(e.target.value)} autoComplete="username" required autoFocus /></Field>
         <Field label="PIN" hint="New patrons get a PIN at the circulation desk">
-          <input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="current-password" required />
+          <PasswordInput inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="current-password" required />
         </Field>
         <button className="btn primary block" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
         <nav className="auth-links" aria-label="Other options">

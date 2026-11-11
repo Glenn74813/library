@@ -5,7 +5,7 @@ import type { BibRecord, Ebook, Fine, Hold, OpacDetail, Page, PatronSummary } fr
 import { BookModal } from '../../components/BookModal'
 import { hasRole, usePatronSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
-import { EbookBadge, ErrorAlert, Field, Pager, Stat, StatusBadge, Table, Tabs } from '../../components/ui'
+import { EbookBadge, ErrorAlert, Field, Pager, Stat, StatusBadge, Table, Tabs, PasswordInput } from '../../components/ui'
 import { fmtBytes, fmtDate, fmtMoney } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
@@ -225,8 +225,8 @@ function AccountTab() {
   return (
     <form className="card stack" style={{ maxWidth: 420 }} onSubmit={submit}>
       <h2>Change PIN</h2>
-      <Field label="Current PIN"><input type="password" inputMode="numeric" value={current} onChange={(e) => setCurrent(e.target.value)} required /></Field>
-      <Field label="New PIN (4–8 digits)"><input type="password" inputMode="numeric" pattern="\d{4,8}" value={next} onChange={(e) => setNext(e.target.value)} required /></Field>
+      <Field label="Current PIN"><PasswordInput inputMode="numeric" value={current} onChange={(e) => setCurrent(e.target.value)} required /></Field>
+      <Field label="New PIN (4–8 digits)"><PasswordInput inputMode="numeric" pattern="\d{4,8}" value={next} onChange={(e) => setNext(e.target.value)} required /></Field>
       <button className="btn primary">Change PIN</button>
       <hr style={{ width: '100%', border: 0, borderTop: '1px solid var(--border)' }} />
       <h2>Your data</h2>

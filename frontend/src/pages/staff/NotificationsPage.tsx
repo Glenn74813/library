@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import { errorText, useToast } from '../../components/Toast'
-import { Field, StatusBadge, Table } from '../../components/ui'
+import { Field, StatusBadge, Table, PasswordInput } from '../../components/ui'
 import { fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 
@@ -65,7 +65,7 @@ export function NotificationsPage() {
             <Field label="Port" hint="587 (STARTTLS) or 465"><input type="number" value={s.mailPort} onChange={(e) => set('mailPort', Number(e.target.value))} /></Field>
             <Field label="Username"><input value={s.mailUsername} autoComplete="off" onChange={(e) => set('mailUsername', e.target.value)} /></Field>
             <Field label="Password" hint={s.passwordSet ? 'Saved — leave empty to keep' : 'App password for the mailbox'}>
-              <input type="password" value={s.mailPassword} autoComplete="new-password" onChange={(e) => set('mailPassword', e.target.value)} /></Field>
+              <PasswordInput value={s.mailPassword} autoComplete="new-password" onChange={(e) => set('mailPassword', e.target.value)} /></Field>
             <Field label="Sender address" hint="e.g. library@zscmst.edu.ph"><input type="email" value={s.mailFrom} onChange={(e) => set('mailFrom', e.target.value)} /></Field>
             <Field label="Security" as="div"><label className="check"><input type="checkbox" checked={s.mailStarttls} onChange={(e) => set('mailStarttls', e.target.checked)} /> Use STARTTLS</label></Field>
           </div>
@@ -77,7 +77,7 @@ export function NotificationsPage() {
             <Field label="Gateway URL" className="span-all" hint={'Receives POST {"to", "message", "sender"} with the API key as a Bearer token'}>
               <input type="url" value={s.smsUrl} onChange={(e) => set('smsUrl', e.target.value)} /></Field>
             <Field label="API key" hint={s.apiKeySet ? 'Saved — leave empty to keep' : ''}>
-              <input type="password" value={s.smsApiKey} autoComplete="new-password" onChange={(e) => set('smsApiKey', e.target.value)} /></Field>
+              <PasswordInput value={s.smsApiKey} autoComplete="new-password" onChange={(e) => set('smsApiKey', e.target.value)} /></Field>
             <Field label="Sender name"><input value={s.smsSender} maxLength={30} onChange={(e) => set('smsSender', e.target.value)} /></Field>
           </div>
           <h3 style={{ margin: '8px 0 0' }}>Send a test</h3>
