@@ -44,6 +44,7 @@ docker compose up -d --build    # db, api, web, backup
   - How far ahead patrons can **book** (default 60 days).
   - How many days before pickup staff are warned that a booking is **at risk** (default 2).
   - The **default lost-item charge** suggested when a loan is marked lost.
+  - **Patron renewals need staff approval** (default on). Off: patrons' renewals are immediate, as before.
 - **Per patron category**
   - Loan days, item limit and renewals.
   - **Max reservations and bookings** (0 = no limit).

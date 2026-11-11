@@ -80,9 +80,9 @@ public class NotificationController {
                 !settings.get("sms.apiKey", "").isBlank(), settings.get("sms.sender", ""),
                 Integer.parseInt(settings.get("notice.sendHour", "7")),
                 Integer.parseInt(settings.get("notice.dueSoonDays", "2")),
-                Map.of(NoticeType.DUE_SOON, settings.get("notice.template.DUE_SOON", ""),
-                        NoticeType.OVERDUE, settings.get("notice.template.OVERDUE", ""),
-                        NoticeType.HOLD_READY, settings.get("notice.template.HOLD_READY", "")));
+                java.util.Arrays.stream(NoticeType.values()).collect(java.util.stream.Collectors.toMap(
+                        t -> t, t -> settings.get("notice.template." + t, ""), (x, y) -> x,
+                        () -> new java.util.EnumMap<>(NoticeType.class))));
     }
 
     @PutMapping("/settings")

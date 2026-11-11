@@ -107,8 +107,10 @@ function SelfCheckScreen() {
 
   async function renew(l: Loan) {
     try {
-      setPatron(await api<PatronView>('/api/kiosk/selfcheck/renew', { ...opts, body: { patron: { card, pin: savedPin.current }, loanId: l.id } }))
-      add(true, l.title, 'Renewed')
+      const r = await api<{ pending: boolean; message: string; patron: PatronView }>('/api/kiosk/selfcheck/renew',
+        { ...opts, body: { patron: { card, pin: savedPin.current }, loanId: l.id } })
+      setPatron(r.patron)
+      add(true, l.title, r.message)
     } catch (e) { add(false, l.title, errorText(e)) }
   }
 

@@ -5,7 +5,7 @@ import { Field, StatusBadge, Table, PasswordInput } from '../../components/ui'
 import { fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 
-type NoticeType = 'DUE_SOON' | 'OVERDUE' | 'HOLD_READY'
+type NoticeType = 'DUE_SOON' | 'OVERDUE' | 'HOLD_READY' | 'RENEWAL_APPROVED' | 'RENEWAL_REJECTED'
 
 interface Settings {
   mailEnabled: boolean; mailHost: string; mailPort: number; mailUsername: string; mailPassword: string; passwordSet: boolean
@@ -22,6 +22,7 @@ interface NoticeRow {
 
 const TEMPLATE_LABEL: Record<NoticeType, string> = {
   DUE_SOON: 'Due soon', OVERDUE: 'Overdue', HOLD_READY: 'Reserved item ready for pickup',
+  RENEWAL_APPROVED: 'Renewal approved', RENEWAL_REJECTED: 'Renewal rejected ({reason} = the reason you gave)',
 }
 
 /** Notice delivery (e-mail / SMS), schedule and editable message templates. */

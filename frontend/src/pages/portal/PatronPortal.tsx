@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, download, logout, qs } from '../../api/client'
-import type { BibRecord, Ebook, Fine, Hold, OpacDetail, Page, PatronSummary } from '../../api/types'
+import type { BibRecord, Ebook, Fine, Hold, OpacDetail, Page, Patron, PatronSummary, RenewalRequest } from '../../api/types'
 import { BookModal } from '../../components/BookModal'
+import { PatronPhotoModal } from '../../components/PatronPhotoModal'
 import { hasRole, usePatronSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
 import { EbookBadge, ErrorAlert, Field, Pager, Stat, StatusBadge, Table, Tabs, PasswordInput } from '../../components/ui'
@@ -24,6 +25,9 @@ export function PatronPortal() {
   const { data: me, error, reload } = useAsync(
     () => isPatron ? api<PatronSummary>('/api/me') : Promise.resolve(undefined), [isPatron])
 
+  const { data: renewals, reload: reloadRenewals } = useAsync(
+    () => isPatron ? api<RenewalRequest[]>('/api/me/renewals') : Promise.resolve(undefined), [isPatron])
+  const pendingLoans = new Set((renewals ?? []).filter((r) => r.status === 'PENDING').map((r) => r.loanId))
   const handledReserve = useRef<string | null>(null)
   const [booking, setBooking] = useState<{ id: number; title: string } | null>(null)
 
@@ -62,9 +66,15 @@ export function PatronPortal() {
     void reload()
   }
 
-  async function act(fn: () => Promise<unknown>, ok: string) {
-    try { await fn(); toast(ok); void reload() } catch (e) { toast(errorText(e), 'error') }
+  async function renew(loanId: number) {
+    try {
+      const r = await api<{ pending: boolean; message: string }>(`/api/me/loans/${loanId}/renew`, { method: 'POST' })
+      toast(r.pending ? 'Renewal requested. The library will approve or reject it.' : 'Renewed!')
+      void reload(); void reloadRenewals()
+    } catch (e) { toast(errorText(e), 'error') }
   }
+
+
 
   return (
     <div className="public-shell">
@@ -90,21 +100,36 @@ export function PatronPortal() {
             { id: 'fines', label: 'Fines' },
             { id: 'search', label: 'Search & reserve' }, { id: 'account', label: 'Account' }]} />
 
-          {tab === 'loans' && <div className="card">
-            <Table rows={me.loans} rowKey={(l) => l.id} empty="You have no borrowed items" columns={[
-              { header: 'Title', render: (l) => <strong>{l.title}</strong> },
-              { header: 'Due', render: (l) => <span className="nowrap">{fmtDate(l.dueAt)} {l.overdue && <span className="badge bad">Overdue</span>}</span> },
-              { header: 'Renewals', render: (l) => `${l.renewals} of ${l.maxRenewals}` },
-              { header: '', render: (l) => <button className="btn small primary" disabled={l.overdue || l.renewals >= l.maxRenewals}
-                onClick={() => act(() => api(`/api/me/loans/${l.id}/renew`, { method: 'POST' }), 'Renewed!')}>Renew</button> },
-            ]} />
+          {tab === 'loans' && <div className="stack">
+            <div className="card">
+              <Table rows={me.loans} rowKey={(l) => l.id} empty="You have no borrowed items" columns={[
+                { header: 'Title', render: (l) => <strong>{l.title}</strong> },
+                { header: 'Due', render: (l) => <span className="nowrap">{fmtDate(l.dueAt)} {l.overdue && <span className="badge bad">Overdue</span>}</span> },
+                { header: 'Renewals', render: (l) => `${l.renewals} of ${l.maxRenewals}` },
+                { header: '', render: (l) => pendingLoans.has(l.id)
+                  ? <span className="badge info">Renewal requested</span>
+                  : <button className="btn small primary" disabled={l.overdue || l.renewals >= l.maxRenewals} onClick={() => renew(l.id)}>Renew</button> },
+              ]} />
+            </div>
+            {renewals && renewals.length > 0 && <div className="card">
+              <h2 style={{ marginTop: 0 }}>Renewal requests</h2>
+              <Table rows={renewals} rowKey={(r) => r.id} columns={[
+                { header: 'Title', render: (r) => r.title },
+                { header: 'Asked', render: (r) => fmtDate(r.requestedAt) },
+                { header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
+                { header: 'Details', render: (r) => r.status === 'PENDING' ? 'Waiting for the library — keep the item until you hear back'
+                  : r.status === 'APPROVED' ? `Now due ${fmtDate(r.newDueAt)}`
+                  : r.status === 'REJECTED' ? <>Reason: <strong>{r.reason}</strong> · return by {fmtDate(r.dueAt)}</>
+                  : r.reason ?? '—' },
+              ]} />
+            </div>}
           </div>}
 
           {tab === 'holds' && <HoldsTab onChange={reload} />}
           {tab === 'ebooks' && <EbooksTab />}
           {tab === 'fines' && <FinesTab />}
           {tab === 'search' && <SearchTab onReserved={() => { setTab('holds'); void reload() }} onBook={(r) => setBooking({ id: r.id, title: r.title })} />}
-          {tab === 'account' && <AccountTab />}
+          {tab === 'account' && <AccountTab patron={me.patron} onChanged={() => void reload()} />}
         </>}
         {booking && <BookModal title={booking.title} calendarPath={`/api/me/holds/calendar/${booking.id}`}
           onBook={(d) => book(booking.id, d)} onClose={() => setBooking(null)} />}
@@ -210,7 +235,27 @@ function SearchTab({ onReserved, onBook }: { onReserved: () => void; onBook: (r:
   )
 }
 
-function AccountTab() {
+/** The patron's own photo for the printed library card: upload a file or take one with the phone/PC camera. */
+function CardPhoto({ patron, onChanged }: { patron: Patron; onChanged: () => void }) {
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="card stack" style={{ maxWidth: 420 }}>
+      <h2>Library card photo</h2>
+      <div className="row" style={{ flexWrap: 'nowrap', alignItems: 'center' }}>
+        {patron.photoUrl ? <img src={patron.photoUrl} alt="Your card photo" className="avatar" style={{ width: 72, height: 72, cursor: 'default' }} />
+          : <div className="avatar" style={{ width: 72, height: 72, display: 'grid', placeItems: 'center' }}><Icon name="user" size={32} /></div>}
+        <p className="muted small" style={{ margin: 0 }}>Used on your printed library card. Face the camera, plain background, no sunglasses or hat.
+          A JPEG or PNG works best.</p>
+      </div>
+      <button type="button" className="btn" onClick={() => setOpen(true)}><Icon name="camera" />{patron.photoUrl ? 'Change photo' : 'Add a photo'}</button>
+      {open && <PatronPhotoModal patron={patron} endpoint="/api/me/photo" title="Your library card photo"
+        onClose={() => setOpen(false)} onSaved={() => { setOpen(false); toast('Photo saved for your library card'); onChanged() }} />}
+    </div>
+  )
+}
+
+function AccountTab({ patron, onChanged }: { patron: Patron; onChanged: () => void }) {
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const toast = useToast()
@@ -223,6 +268,8 @@ function AccountTab() {
     } catch (err) { toast(errorText(err), 'error') }
   }
   return (
+    <div className="grid cols-2" style={{ alignItems: 'start' }}>
+    <CardPhoto patron={patron} onChanged={onChanged} />
     <form className="card stack" style={{ maxWidth: 420 }} onSubmit={submit}>
       <h2>Change PIN</h2>
       <Field label="Current PIN"><PasswordInput inputMode="numeric" value={current} onChange={(e) => setCurrent(e.target.value)} required /></Field>
@@ -235,5 +282,6 @@ function AccountTab() {
       <button type="button" className="btn" onClick={() => download('/api/me/data-export', 'my-library-data.json')
         .catch((e) => toast(errorText(e), 'error'))}><Icon name="download" />Download my data</button>
     </form>
+    </div>
   )
 }

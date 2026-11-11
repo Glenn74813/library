@@ -29,7 +29,8 @@ public class CirculationSettingsController {
                                       @NotNull Map<MaterialType, Integer> typeLoanDays,
                                       @Min(1) @Max(365) int bookingHorizonDays,
                                       @Min(0) @Max(30) int atRiskDays,
-                                      @NotNull @DecimalMin("0") BigDecimal defaultLostFee) {
+                                      @NotNull @DecimalMin("0") BigDecimal defaultLostFee,
+                                      boolean renewalApproval) {
     }
 
     private final LoanPolicy policy;
@@ -45,7 +46,7 @@ public class CirculationSettingsController {
     @GetMapping("/api/circulation/settings")
     public CirculationSettings get() {
         return new CirculationSettings(policy.roomUseTypes(), policy.typeLoanDays(), policy.bookingHorizonDays(),
-                policy.atRiskDays(), policy.defaultLostFee());
+                policy.atRiskDays(), policy.defaultLostFee(), policy.renewalApproval());
     }
 
     @PutMapping("/api/circulation/settings")
@@ -56,9 +57,10 @@ public class CirculationSettingsController {
         settings.put("circulation.bookingHorizonDays", String.valueOf(req.bookingHorizonDays()));
         settings.put("circulation.atRiskDays", String.valueOf(req.atRiskDays()));
         settings.put("circulation.defaultLostFee", req.defaultLostFee().toPlainString());
+        policy.setRenewalApproval(req.renewalApproval());
         audit.record("CIRCULATION_SETTINGS", "room use only: " + req.roomUseTypes() + "; loan days by type: "
                 + policy.typeLoanDays() + "; booking horizon " + req.bookingHorizonDays() + "d; at-risk "
-                + req.atRiskDays() + "d; lost fee " + req.defaultLostFee());
+                + req.atRiskDays() + "d; lost fee " + req.defaultLostFee() + "; renewal approval " + req.renewalApproval());
         return get();
     }
 }

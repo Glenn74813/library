@@ -46,9 +46,11 @@ public class PatronPortalController {
     private final PatronRepository patrons;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokens;
+    private final RenewalService renewals;
 
     public PatronPortalController(CirculationService service, PatronRepository patrons,
-                                  PasswordEncoder passwordEncoder, TokenService tokens) {
+                                  PasswordEncoder passwordEncoder, TokenService tokens, RenewalService renewals) {
+        this.renewals = renewals;
         this.service = service;
         this.patrons = patrons;
         this.passwordEncoder = passwordEncoder;
@@ -71,9 +73,15 @@ public class PatronPortalController {
         return PageResponse.of(service.history(patronId(jwt), PageRequest.of(page, 20)), l -> l);
     }
 
+    /** Asks to renew; with renewal approval on, staff decide (see {@link RenewalService}). */
     @PostMapping("/loans/{loanId}/renew")
-    public LoanDto renew(@AuthenticationPrincipal Jwt jwt, @PathVariable Long loanId) {
-        return service.renew(loanId, patronId(jwt));
+    public RenewalService.Outcome renew(@AuthenticationPrincipal Jwt jwt, @PathVariable Long loanId) {
+        return renewals.request(loanId, patronId(jwt), RenewalRequest.Channel.PORTAL);
+    }
+
+    @GetMapping("/renewals")
+    public List<RenewalService.RenewalDto> renewals(@AuthenticationPrincipal Jwt jwt) {
+        return renewals.ofPatron(patronId(jwt));
     }
 
     @GetMapping("/holds")

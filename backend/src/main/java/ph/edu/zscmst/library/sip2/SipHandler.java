@@ -29,6 +29,8 @@ import ph.edu.zscmst.library.circulation.HoldRequestRepository;
 import ph.edu.zscmst.library.circulation.HoldStatus;
 import ph.edu.zscmst.library.circulation.Loan;
 import ph.edu.zscmst.library.circulation.LoanRepository;
+import ph.edu.zscmst.library.circulation.RenewalRequest;
+import ph.edu.zscmst.library.circulation.RenewalService;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.common.LibraryClock;
@@ -81,12 +83,14 @@ public class SipHandler {
     private final LibraryClock clock;
     private final TransactionTemplate tx;
     private final SystemSettings system;
+    private final RenewalService renewals;
 
     public SipHandler(AppUserRepository users, PasswordEncoder passwords, PatronRepository patrons, ItemRepository items,
                       LoanRepository loans, HoldRequestRepository holds, CirculationService circulation,
                       SettingsService settings, AuditService audit, LibraryClock clock, TransactionTemplate tx,
-                      SystemSettings system) {
+                      SystemSettings system, RenewalService renewals) {
         this.system = system;
+        this.renewals = renewals;
         this.users = users;
         this.passwords = passwords;
         this.patrons = patrons;
@@ -354,13 +358,15 @@ public class SipHandler {
                 if (!renewalPolicy) {
                     error = "You already have this item";
                 } else {
-                    Result<LoanDto> renewed = attempt(() -> circulation.renew(existing.get().getId(), p.get().getId()));
-                    if (renewed.ok()) {
+                    Result<RenewalService.Outcome> renewed = attempt(() ->
+                            renewals.request(existing.get().getId(), p.get().getId(), RenewalRequest.Channel.SIP2));
+                    if (renewed.ok() && !renewed.value().pending()) {
+                        LoanDto l = renewed.value().loan();
                         return r.fixed('1').fixed('Y').fixed('N').fixed('Y').fixed(now()).field("AO", institution(m))
-                                .field("AA", card).field("AB", barcode).field("AJ", renewed.value().title())
-                                .field("AH", date(renewed.value().dueAt())).field("AF", "Renewed");
+                                .field("AA", card).field("AB", barcode).field("AJ", l.title())
+                                .field("AH", date(l.dueAt())).field("AF", "Renewed");
                     }
-                    error = renewed.error();
+                    error = renewed.ok() ? "Renewal request sent to the library for approval" : renewed.error();
                 }
             }
         }
@@ -411,13 +417,15 @@ public class SipHandler {
         String error = p.isEmpty() ? "Patron not found" : !pinOk(p.get(), m.field("AD")) ? "Wrong PIN"
                 : loan.isEmpty() || !loan.get().getPatron().getId().equals(p.get().getId()) ? "This item is not on loan to you" : null;
         if (error == null) {
-            Result<LoanDto> renewed = attempt(() -> circulation.renew(loan.get().getId(), p.get().getId()));
-            if (renewed.ok()) {
+            Result<RenewalService.Outcome> renewed = attempt(() ->
+                    renewals.request(loan.get().getId(), p.get().getId(), RenewalRequest.Channel.SIP2));
+            if (renewed.ok() && !renewed.value().pending()) {
+                LoanDto l = renewed.value().loan();
                 return r.fixed('1').fixed('Y').fixed('N').fixed('Y').fixed(now()).field("AO", institution(m))
-                        .field("AA", card).field("AB", barcode).field("AJ", renewed.value().title())
-                        .field("AH", date(renewed.value().dueAt()));
+                        .field("AA", card).field("AB", barcode).field("AJ", l.title()).field("AH", date(l.dueAt()));
             }
-            error = renewed.error();
+            // Waiting for staff approval counts as "not renewed yet" for the station.
+            error = renewed.ok() ? "Renewal request sent to the library for approval" : renewed.error();
         }
         return r.fixed('0').fixed('N').fixed('U').fixed('N').fixed(now()).field("AO", institution(m))
                 .field("AA", card).field("AB", barcode).field("AJ", "").field("AH", "").field("AF", error);

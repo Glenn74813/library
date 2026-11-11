@@ -153,6 +153,10 @@ Tester(s): ______________________  Date: ____________  Version / build: ________
 | M17 | Admin resets a staff password | Staff must choose a new password before anything else | | |
 | M18 | Print barcode labels, spine labels and 10 ID cards on real sheets | Print lines up with the labels / card stock | | |
 | M19 | Reports → E-book usage after patrons open e-books | Openings, readers and titles match | | |
+| M20 | Patron asks to renew in My Library | Shows "Renewal requested"; appears under Renewal requests and in the bell | | |
+| M21 | Staff reject a renewal without a reason, then with one | Refused without; patron gets the reason and keeps the due date | | |
+| M22 | Staff approve a renewal | New due date; patron notified | | |
+| M23 | Patron uploads a photo, and takes one with a phone camera | Photo on patron page and on the printed ID card | | |
 
 ## Sign-off
 

@@ -18,6 +18,7 @@ const NAV: { section: string; icon: IconName; items: NavItem[] }[] = [
     items: [
       { to: '/staff/circulation', label: 'Check out / in' },
       { to: '/staff/loans', label: 'Loans & overdue' },
+      { to: '/staff/renewals', label: 'Renewal requests' },
       { to: '/staff/holds', label: 'Holds' },
       { to: '/staff/fines', label: 'Fines & payments' },
     ],

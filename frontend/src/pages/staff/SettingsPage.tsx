@@ -130,6 +130,7 @@ interface CirculationSettings {
   bookingHorizonDays: number
   atRiskDays: number
   defaultLostFee: number
+  renewalApproval: boolean
 }
 
 /** Library-wide rules: room-use-only and loan periods per material type, bookings, lost items. */
@@ -177,6 +178,10 @@ function LibraryRulesCard({ canEdit }: { canEdit: boolean }) {
             <input type="number" min={0} max={30} value={data.atRiskDays} onChange={(e) => set({ atRiskDays: Number(e.target.value) })} /></Field>
           <Field label="Default lost-item charge (PHP)" hint="Suggested when marking a loan lost; staff can change it each time">
             <input type="number" min={0} step="0.01" value={data.defaultLostFee} onChange={(e) => set({ defaultLostFee: Number(e.target.value) })} /></Field>
+          <Field label="Patron renewals" as="div" className="span-all"
+            hint="Renewals from My Library, the self-checkout kiosk and self-check stations wait under Circulation → Renewal requests. Renewals at the desk are immediate.">
+            <label className="check"><input type="checkbox" checked={data.renewalApproval} onChange={(e) => set({ renewalApproval: e.target.checked })} />
+              Need staff approval</label></Field>
         </div>
       </fieldset>
       {canEdit && <div className="row end"><button className="btn primary" onClick={save}>Save</button></div>}

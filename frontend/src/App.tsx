@@ -25,6 +25,7 @@ import { AuditPage } from './pages/staff/AuditPage'
 import { PrivacyPage } from './pages/staff/PrivacyPage'
 import { SystemSettingsPage } from './pages/staff/SystemSettingsPage'
 import { LabelsPage } from './pages/staff/LabelsPage'
+import { RenewalsPage } from './pages/staff/RenewalsPage'
 import { PrivacyNotice } from './pages/public/PrivacyNotice'
 import { AccountPage } from './pages/staff/AccountPage'
 import { OpacKiosk } from './pages/opac/OpacKiosk'
@@ -68,6 +69,7 @@ export default function App() {
         <Route path="privacy" element={<PrivacyPage />} />
         <Route path="system" element={<SystemSettingsPage />} />
         <Route path="labels" element={<LabelsPage />} />
+        <Route path="renewals" element={<RenewalsPage />} />
         <Route path="account" element={<AccountPage />} />
       </Route>
       <Route path="/privacy" element={<PrivacyNotice />} />

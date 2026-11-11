@@ -100,6 +100,15 @@ public class LoanPolicy {
         }
     }
 
+    /** Patron renewals (portal, kiosk, SIP2) wait for staff approval; desk renewals never do. */
+    public boolean renewalApproval() {
+        return !"false".equals(settings.get("circulation.renewalApproval", "true"));
+    }
+
+    public void setRenewalApproval(boolean required) {
+        settings.put("circulation.renewalApproval", String.valueOf(required));
+    }
+
     public boolean isLoanable(Item i) {
         return !isRoomUse(i);
     }

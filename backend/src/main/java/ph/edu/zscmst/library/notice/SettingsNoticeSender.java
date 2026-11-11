@@ -31,7 +31,9 @@ public class SettingsNoticeSender implements NoticeSender {
     static final Map<NoticeType, String> SUBJECTS = Map.of(
             NoticeType.DUE_SOON, "Library item due soon",
             NoticeType.OVERDUE, "Library item overdue",
-            NoticeType.HOLD_READY, "Your reserved item is ready for pickup");
+            NoticeType.HOLD_READY, "Your reserved item is ready for pickup",
+            NoticeType.RENEWAL_APPROVED, "Your renewal was approved",
+            NoticeType.RENEWAL_REJECTED, "Your renewal was not approved");
 
     private final SettingsService settings;
     private final SystemSettings system;

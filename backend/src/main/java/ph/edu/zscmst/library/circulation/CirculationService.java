@@ -65,12 +65,14 @@ public class CirculationService {
     private final LibraryCalendar calendar;
     private final SettingsService settings;
     private final LoanPolicy policy;
+    private final RenewalRequestRepository renewalRequests;
 
     public CirculationService(LoanRepository loans, HoldRequestRepository holds, FineRepository fines,
                               ItemRepository items, PatronRepository patrons, BibRecordRepository records,
                               NoticeService notices, LibraryClock clock, AuditService audit, LibraryCalendar calendar,
-                              SettingsService settings, LoanPolicy policy) {
+                              SettingsService settings, LoanPolicy policy, RenewalRequestRepository renewalRequests) {
         this.policy = policy;
+        this.renewalRequests = renewalRequests;
         this.calendar = calendar;
         this.settings = settings;
         this.loans = loans;
@@ -198,6 +200,7 @@ public class CirculationService {
         Instant now = offlineAt == null ? Instant.now() : offlineAt;
         if (now.isBefore(loan.getCheckoutAt())) now = loan.getCheckoutAt();
         loan.setReturnedAt(now);
+        renewalRequests.cancelPendingForLoan(loan.getId());
         BigDecimal fine = assessOverdueFine(loan, now);
         String holdFor = routeReturnedItem(item);
         audit.record("CHECKIN", item.getBarcode() + " from " + loan.getPatron().getCardNumber()
@@ -210,14 +213,42 @@ public class CirculationService {
 
     @Transactional
     public LoanDto renew(Long loanId, Long requiredPatronId) {
+        return renewLoan(loanId, requiredPatronId, false);
+    }
+
+    /**
+     * Renews a loan. {@code requestedBeforeDue}: approving a patron's request that was made before the
+     * due date, so the loan may be overdue by the time staff decide.
+     */
+    @Transactional
+    public LoanDto renewLoan(Long loanId, Long requiredPatronId, boolean requestedBeforeDue) {
+        Loan loan = renewableLoan(loanId, requiredPatronId);
+        Instant newDue = renewedDueDate(loan, requestedBeforeDue);
+        if (newDue.isAfter(loan.getDueAt())) loan.setDueAt(newDue);
+        loan.setRenewals(loan.getRenewals() + 1);
+        audit.record("RENEW", loan.getItem().getBarcode() + " for " + loan.getPatron().getCardNumber());
+        return toDto(loan);
+    }
+
+    /** The due date a renewal would give now, or the reason it can't be renewed (nothing is changed). */
+    @Transactional(readOnly = true, noRollbackFor = ApiException.class)
+    public Instant previewRenewal(Long loanId, Long requiredPatronId, boolean requestedBeforeDue) {
+        return renewedDueDate(renewableLoan(loanId, requiredPatronId), requestedBeforeDue);
+    }
+
+    private Loan renewableLoan(Long loanId, Long requiredPatronId) {
         Loan loan = loans.findWithDetailsById(loanId).orElseThrow(() -> ApiException.notFound("Loan"));
-        Patron p = loan.getPatron();
-        if (requiredPatronId != null && !p.getId().equals(requiredPatronId)) {
+        if (requiredPatronId != null && !loan.getPatron().getId().equals(requiredPatronId)) {
             throw ApiException.notFound("Loan");
         }
+        return loan;
+    }
+
+    private Instant renewedDueDate(Loan loan, boolean requestedBeforeDue) {
+        Patron p = loan.getPatron();
         if (!loan.isActive()) throw ApiException.badRequest("Loan was already returned");
         if (p.isBlocked()) throw ApiException.conflict("Patron is blocked");
-        if (loan.getDueAt().isBefore(Instant.now())) {
+        if (!requestedBeforeDue && loan.getDueAt().isBefore(Instant.now())) {
             throw ApiException.conflict("Overdue items cannot be renewed; please return the item to the library");
         }
         PatronCategory cat = p.getCategory();
@@ -238,11 +269,7 @@ public class CirculationService {
                         + clock.format(clock.endOfDay(limit.get().bookedFor())) + ". Please return it by the due date.");
             }
         }
-        Instant newDue = clock.endOfDay(wanted);
-        if (newDue.isAfter(loan.getDueAt())) loan.setDueAt(newDue);
-        loan.setRenewals(loan.getRenewals() + 1);
-        audit.record("RENEW", loan.getItem().getBarcode() + " for " + p.getCardNumber());
-        return toDto(loan);
+        return clock.endOfDay(wanted);
     }
 
     @Transactional
@@ -251,6 +278,7 @@ public class CirculationService {
         if (!loan.isActive()) throw ApiException.badRequest("Loan was already returned");
         Instant now = Instant.now();
         loan.setReturnedAt(now);
+        renewalRequests.cancelPendingForLoan(loan.getId());
         assessOverdueFine(loan, now);
         loan.getItem().setStatus(ItemStatus.LOST);
         if (charge.signum() > 0) {

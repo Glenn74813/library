@@ -11,8 +11,11 @@ import java.util.Optional;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -52,6 +55,36 @@ public class PatronPhotoController {
     @Transactional
     public PatronDto upload(@PathVariable Long id, @RequestPart("file") MultipartFile file) throws IOException {
         Patron p = patrons.findById(id).orElseThrow(() -> ApiException.notFound("Patron"));
+        replacePhoto(p, file);
+        audit.record("PATRON_PHOTO", p.getCardNumber());
+        return PatronDto.of(p);
+    }
+
+    /** A patron uploads or takes their own photo for the library card in My Library. */
+    @PostMapping(path = "/api/me/photo", consumes = "multipart/form-data")
+    @Transactional
+    public PatronDto uploadOwn(@AuthenticationPrincipal Jwt jwt, @RequestPart("file") MultipartFile file) throws IOException {
+        Patron p = own(jwt);
+        replacePhoto(p, file);
+        audit.record(p.getCardNumber(), "PATRON_PHOTO_SELF", "photo for the library card");
+        return PatronDto.of(p);
+    }
+
+    @DeleteMapping("/api/me/photo")
+    @Transactional
+    public PatronDto removeOwn(@AuthenticationPrincipal Jwt jwt) {
+        Patron p = own(jwt);
+        clearPhoto(p);
+        return PatronDto.of(p);
+    }
+
+    private Patron own(Jwt jwt) {
+        Number id = jwt.getClaim("patronId");
+        if (id == null) throw new ApiException(HttpStatus.FORBIDDEN, "Not a patron token");
+        return patrons.findById(id.longValue()).orElseThrow(() -> ApiException.notFound("Patron"));
+    }
+
+    private void replacePhoto(Patron p, MultipartFile file) throws IOException {
         if (file.isEmpty()) throw ApiException.badRequest("Choose a photo");
         system.checkUpload(SystemSettings.UploadKind.PHOTO, file.getSize());
         FileStorage.StoredFile stored;
@@ -67,18 +100,20 @@ public class PatronPhotoController {
         p.setPhotoUrl("/api/opac/photos/" + stored.key());
         patrons.flush();
         if (old != null) storage.delete(old);
-        audit.record("PATRON_PHOTO", p.getCardNumber());
-        return PatronDto.of(p);
     }
 
     @DeleteMapping("/api/patrons/{id}/photo")
     @Transactional
     public PatronDto remove(@PathVariable Long id) {
         Patron p = patrons.findById(id).orElseThrow(() -> ApiException.notFound("Patron"));
+        clearPhoto(p);
+        return PatronDto.of(p);
+    }
+
+    private void clearPhoto(Patron p) {
         if (p.getPhotoKey() != null) storage.delete(p.getPhotoKey());
         p.setPhotoKey(null);
         p.setPhotoUrl(null);
-        return PatronDto.of(p);
     }
 
     @GetMapping("/api/opac/photos/{key}")

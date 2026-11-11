@@ -131,6 +131,7 @@ const STATUS_TONE: Record<string, string> = {
   UNPAID: 'bad', PAID: 'ok', WAIVED: '', ALARM: 'bad', TAMPER: 'bad', POWER_LOSS: 'warn',
   POWER_RESTORED: 'ok', VISITOR: 'info', EMERGENCY_ON: 'bad', EMERGENCY_OFF: 'ok', BROADCAST: 'warn',
   IN: 'ok', OUT: 'info', OK: 'ok', CHECK: 'warn', MISPLACED: 'warn', UNKNOWN: 'bad', DUPLICATE: '',
+  APPROVED: 'ok', REJECTED: 'bad',
 }
 
 const STATUS_TEXT: Record<string, string> = {

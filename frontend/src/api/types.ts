@@ -514,3 +514,30 @@ export interface Task {
   count: number
   link: string
 }
+
+export type RenewalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
+
+/** A patron's renewal request, decided by staff. */
+export interface RenewalRequest {
+  id: number
+  loanId: number
+  title: string
+  barcode: string
+  patronId: number
+  patronName: string
+  cardNumber: string
+  status: RenewalStatus
+  channel: 'PORTAL' | 'KIOSK' | 'SIP2'
+  requestedAt: string
+  dueAt: string
+  /** Due date if approved now (pending requests only). */
+  proposedDueAt: string | null
+  newDueAt: string | null
+  decidedAt: string | null
+  decidedBy: string | null
+  reason: string | null
+  renewals: number
+  maxRenewals: number
+  /** Why approving would fail now (e.g. someone reserved the title since). */
+  problem: string | null
+}

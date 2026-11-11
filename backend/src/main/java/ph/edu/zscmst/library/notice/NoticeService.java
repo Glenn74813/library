@@ -42,10 +42,15 @@ public class NoticeService {
 
     @Transactional
     public void queue(Patron patron, NoticeType type, String title, Instant date, String reference) {
+        queue(patron, type, title, date, reference, "");
+    }
+
+    /** {@code reason} fills the template's {reason} placeholder (renewal decisions). */
+    public void queue(Patron patron, NoticeType type, String title, Instant date, String reference, String reason) {
         if (notices.existsByTypeAndReference(type, reference)) return;
         String template = settings.get("notice.template." + type, "{name}: {title} ({due})");
         String message = render(template, Map.of("name", patron.getFirstName(), "title", title,
-                "due", clock.format(date)));
+                "due", clock.format(date), "reason", reason == null ? "" : reason));
         notices.save(new Notice(patron, type, message, reference));
     }
 

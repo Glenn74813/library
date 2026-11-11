@@ -5,8 +5,13 @@ import { Icon } from './Icon'
 import { errorText } from './Toast'
 import { ErrorAlert, Modal } from './ui'
 
-/** Upload a patron photo or take one with the desk webcam. */
-export function PatronPhotoModal({ patron, onClose, onSaved }: { patron: Patron; onClose: () => void; onSaved: () => void }) {
+/**
+ * Upload a patron photo or take one with the camera. Staff use the patron's endpoint; patrons
+ * set their own card photo in My Library (`endpoint="/api/me/photo"`).
+ */
+export function PatronPhotoModal({ patron, onClose, onSaved, endpoint = `/api/patrons/${patron.id}/photo`, title = `Photo — ${patron.fullName}` }: {
+  patron: Patron; onClose: () => void; onSaved: () => void; endpoint?: string; title?: string
+}) {
   const [mode, setMode] = useState<'choose' | 'camera'>('choose')
   const [shot, setShot] = useState<{ blob: Blob; url: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -46,7 +51,7 @@ export function PatronPhotoModal({ patron, onClose, onSaved }: { patron: Patron;
     fd.append('file', blob, name)
     setBusy(true)
     try {
-      await api(`/api/patrons/${patron.id}/photo`, { body: fd })
+      await api(endpoint, { body: fd })
       onSaved()
     } catch (e) {
       setError(errorText(e))
@@ -56,11 +61,11 @@ export function PatronPhotoModal({ patron, onClose, onSaved }: { patron: Patron;
   }
 
   async function remove() {
-    try { await api(`/api/patrons/${patron.id}/photo`, { method: 'DELETE' }); onSaved() } catch (e) { setError(errorText(e)) }
+    try { await api(endpoint, { method: 'DELETE' }); onSaved() } catch (e) { setError(errorText(e)) }
   }
 
   return (
-    <Modal title={`Photo — ${patron.fullName}`} onClose={onClose} footer={<>
+    <Modal title={title} onClose={onClose} footer={<>
       {patron.photoUrl && !shot && <button className="btn danger" onClick={remove}>Remove photo</button>}
       <span className="spacer" />
       <button className="btn" onClick={onClose}>Cancel</button>
@@ -79,7 +84,7 @@ export function PatronPhotoModal({ patron, onClose, onSaved }: { patron: Patron;
           {shot && <button className="btn" onClick={() => { setShot(null); void startCamera() }}>Retake</button>}
           {mode === 'choose' && <>
             <button className="btn" onClick={() => fileRef.current?.click()} disabled={busy}><Icon name="upload" />Upload file</button>
-            <button className="btn" onClick={startCamera}><Icon name="camera" />Use webcam</button>
+            <button className="btn" onClick={startCamera}><Icon name="camera" />Take a photo</button>
           </>}
         </div>
       </div>

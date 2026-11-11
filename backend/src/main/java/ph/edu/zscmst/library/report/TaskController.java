@@ -14,6 +14,8 @@ import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.ItemStatus;
 import ph.edu.zscmst.library.catalog.LoanPolicy;
 import ph.edu.zscmst.library.circulation.CirculationService;
+import ph.edu.zscmst.library.circulation.RenewalRequest;
+import ph.edu.zscmst.library.circulation.RenewalRequestRepository;
 import ph.edu.zscmst.library.circulation.FineRepository;
 import ph.edu.zscmst.library.circulation.HoldRequest;
 import ph.edu.zscmst.library.circulation.HoldRequestRepository;
@@ -43,6 +45,7 @@ public class TaskController {
     private final ItemRepository items;
     private final CirculationService circulation;
     private final LoanPolicy policy;
+    private final RenewalRequestRepository renewalRequests;
     private final GateEventRepository gateEvents;
     private final StocktakeSessionRepository stocktakes;
     private final SettingsService settings;
@@ -51,7 +54,8 @@ public class TaskController {
     public TaskController(HoldRequestRepository holds, LoanRepository loans, FineRepository fines, ItemRepository items,
                           GateEventRepository gateEvents, StocktakeSessionRepository stocktakes,
                           SettingsService settings, LibraryClock clock, CirculationService circulation,
-                          LoanPolicy policy) {
+                          LoanPolicy policy, RenewalRequestRepository renewalRequests) {
+        this.renewalRequests = renewalRequests;
         this.circulation = circulation;
         this.policy = policy;
         this.holds = holds;
@@ -117,6 +121,11 @@ public class TaskController {
         if (ready > 0) {
             tasks.add(new Task("holds-ready", Severity.INFO, ready + " reserved item(s) on the hold shelf",
                     "Waiting for the patrons to pick them up.", ready, "/staff/holds"));
+        }
+        long renewalsWaiting = renewalRequests.countByStatus(RenewalRequest.Status.PENDING);
+        if (renewalsWaiting > 0) {
+            tasks.add(new Task("renewals-pending", Severity.WARNING, renewalsWaiting + " renewal request(s) to approve",
+                    "Patrons are waiting to hear whether they may keep the items longer.", renewalsWaiting, "/staff/renewals"));
         }
         List<HoldRequest> risky = circulation.bookingsAtRisk(policy.atRiskDays());
         List<HoldRequest> waiting = risky.stream().filter(h -> h.getStatus() == HoldStatus.PENDING).toList();

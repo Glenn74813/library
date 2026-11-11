@@ -73,6 +73,17 @@ If the server cannot be reached, the desk switches to **Offline mode** by itself
 - From a patron's page: **Reserve / book**. From the OPAC: the **Reserve** and **Book** buttons next to
   each copy.
 
+### 1.6a Renewal requests
+**Circulation → Renewal requests**. When patrons renew in My Library, at the self-checkout kiosk or
+a self-check station, the renewal waits here (the bell shows how many). Each row shows the current
+due date and the due date **if approved now**, already adjusted for other patrons' reservations and
+bookings; a red note means it can't be renewed any more (e.g. someone reserved the title since).
+- **Approve** renews the loan and tells the patron the new due date.
+- **Reject** needs a reason (pick one or type your own); the patron keeps the original due date and
+  receives the reason by e-mail/SMS and in My Library.
+- Renewals you do at the desk are immediate. A request is cancelled automatically if the item comes back.
+- A request made before the due date can still be approved after it.
+
 ### 1.7 Fines and payments
 **Circulation → Fines & payments**: select unpaid fines and **Pay** to issue an official receipt
 (reprint any time), or **Waive** with a reason (librarian). Manual charges (damaged item, lost card)
@@ -150,7 +161,11 @@ whether it is **Available** or **On loan** and where it is shelved. School-owned
 ### 2.2 My Library (`/my`)
 Sign in with your card number and PIN (get the PIN at the desk). You can:
 
-- see your loans and due dates, and **renew** (unless overdue or at the renewal limit);
+- see your loans and due dates, and ask to **renew** (unless overdue or at the renewal limit). The
+  library approves or rejects the request; you are told by e-mail/SMS and under *Renewal requests*.
+  Keep the item until then;
+- add or change your **library card photo**: upload a picture or take one with your phone or PC camera
+  (Account tab);
 - **reserve** a title, or **book** it for a pickup date from the availability calendar;
 - see fines and receipts;
 - read school-owned e-books;

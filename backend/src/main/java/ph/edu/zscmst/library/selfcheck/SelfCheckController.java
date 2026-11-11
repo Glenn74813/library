@@ -21,6 +21,8 @@ import ph.edu.zscmst.library.circulation.CirculationDtos.CheckoutResult;
 import ph.edu.zscmst.library.circulation.CirculationDtos.LoanDto;
 import ph.edu.zscmst.library.circulation.CirculationDtos.PatronSummary;
 import ph.edu.zscmst.library.circulation.CirculationService;
+import ph.edu.zscmst.library.circulation.RenewalRequest;
+import ph.edu.zscmst.library.circulation.RenewalService;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.common.SettingsService;
@@ -58,6 +60,10 @@ public class SelfCheckController {
     public record Checkout(String title, String barcode, Instant dueAt, String notice, PatronView patron) {
     }
 
+    /** {@code pending}: the renewal waits for staff approval. */
+    public record Renewed(boolean pending, String message, PatronView patron) {
+    }
+
     public record Returned(String title, Instant dueAt, BigDecimal fine, String message) {
     }
 
@@ -67,9 +73,12 @@ public class SelfCheckController {
     private final SettingsService settings;
     private final SystemSettings system;
     private final AuditService audit;
+    private final RenewalService renewals;
 
     public SelfCheckController(PatronRepository patrons, PasswordEncoder passwords, CirculationService circulation,
-                               SettingsService settings, SystemSettings system, AuditService audit) {
+                               SettingsService settings, SystemSettings system, AuditService audit,
+                               RenewalService renewals) {
+        this.renewals = renewals;
         this.patrons = patrons;
         this.passwords = passwords;
         this.circulation = circulation;
@@ -102,10 +111,11 @@ public class SelfCheckController {
     }
 
     @PostMapping("/api/kiosk/selfcheck/renew")
-    public PatronView renew(@Valid @RequestBody RenewRequest req) {
+    public Renewed renew(@Valid @RequestBody RenewRequest req) {
         Patron p = verify(req.patron());
-        circulation.renew(req.loanId(), p.getId());
-        return view(p);
+        RenewalService.Outcome o = renewals.request(req.loanId(), p.getId(), RenewalRequest.Channel.KIOSK);
+        return new Renewed(o.pending(), o.pending() ? "Renewal requested — the library will approve or reject it"
+                : "Renewed", view(p));
     }
 
     @PostMapping("/api/kiosk/selfcheck/return")
