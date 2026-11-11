@@ -65,14 +65,47 @@ const NAV: { section: string; icon: IconName; items: NavItem[] }[] = [
   },
 ]
 
+const COLLAPSED_KEY = 'smartlib.nav.collapsed'
+const PUBLIC_SECTION = 'Public screens'
+
+function loadCollapsed(): string[] {
+  try { return JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]') } catch { return [] }
+}
+
 export function StaffLayout() {
   const session = useSession()
   const lib = useLibrary()
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
+  // Sidebar sections the user folded away; remembered on this computer.
+  const [collapsed, setCollapsed] = useState<string[]>(loadCollapsed)
 
   useEffect(() => setOpen(false), [location.pathname])
+
+  // Updates from the latest state, so quick successive clicks are all kept.
+  const updateCollapsed = (change: (prev: string[]) => string[]) => setCollapsed((prev) => {
+    const next = change(prev)
+    try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+    return next
+  })
+  const toggle = (section: string) =>
+    updateCollapsed((prev) => (prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]))
+
+  // Opening a page (from a link or the bell) unfolds its section, so the current page is always visible.
+  useEffect(() => {
+    const current = NAV.find((g) => g.items.some((i) => i.to === '/staff' ? location.pathname === '/staff' : location.pathname.startsWith(i.to)))
+    if (current) updateCollapsed((prev) => (prev.includes(current.section) ? prev.filter((s) => s !== current.section) : prev))
+  }, [location.pathname])
+
+  const sectionHead = (name: string, icon: IconName) => {
+    const isOpen = !collapsed.includes(name)
+    return (
+      <button type="button" className={`section ${isOpen ? '' : 'collapsed'}`} aria-expanded={isOpen} onClick={() => toggle(name)}>
+        <Icon name={icon} />{name}<Icon name="chevron-down" className="chevron" />
+      </button>
+    )
+  }
 
   if (!hasRole(session, ...STAFF_ROLES)) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
@@ -98,17 +131,19 @@ export function StaffLayout() {
             if (!items.length) return null
             return (
               <div key={group.section} style={{ display: 'contents' }}>
-                <div className="section"><Icon name={group.icon} />{group.section}</div>
-                {items.map((i) => (
+                {sectionHead(group.section, group.icon)}
+                {!collapsed.includes(group.section) && items.map((i) => (
                   <NavLink key={i.to} to={i.to} end={i.to === '/staff'}>{i.label}</NavLink>
                 ))}
               </div>
             )
           })}
-          <div className="section"><Icon name="monitor" />Public screens</div>
-          <NavLink to="/opac" target="_blank">OPAC kiosk</NavLink>
-          <NavLink to="/kiosk/attendance" target="_blank">Attendance kiosk</NavLink>
-          <NavLink to="/kiosk/selfcheck" target="_blank">Self-checkout kiosk</NavLink>
+          {sectionHead(PUBLIC_SECTION, 'monitor')}
+          {!collapsed.includes(PUBLIC_SECTION) && <>
+            <NavLink to="/opac" target="_blank">OPAC kiosk</NavLink>
+            <NavLink to="/kiosk/attendance" target="_blank">Attendance kiosk</NavLink>
+            <NavLink to="/kiosk/selfcheck" target="_blank">Self-checkout kiosk</NavLink>
+          </>}
         </nav>
         <div className="user-block">
           <div><strong>{session!.user.displayName}</strong></div>
