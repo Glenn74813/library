@@ -1,7 +1,8 @@
-import { useCallback, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, qs } from '../../api/client'
-import { MATERIAL_TYPES, type BibRecord, type OpacDetail, type Page } from '../../api/types'
+import { MATERIAL_TYPES, type BibRecord, type KioskConfig, type OpacDetail, type Page, type VoiceSettings } from '../../api/types'
+import { BroadcastOverlay } from '../../components/BroadcastOverlay'
 import { applyKey, OnScreenKeyboard } from '../../components/OnScreenKeyboard'
 import { EbookBadge, Modal, Pager, StatusBadge, Table } from '../../components/ui'
 import { fmtDate, label } from '../../format'
@@ -9,12 +10,14 @@ import { useAsync } from '../../hooks/useAsync'
 import { useInactivity } from '../../hooks/useInactivity'
 import { Icon } from '../../components/Icon'
 import { Logo } from '../../components/Logo'
+import { useLibraryConfig } from '../../api/library'
 
 /**
  * Online Public Access Catalog. Live link to the LMS catalog with real-time availability.
  * Add ?kiosk=1 on touch kiosks: large controls, on-screen keyboard, auto-reset after inactivity.
  */
 export function OpacKiosk() {
+  const config = useLibraryConfig()
   const [params] = useSearchParams()
   const kiosk = params.get('kiosk') === '1'
   const [input, setInput] = useState('')
@@ -31,11 +34,22 @@ export function OpacKiosk() {
     [query, page])
   const { data: arrivals } = useAsync(() => api<BibRecord[]>('/api/opac/new-arrivals', { anonymous: true }), [])
 
+  // Public displays show emergency/announcement broadcasts too (polled; no sign-in needed).
+  const [broadcast, setBroadcast] = useState<{ broadcast: KioskConfig['broadcast']; voice: VoiceSettings } | null>(null)
+  useEffect(() => {
+    if (!kiosk) return
+    const load = () => api<{ broadcast: KioskConfig['broadcast']; voice: VoiceSettings }>('/api/opac/broadcast', { anonymous: true })
+      .then(setBroadcast).catch(() => {})
+    load()
+    const t = setInterval(load, 15_000)
+    return () => clearInterval(t)
+  }, [kiosk])
+
   const reset = useCallback(() => {
     setInput(''); setQuery({ q: '', field: 'any', type: '' }); setField('any'); setType(''); setPage(0); setDetailId(null)
     setShowKeys(kiosk)
   }, [kiosk])
-  useInactivity(kiosk ? 90_000 : 24 * 3600_000, reset)
+  useInactivity(kiosk ? config.opacResetSeconds * 1000 : 24 * 3600_000, reset)
 
   function search(e?: FormEvent) {
     e?.preventDefault()
@@ -47,8 +61,10 @@ export function OpacKiosk() {
 
   return (
     <div className={`public-shell ${kiosk ? 'kiosk' : ''}`}>
+      {kiosk && <BroadcastOverlay broadcast={broadcast?.broadcast} voice={broadcast?.voice} audioPath="/api/opac/broadcast-audio" anonymous />}
       <div className="public-bar">
-        <Logo /><span className="title">ZSCMST Library Catalog</span>
+        <Logo /><span className="title">{config.profile.shortName} Library Catalog</span>
+        {!kiosk && <Link className="btn small ghost" to="/privacy">Privacy</Link>}
         {!kiosk && <Link className="btn small" to="/my"><Icon name="user" />My account</Link>}
         {kiosk && <button className="btn small ghost" style={{ background: 'transparent', color: 'inherit', borderColor: 'currentColor' }} onClick={reset}>Start over</button>}
       </div>
@@ -112,6 +128,7 @@ function OpacDetailModal({ id, kiosk, onClose }: { id: number; kiosk: boolean; o
             {([['Author(s)', r.authors], ['Call number', r.callNumber], ['Publisher', r.publisher], ['Year', r.publicationYear],
               ['Edition', r.edition], ['ISBN', r.isbn], ['Type', label(r.materialType)], ['Subjects', r.subjects]] as const)
               .filter(([, v]) => v).map(([k, v]) => <div key={k}><dt className="muted small">{k}</dt><dd style={{ margin: 0 }}>{v}</dd></div>)}
+            {data!.extraFields.map((x) => <div key={x.label}><dt className="muted small">{x.label}</dt><dd style={{ margin: 0 }}>{x.value}</dd></div>)}
           </dl>
           {r.summary && <p>{r.summary}</p>}
           <h3>Copies</h3>
@@ -121,7 +138,8 @@ function OpacDetailModal({ id, kiosk, onClose }: { id: number; kiosk: boolean; o
             { header: 'Status', render: (i) => (
               <div className="copy-status">
                 <span><StatusBadge status={i.status} />{i.dueAt && <span className="small muted"> due {fmtDate(i.dueAt)}</span>}</span>
-                {!kiosk && (i.status === 'AVAILABLE' || i.status === 'ON_LOAN' || i.status === 'ON_HOLD') && (
+                {i.roomUseOnly && <span className="badge warn">Room use only</span>}
+                {!kiosk && !i.roomUseOnly && (i.status === 'AVAILABLE' || i.status === 'ON_LOAN' || i.status === 'ON_HOLD') && (
                   <span className="row">
                     <Link className="btn small primary" to={`/my?reserve=${r.id}`}
                       title={i.status === 'AVAILABLE' ? 'We set a copy aside for you to pick up' : 'Join the line for the next returned copy'}>Reserve</Link>

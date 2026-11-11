@@ -24,6 +24,31 @@ public interface AttendanceLogRepository extends JpaRepository<AttendanceLog, Lo
 
     long countByTimeInAfterAndTimeOutIsNull(Instant after);
 
+    List<AttendanceLog> findByTimeOutIsNullAndTimeInBefore(Instant before);
+
+    @EntityGraph(attributePaths = {"patron"})
+    Page<AttendanceLog> findByPatronIdOrderByTimeInDesc(Long patronId, Pageable pageable);
+
+    long countByPatronId(Long patronId);
+
+    long countByPatronIdAndTimeOutIsNotNull(Long patronId);
+
+    long countByPatronIdAndTimeInBetween(Long patronId, Instant from, Instant to);
+
+    /** Total minutes spent in the library by one patron (completed visits only). */
+    @Query(value = "SELECT coalesce(sum(extract(epoch FROM (time_out - time_in)) / 60), 0) FROM attendance_log WHERE patron_id = :patronId AND time_out IS NOT NULL", nativeQuery = true)
+    double totalMinutes(Long patronId);
+
+    @EntityGraph(attributePaths = {"patron"})
+    @Query("""
+            select a from AttendanceLog a join a.patron p
+            where a.timeIn >= :from and a.timeIn < :to
+              and (lower(p.cardNumber) like lower(concat('%', :q, '%')) or lower(p.firstName) like lower(concat('%', :q, '%'))
+                   or lower(p.lastName) like lower(concat('%', :q, '%')))
+            order by a.timeIn desc
+            """)
+    Page<AttendanceLog> search(Instant from, Instant to, String q, Pageable pageable);
+
     @Query("select count(distinct a.patron.id) from AttendanceLog a where a.timeIn >= :from and a.timeIn < :to")
     long countDistinctPatrons(Instant from, Instant to);
 

@@ -3,7 +3,12 @@ package ph.edu.zscmst.library.catalog;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -18,6 +23,24 @@ public final class CatalogDtos {
     private CatalogDtos() {
     }
 
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+
+    /** Parses the stored custom-field JSON; tolerant of empty or malformed values. */
+    public static Map<String, String> customValues(String json) {
+        if (json == null || json.isBlank()) return Map.of();
+        try {
+            Map<String, String> out = new LinkedHashMap<>();
+            JSON.readTree(json).properties().forEach(e -> out.put(e.getKey(), e.getValue().asString()));
+            return out;
+        } catch (JacksonException e) {
+            return Map.of();
+        }
+    }
+
+    public static String customJson(Map<String, String> values) {
+        return values == null || values.isEmpty() ? null : JSON.writeValueAsString(values);
+    }
+
     public record Availability(int total, int available) {
         public static final Availability NONE = new Availability(0, 0);
     }
@@ -25,7 +48,8 @@ public final class CatalogDtos {
     public record RecordDto(Long id, String title, String subtitle, String authors, String isbn, String publisher,
                             Integer publicationYear, String edition, String subjects, String callNumber,
                             MaterialType materialType, String language, String summary, int totalCopies,
-                            int availableCopies, Instant createdAt, Instant updatedAt, DigitalSummary ebook) {
+                            int availableCopies, Instant createdAt, Instant updatedAt, DigitalSummary ebook,
+                            Map<String, String> customFields) {
         public static RecordDto of(BibRecord r, Availability a) {
             return of(r, a, null);
         }
@@ -34,7 +58,7 @@ public final class CatalogDtos {
             return new RecordDto(r.getId(), r.getTitle(), r.getSubtitle(), r.getAuthors(), r.getIsbn(),
                     r.getPublisher(), r.getPublicationYear(), r.getEdition(), r.getSubjects(), r.getCallNumber(),
                     r.getMaterialType(), r.getLanguage(), r.getSummary(), a.total(), a.available(),
-                    r.getCreatedAt(), r.getUpdatedAt(), ebook);
+                    r.getCreatedAt(), r.getUpdatedAt(), ebook, customValues(r.getCustomFields()));
         }
     }
 
@@ -52,17 +76,19 @@ public final class CatalogDtos {
                                 @Size(max = 100) String callNumber,
                                 @NotNull MaterialType materialType,
                                 @Size(max = 40) String language,
-                                String summary) {
+                                String summary,
+                                Map<String, @Size(max = 500) String> customFields) {
     }
 
     public record ItemDto(Long id, Long recordId, String title, String callNumber, String barcode, String rfidEpc,
                           String location, String aisle, String shelf, String shelfLocation, ItemStatus status,
-                          LocalDate acquiredDate, BigDecimal price, String notes, Instant dueAt) {
-        public static ItemDto of(Item i, Instant dueAt) {
+                          LocalDate acquiredDate, BigDecimal price, String notes, Instant dueAt,
+                          boolean roomUseOnly, Boolean roomUseOverride) {
+        public static ItemDto of(Item i, Instant dueAt, boolean roomUseOnly) {
             BibRecord r = i.getRecord();
             return new ItemDto(i.getId(), r.getId(), r.getTitle(), r.getCallNumber(), i.getBarcode(), i.getRfidEpc(),
                     i.getLocation(), i.getAisle(), i.getShelf(), i.getShelfLocation(), i.getStatus(), i.getAcquiredDate(),
-                    i.getPrice(), i.getNotes(), dueAt);
+                    i.getPrice(), i.getNotes(), dueAt, roomUseOnly, i.getRoomUseOnly());
         }
     }
 
@@ -71,6 +97,8 @@ public final class CatalogDtos {
                               @Size(max = 100) String location,
                               @Size(max = 20) String aisle,
                               @Size(max = 20) String shelf,
+                              /** null = follow the material type; true = room use only; false = can be borrowed */
+                              Boolean roomUseOnly,
                               ItemStatus status,
                               LocalDate acquiredDate,
                               BigDecimal price,
@@ -79,10 +107,14 @@ public final class CatalogDtos {
 
     /** Public view used by OPAC kiosks: no internal identifiers beyond what a patron needs. */
     public record OpacItemDto(String barcode, String location, String aisle, String shelf, String shelfLocation,
-                              String callNumber, ItemStatus status, Instant dueAt) {
+                              String callNumber, ItemStatus status, Instant dueAt, boolean roomUseOnly) {
     }
 
-    public record OpacDetailDto(RecordDto record, List<OpacItemDto> items) {
+    /** A custom field shown publicly, with its label. */
+    public record LabeledValue(String label, String value) {
+    }
+
+    public record OpacDetailDto(RecordDto record, List<OpacItemDto> items, List<LabeledValue> extraFields) {
     }
 
     public record IsbnLookupResult(String isbn, String title, String subtitle, String authors, String publisher,

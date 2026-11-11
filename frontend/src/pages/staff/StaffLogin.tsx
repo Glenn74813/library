@@ -6,8 +6,10 @@ import { ErrorAlert, Field } from '../../components/ui'
 import { errorText } from '../../components/Toast'
 import { Logo } from '../../components/Logo'
 import { Icon } from '../../components/Icon'
+import { useLibrary } from '../../api/library'
 
 export function StaffLogin() {
+  const lib = useLibrary()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -39,7 +41,7 @@ export function StaffLogin() {
       <form className="card auth-card stack" onSubmit={submit}>
         <div className="logo"><Logo large /></div>
         <h1>Staff sign in</h1>
-        <div className="school">Zamboanga State College of Marine Sciences and Technology</div>
+        <div className="school">{lib.institution || lib.name}</div>
         <ErrorAlert error={error} />
         <Field label="Username">
           <input autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus />

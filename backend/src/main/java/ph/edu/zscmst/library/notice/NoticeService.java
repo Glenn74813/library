@@ -2,11 +2,11 @@ package ph.edu.zscmst.library.notice;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,16 +27,17 @@ public class NoticeService {
     private final SettingsService settings;
     private final LibraryClock clock;
     private final NoticeSender sender;
-    private final int dueSoonDays;
+
+    /** Give up on a notice after this many failed delivery attempts. */
+    static final int MAX_ATTEMPTS = 5;
 
     public NoticeService(NoticeRepository notices, LoanRepository loans, SettingsService settings, LibraryClock clock,
-                         NoticeSender sender, @Value("${app.library.due-soon-days}") int dueSoonDays) {
+                         NoticeSender sender) {
         this.notices = notices;
         this.loans = loans;
         this.settings = settings;
         this.clock = clock;
         this.sender = sender;
-        this.dueSoonDays = dueSoonDays;
     }
 
     @Transactional
@@ -56,11 +57,21 @@ public class NoticeService {
         return result;
     }
 
-    /** Daily scan for loans that are due soon or overdue. */
-    @Scheduled(cron = "${app.library.notice-cron:0 0 7 * * *}", zone = "${app.library.timezone}")
+    /** Hourly check: once a day, at the configured hour, scan for loans that are due soon or overdue. */
+    @Scheduled(cron = "0 1 * * * *", zone = "${app.library.timezone}")
+    @Transactional
+    public void dailyRun() {
+        LocalDate today = clock.today();
+        int hour = Integer.parseInt(settings.get("notice.sendHour", "7"));
+        if (LocalTime.now(clock.zone()).getHour() < hour || today.toString().equals(settings.get("notice.lastRun", ""))) return;
+        settings.put("notice.lastRun", today.toString());
+        generateDailyNotices();
+    }
+
     @Transactional
     public void generateDailyNotices() {
         LocalDate today = clock.today();
+        int dueSoonDays = Integer.parseInt(settings.get("notice.dueSoonDays", "2"));
         Instant now = Instant.now();
         loans.findByReturnedAtIsNullAndDueAtBetween(now, clock.endOfDay(today.plusDays(dueSoonDays)))
                 .forEach(l -> queue(l.getPatron(), NoticeType.DUE_SOON, l.getItem().getRecord().getTitle(),
@@ -74,11 +85,20 @@ public class NoticeService {
     @Scheduled(fixedDelayString = "PT5M", initialDelayString = "PT1M")
     @Transactional
     public void dispatchPending() {
-        for (Notice n : notices.findTop200BySentAtIsNullOrderByCreatedAtAsc()) {
+        for (Notice n : notices.findTop200BySentAtIsNullAndAttemptsLessThanOrderByCreatedAtAsc(MAX_ATTEMPTS)) {
+            NoticeSender.Delivery d;
             try {
-                if (sender.send(n)) n.setSentAt(Instant.now());
+                d = sender.send(n);
             } catch (RuntimeException e) {
-                log.warn("Failed to send notice {}: {}", n.getId(), e.getMessage());
+                d = new NoticeSender.Delivery(false, null, e.getMessage());
+            }
+            n.setAttempts(n.getAttempts() + 1);
+            n.setLastError(d.error());
+            if (d.delivered()) {
+                n.setSentAt(Instant.now());
+                n.setChannels(d.channels());
+            } else {
+                log.warn("Notice {} not delivered (attempt {}): {}", n.getId(), n.getAttempts(), d.error());
             }
         }
     }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { api, logout, qs } from '../../api/client'
+import { api, download, logout, qs } from '../../api/client'
 import type { BibRecord, Ebook, Fine, Hold, OpacDetail, Page, PatronSummary } from '../../api/types'
 import { BookModal } from '../../components/BookModal'
 import { hasRole, useSession } from '../../auth/AuthContext'
@@ -228,6 +228,12 @@ function AccountTab() {
       <Field label="Current PIN"><input type="password" inputMode="numeric" value={current} onChange={(e) => setCurrent(e.target.value)} required /></Field>
       <Field label="New PIN (4–8 digits)"><input type="password" inputMode="numeric" pattern="\d{4,8}" value={next} onChange={(e) => setNext(e.target.value)} required /></Field>
       <button className="btn primary">Change PIN</button>
+      <hr style={{ width: '100%', border: 0, borderTop: '1px solid var(--border)' }} />
+      <h2>Your data</h2>
+      <p className="muted small" style={{ margin: 0 }}>Download a copy of everything the library keeps about you: profile, loans, fines,
+        reservations, visits and notices. To correct or erase your data, ask the library. <Link to="/privacy">Privacy notice</Link></p>
+      <button type="button" className="btn" onClick={() => download('/api/me/data-export', 'my-library-data.json')
+        .catch((e) => toast(errorText(e), 'error'))}><Icon name="download" />Download my data</button>
     </form>
   )
 }

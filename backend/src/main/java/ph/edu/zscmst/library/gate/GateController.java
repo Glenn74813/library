@@ -2,8 +2,12 @@ package ph.edu.zscmst.library.gate;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -33,11 +37,13 @@ import org.springframework.core.io.Resource;
 import ph.edu.zscmst.library.gate.BroadcastService.Preset;
 
 
+import ph.edu.zscmst.library.calendar.LibraryCalendar;
 import ph.edu.zscmst.library.catalog.Item;
 import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.ItemStatus;
+import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
-import ph.edu.zscmst.library.common.Csv;
+import ph.edu.zscmst.library.common.Pdf;
 import ph.edu.zscmst.library.common.LibraryClock;
 import ph.edu.zscmst.library.common.PageResponse;
 import ph.edu.zscmst.library.common.SettingsService;
@@ -63,7 +69,12 @@ public class GateController {
                                      Integer visitorCount, @Size(max = 500) String message) {
     }
 
-    public record GateConfig(boolean emergencyMode, boolean alarmEnabled) {
+    /**
+     * {@code schedule}: ALWAYS, OPEN_HOURS (library opening hours, from 15 min before opening to 30 min
+     * after closing) or CUSTOM ({@code armFrom}-{@code armTo} every day). {@code armedNow} is read-only.
+     */
+    public record GateConfig(boolean emergencyMode, boolean alarmEnabled, String schedule, LocalTime armFrom,
+                             LocalTime armTo, boolean armedNow) {
     }
 
     public record BroadcastRequest(@NotBlank @Size(max = 500) String message, String presetId) {
@@ -84,7 +95,7 @@ public class GateController {
     }
 
     public record Summary(long alarmsToday, long visitorsToday, long tamperToday, long powerLossToday,
-                          boolean emergencyMode, boolean alarmEnabled, List<GateStatus> gates) {
+                          boolean emergencyMode, boolean alarmEnabled, List<GateStatus> gates, GateConfig config) {
     }
 
     private final GateEventRepository events;
@@ -93,9 +104,11 @@ public class GateController {
     private final LibraryClock clock;
     private final AuditService audit;
     private final BroadcastService broadcasts;
+    private final LibraryCalendar calendar;
 
     public GateController(GateEventRepository events, ItemRepository items, SettingsService settings,
-                          LibraryClock clock, AuditService audit, BroadcastService broadcasts) {
+                          LibraryClock clock, AuditService audit, BroadcastService broadcasts, LibraryCalendar calendar) {
+        this.calendar = calendar;
         this.events = events;
         this.items = items;
         this.settings = settings;
@@ -105,7 +118,38 @@ public class GateController {
     }
 
     private GateConfig config() {
-        return new GateConfig(settings.getBoolean("gate.emergencyMode"), settings.getBoolean("gate.alarmEnabled"));
+        String schedule = settings.get("gate.schedule", "ALWAYS");
+        LocalTime from = parseTime(settings.get("gate.armFrom", "07:00"));
+        LocalTime to = parseTime(settings.get("gate.armTo", "19:00"));
+        return new GateConfig(settings.getBoolean("gate.emergencyMode"), settings.getBoolean("gate.alarmEnabled"),
+                schedule, from, to, armedNow(schedule, from, to));
+    }
+
+    /** Whether the alarm schedule arms the gate at this moment. */
+    private boolean armedNow(String schedule, LocalTime from, LocalTime to) {
+        ZonedDateTime now = ZonedDateTime.now(clock.zone());
+        LocalTime t = now.toLocalTime();
+        return switch (schedule) {
+            case "OPEN_HOURS" -> {
+                LibraryCalendar.Snapshot cal = calendar.snapshot(now.toLocalDate(), now.toLocalDate());
+                LocalTime open = cal.openingTime(now.toLocalDate());
+                LocalTime close = cal.closingTime(now.toLocalDate());
+                yield cal.isOpen(now.toLocalDate()) && open != null && close != null
+                        && !t.isBefore(open.minusMinutes(15)) && !t.isAfter(close.plusMinutes(30));
+            }
+            case "CUSTOM" -> from == null || to == null || (from.isBefore(to)
+                    ? !t.isBefore(from) && t.isBefore(to)
+                    : !t.isBefore(from) || t.isBefore(to));          // overnight window
+            default -> true;
+        };
+    }
+
+    private static LocalTime parseTime(String s) {
+        try {
+            return s == null || s.isBlank() ? null : LocalTime.parse(s);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
     }
 
     // ------------------------------------------------ device endpoints
@@ -137,12 +181,13 @@ public class GateController {
                 e.setItem(item);
                 e.setEpc(epc);
                 e.setMessage(cfg.emergencyMode() ? "Unborrowed item during emergency mode (alarm suppressed)"
+                        : !cfg.armedNow() ? "Unborrowed item outside alarm hours (alarm off)"
                         : "Unborrowed item detected");
                 events.save(e);
                 alarm = true;
             }
         }
-        return new CheckResponse(alarm && cfg.alarmEnabled() && !cfg.emergencyMode(), cfg.emergencyMode(), results);
+        return new CheckResponse(alarm && cfg.alarmEnabled() && !cfg.emergencyMode() && cfg.armedNow(), cfg.emergencyMode(), results);
     }
 
     @PostMapping("/api/gate/device/events")
@@ -188,7 +233,7 @@ public class GateController {
                 events.sumVisitors(start, end),
                 events.countByEventTypeAndOccurredAtBetween(GateEventType.TAMPER, start, end),
                 events.countByEventTypeAndOccurredAtBetween(GateEventType.POWER_LOSS, start, end),
-                cfg.emergencyMode(), cfg.alarmEnabled(), gates);
+                cfg.emergencyMode(), cfg.alarmEnabled(), gates, cfg);
     }
 
     @PutMapping("/api/gate/settings")
@@ -198,13 +243,25 @@ public class GateController {
         GateConfig before = config();
         settings.put("gate.emergencyMode", String.valueOf(req.emergencyMode()));
         settings.put("gate.alarmEnabled", String.valueOf(req.alarmEnabled()));
+        if (req.schedule() != null) {
+            if (!Set.of("ALWAYS", "OPEN_HOURS", "CUSTOM").contains(req.schedule())) {
+                throw ApiException.badRequest("Unknown alarm schedule");
+            }
+            if ("CUSTOM".equals(req.schedule()) && (req.armFrom() == null || req.armTo() == null || req.armFrom().equals(req.armTo()))) {
+                throw ApiException.badRequest("Set the start and end of the alarm hours");
+            }
+            settings.put("gate.schedule", req.schedule());
+            if (req.armFrom() != null) settings.put("gate.armFrom", req.armFrom().toString());
+            if (req.armTo() != null) settings.put("gate.armTo", req.armTo().toString());
+        }
         if (before.emergencyMode() != req.emergencyMode()) {
             GateEvent e = new GateEvent("system", req.emergencyMode() ? GateEventType.EMERGENCY_ON
                     : GateEventType.EMERGENCY_OFF, Instant.now());
             e.setMessage("Set by " + AuditService.currentActor());
             events.save(e);
         }
-        audit.record("GATE_SETTINGS", "emergency=" + req.emergencyMode() + " alarm=" + req.alarmEnabled());
+        audit.record("GATE_SETTINGS", "emergency=" + req.emergencyMode() + " alarm=" + req.alarmEnabled()
+                + (req.schedule() == null ? "" : " schedule=" + req.schedule()));
         return config();
     }
 
@@ -252,6 +309,20 @@ public class GateController {
         return broadcasts.presetAudio(id).response();
     }
 
+    /** Current announcement for public displays (OPAC kiosks); announcements are public by nature. */
+    public record PublicBroadcast(BroadcastService.CurrentBroadcast broadcast, VoiceSettings voice) {
+    }
+
+    @GetMapping("/api/opac/broadcast")
+    public PublicBroadcast publicBroadcast() {
+        return new PublicBroadcast(broadcasts.current(), VoiceSettings.load(settings));
+    }
+
+    @GetMapping("/api/opac/broadcast-audio")
+    public ResponseEntity<Resource> publicBroadcastAudio() {
+        return broadcasts.currentAudio().response();
+    }
+
     /** Recording of the announcement currently being broadcast (kiosks). */
     @GetMapping("/api/kiosk/broadcast-audio")
     public ResponseEntity<Resource> broadcastAudio() {
@@ -275,13 +346,14 @@ public class GateController {
     @GetMapping("/api/gate/export")
     @Transactional(readOnly = true)
     public ResponseEntity<byte[]> export(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-                                         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+                                         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+                                         @RequestParam(defaultValue = "csv") String format) {
         List<List<?>> rows = events.findByOccurredAtBetweenOrderByOccurredAtAsc(clock.startOfDay(from),
                         clock.startOfDay(to.plusDays(1))).stream().map(EventDto::of)
-                .<List<?>>map(e -> java.util.Arrays.asList(e.occurredAt().atZone(clock.zone()).toLocalDateTime(),
+                .<List<?>>map(e -> java.util.Arrays.asList(e.occurredAt().atZone(clock.zone()).toLocalDateTime().withNano(0).toString().replace('T', ' '),
                         e.gateId(), e.type(), e.epc(), e.barcode(), e.title(), e.visitorCount(), e.message()))
                 .toList();
-        return Csv.download("gate-events-" + from + "-to-" + to + ".csv",
+        return Pdf.export(format, "gate-events-" + from + "-to-" + to, "Gate Events", from + " to " + to,
                 List.of("Time", "Gate", "Event", "EPC", "Barcode", "Title", "Visitors", "Message"), rows);
     }
 }

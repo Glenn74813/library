@@ -8,7 +8,13 @@ const SHOW_MS = 60_000
 const DEFAULT_VOICE: VoiceSettings = { name: '', lang: 'en-US', rate: 0.95, pitch: 1, repeat: 2 }
 
 /** Shows (and speaks) an emergency/announcement broadcast pushed from the gate console. */
-export function BroadcastOverlay({ broadcast, voice }: { broadcast: KioskConfig['broadcast'] | undefined; voice?: VoiceSettings }) {
+export function BroadcastOverlay({ broadcast, voice, audioPath = '/api/kiosk/broadcast-audio', anonymous = false }: {
+  broadcast: KioskConfig['broadcast'] | undefined
+  voice?: VoiceSettings
+  /** Where to fetch the recording: kiosks use their session, public OPAC screens the open endpoint. */
+  audioPath?: string
+  anonymous?: boolean
+}) {
   const [visible, setVisible] = useState<string | null>(null)
   const lastSeen = useRef<string | null>(sessionStorageGet())
   const audio = useRef<HTMLAudioElement | null>(null)
@@ -34,7 +40,7 @@ export function BroadcastOverlay({ broadcast, voice }: { broadcast: KioskConfig[
   }, [broadcast]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function playRecording(times: number) {
-    const { data, contentType } = await fetchBytes('/api/kiosk/broadcast-audio', 'kiosk')
+    const { data, contentType } = await fetchBytes(audioPath, 'kiosk', anonymous)
     const url = URL.createObjectURL(new Blob([data], { type: contentType }))
     try {
       for (let i = 0; i < Math.max(1, times) && !stopped.current; i++) {

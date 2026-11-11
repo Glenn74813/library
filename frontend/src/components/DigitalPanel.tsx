@@ -7,12 +7,14 @@ import { useAsync } from '../hooks/useAsync'
 import { Icon } from './Icon'
 import { errorText, useToast } from './Toast'
 import { ErrorAlert, Field } from './ui'
+import { useLibraryConfig } from '../api/library'
 
 /**
  * Digital copy of a catalog record. A title is either school-owned (upload the PDF/EPUB; every
  * signed-in patron can read it) or commercial (vendor link only; the file is never uploaded).
  */
 export function DigitalPanel({ recordId }: { recordId: number }) {
+  const maxMb = useLibraryConfig().uploads.ebookMaxMb
   const { data: info, error, setData } = useAsync(() => api<DigitalInfo>(`/api/catalog/records/${recordId}/digital`), [recordId])
   const [mode, setMode] = useState<'owned' | 'commercial' | null>(null)
   const [busy, setBusy] = useState(false)
@@ -22,7 +24,7 @@ export function DigitalPanel({ recordId }: { recordId: number }) {
   const toast = useToast()
 
   async function upload(file: File) {
-    if (file.size > 100 * 1024 * 1024) return toast('The file is too large (limit 100 MB)', 'error')
+    if (file.size > maxMb * 1024 * 1024) return toast(`The file is too large (limit ${maxMb} MB)`, 'error')
     const fd = new FormData()
     fd.append('file', file)
     setBusy(true)
@@ -116,7 +118,7 @@ export function DigitalPanel({ recordId }: { recordId: number }) {
             <button className="card choice" onClick={() => fileRef.current?.click()} disabled={busy}>
               <Icon name="upload" className="choice-icon" />
               <strong>{busy ? 'Uploading…' : 'Upload a school-owned e-book'}</strong>
-              <span className="muted small">PDF or EPUB, up to 100 MB. Every signed-in patron can read it in the app.</span>
+              <span className="muted small">PDF or EPUB, up to {maxMb} MB. Every signed-in patron can read it in the app.</span>
             </button>
             <button className="card choice" onClick={() => { setUrl(''); setProvider(''); setMode('commercial') }}>
               <Icon name="link" className="choice-icon" />

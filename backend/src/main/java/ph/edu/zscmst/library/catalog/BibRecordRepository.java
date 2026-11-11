@@ -44,6 +44,14 @@ public interface BibRecordRepository extends JpaRepository<BibRecord, Long> {
 
     List<BibRecord> findTop12ByOrderByCreatedAtDesc();
 
+    Optional<BibRecord> findFirstByIsbn(String isbn);
+
+    Optional<BibRecord> findFirstByTitleIgnoreCaseAndAuthorsIgnoreCase(String title, String authors);
+
+    Optional<BibRecord> findFirstByTitleIgnoreCaseAndAuthorsIsNull(String title);
+
+    List<BibRecord> findAllByOrderByIdAsc();
+
     /** Row lock used to serialise bookings of one title. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from BibRecord r where r.id = :id")

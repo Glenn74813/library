@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, download, fetchBytes, qs } from '../../api/client'
-import type { GateEvent, GateEventType, GateSummary, Page, VoiceSettings } from '../../api/types'
+import { api, fetchBytes, qs } from '../../api/client'
+import type { GateConfig, GateEvent, GateEventType, GateSummary, Page, VoiceSettings } from '../../api/types'
 import { loadVoices, pickVoice, speak, speechSupported } from '../../speech'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
-import { ErrorAlert, Field, Modal, Pager, Stat, StatusBadge, Table } from '../../components/ui'
+import { ErrorAlert, Field, Modal, Pager, Stat, StatusBadge, Table, ExportMenu } from '../../components/ui'
 import { daysAgo, fmtDateTime, isoDate, label } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
+import { useLibrary } from '../../api/library'
 
 /** Announcement preset; a recording (MP3...) is played on kiosks instead of text-to-speech. */
 interface Preset { id?: string; name: string; message: string; hasAudio?: boolean; audioFilename?: string | null }
@@ -56,7 +57,7 @@ export function GatePage() {
     <>
       <div className="page-head">
         <h1>Security gate</h1>
-        <button className="btn" onClick={() => download(`/api/gate/export${qs({ from, to })}`, 'gate-events.csv')}><Icon name="download" />Export log</button>
+        <ExportMenu path={`/api/gate/export${qs({ from, to })}`} name="gate-events" label="Export log…" />
       </div>
       {summary?.emergencyMode && <div className="alert error" style={{ marginBottom: 16 }}><strong>EMERGENCY MODE IS ON</strong> — gate alarms are suppressed and the gate never blocks people.</div>}
       {summary && (
@@ -70,6 +71,7 @@ export function GatePage() {
       <div className="grid cols-2" style={{ marginBottom: 16 }}>
         <div className="card stack">
           <h2>Gate control & device health</h2>
+          {summary && <AlarmSchedule config={summary.config} canEdit={canEdit} onSaved={() => void reloadSummary()} />}
           {summary?.gates.length ? summary.gates.map((g) => (
             <div key={g.gateId} className="row"><strong>{g.gateId}</strong><span className={`badge ${g.online ? 'ok' : 'bad'}`}>{g.online ? 'Online' : 'Offline'}</span>
               <span className="muted small">last seen {fmtDateTime(g.lastSeen)}</span></div>
@@ -363,6 +365,9 @@ function voiceRank(v: SpeechSynthesisVoice) {
 
 /** Voice used to read announcements aloud on every kiosk/display. */
 function VoiceCard({ canEdit }: { canEdit: boolean }) {
+  const lib = useLibrary()
+  // Spell out acronyms such as "ZSCMST" so the voice reads them letter by letter.
+  const spokenName = lib.name.replace(/\b[A-Z]{2,}\b/g, (w) => w.split('').join(' '))
   const { data: saved, setData: setSaved } = useAsync(() => api<VoiceSettings>('/api/gate/voice'), [])
   const [v, setV] = useState<VoiceSettings | null>(null)
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
@@ -431,11 +436,53 @@ function VoiceCard({ canEdit }: { canEdit: boolean }) {
           For Philippine English or Filipino voices, use Microsoft Edge (its online voices) or add the language in Windows/Android speech settings.
         </p>
         <div className="row end actions-stretch">
-          <button className="btn" onClick={() => void speak('Good day. This is a test announcement from the Z S C M S T Learning Resource Center.', v, 1)}>
+          <button className="btn" onClick={() => void speak(`Good day. This is a test announcement from the ${spokenName}.`, v, 1)}>
             <Icon name="volume-2" />Test voice</button>
           {canEdit && <button className="btn primary" onClick={save}>Save voice</button>}
         </div>
       </>}
+    </div>
+  )
+}
+
+/** When the gate alarm is armed: always, during opening hours, or custom daily hours. */
+function AlarmSchedule({ config, canEdit, onSaved }: { config: GateConfig; canEdit: boolean; onSaved: () => void }) {
+  const [c, setC] = useState(config)
+  const toast = useToast()
+  useEffect(() => setC(config), [config])
+  const hhmm = (t: string | null) => (t ? t.slice(0, 5) : '')
+  async function save() {
+    try {
+      await api('/api/gate/settings', { method: 'PUT', body: { emergencyMode: c.emergencyMode, alarmEnabled: c.alarmEnabled,
+        schedule: c.schedule, armFrom: c.armFrom || null, armTo: c.armTo || null } })
+      toast('Alarm schedule saved')
+      onSaved()
+    } catch (e) { toast(errorText(e), 'error') }
+  }
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="row">
+        <strong>Alarm</strong>
+        {!config.alarmEnabled ? <span className="badge bad">Disabled</span>
+          : config.emergencyMode ? <span className="badge bad">Suppressed (emergency)</span>
+            : config.armedNow ? <span className="badge ok">Armed now</span> : <span className="badge warn">Off — outside alarm hours</span>}
+      </div>
+      <fieldset disabled={!canEdit} className="form-grid" style={{ border: 0, padding: 0, margin: 0 }}>
+        <Field label="Alarm schedule">
+          <select value={c.schedule} onChange={(e) => setC({ ...c, schedule: e.target.value as GateConfig['schedule'] })}>
+            <option value="ALWAYS">Always armed</option>
+            <option value="OPEN_HOURS">During opening hours (library calendar)</option>
+            <option value="CUSTOM">Custom daily hours</option>
+          </select>
+        </Field>
+        {c.schedule === 'CUSTOM' && <>
+          <Field label="Armed from"><input type="time" value={hhmm(c.armFrom)} onChange={(e) => setC({ ...c, armFrom: e.target.value })} /></Field>
+          <Field label="Armed until"><input type="time" value={hhmm(c.armTo)} onChange={(e) => setC({ ...c, armTo: e.target.value })} /></Field>
+        </>}
+      </fieldset>
+      {canEdit && c.schedule !== config.schedule || canEdit && (c.armFrom !== config.armFrom || c.armTo !== config.armTo)
+        ? <div className="row end"><button className="btn small primary" onClick={save}>Save schedule</button></div> : null}
+      <p className="muted small" style={{ margin: 0 }}>Outside the schedule, unborrowed items are still logged but the gate does not sound.</p>
     </div>
   )
 }

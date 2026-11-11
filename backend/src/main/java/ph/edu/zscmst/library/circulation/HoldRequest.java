@@ -42,6 +42,9 @@ public class HoldRequest {
     private Instant expiresAt;
     /** Requested pickup date for an advance booking; null for "next available copy". */
     private LocalDate pickupDate;
+    /** When and by whom the reservation ended: released to the patron, cancelled, or expired ("system"). */
+    private Instant closedAt;
+    private String closedBy;
 
     protected HoldRequest() {
     }
@@ -75,4 +78,13 @@ public class HoldRequest {
     public Instant getReadyAt() { return readyAt; }
     public Instant getExpiresAt() { return expiresAt; }
     public LocalDate getPickupDate() { return pickupDate; }
+    public Instant getClosedAt() { return closedAt; }
+    public String getClosedBy() { return closedBy; }
+
+    /** Ends the reservation (FULFILLED = released to the patron, CANCELLED, EXPIRED) and records who did it. */
+    public void close(HoldStatus outcome, String by, Instant at) {
+        this.status = outcome;
+        this.closedBy = by;
+        this.closedAt = at;
+    }
 }

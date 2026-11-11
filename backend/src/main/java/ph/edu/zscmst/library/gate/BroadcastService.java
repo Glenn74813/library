@@ -29,6 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
+import ph.edu.zscmst.library.common.SystemSettings;
 import ph.edu.zscmst.library.common.SettingsService;
 import ph.edu.zscmst.library.digital.FileStorage;
 
@@ -59,14 +60,15 @@ public class BroadcastService {
         }
     }
 
-    static final long MAX_AUDIO_BYTES = 10L * 1024 * 1024;
-
     private final SettingsService settings;
     private final FileStorage storage;
     private final JsonMapper json;
     private final AuditService audit;
+    private final SystemSettings system;
 
-    public BroadcastService(SettingsService settings, FileStorage storage, JsonMapper json, AuditService audit) {
+    public BroadcastService(SettingsService settings, FileStorage storage, JsonMapper json, AuditService audit,
+                            SystemSettings system) {
+        this.system = system;
         this.settings = settings;
         this.storage = storage;
         this.json = json;
@@ -134,7 +136,7 @@ public class BroadcastService {
         List<StoredPreset> list = load();
         int idx = indexOf(list, presetId);
         if (file.isEmpty()) throw ApiException.badRequest("The file is empty");
-        if (file.getSize() > MAX_AUDIO_BYTES) throw ApiException.badRequest("Recording is too large (limit 10 MB)");
+        system.checkUpload(SystemSettings.UploadKind.AUDIO, file.getSize());
         AudioFormat format;
         FileStorage.StoredFile stored;
         try (InputStream raw = file.getInputStream(); BufferedInputStream in = new BufferedInputStream(raw)) {

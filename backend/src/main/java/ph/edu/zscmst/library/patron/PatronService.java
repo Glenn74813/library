@@ -74,6 +74,7 @@ public class PatronService {
     public void setPin(Long id, String pin) {
         Patron p = get(id);
         p.setPinHash(passwordEncoder.encode(pin));
+        p.unlockPin();
         audit.record("PATRON_PIN_SET", p.getCardNumber());
     }
 

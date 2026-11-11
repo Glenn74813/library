@@ -3,9 +3,11 @@ import { fmtDateTime, fmtMoney } from '../format'
 import { Modal } from './ui'
 import { Icon } from './Icon'
 import { Logo } from './Logo'
+import { useLibrary } from '../api/library'
 
 /** Printable payment receipt sized for an 80 mm thermal printer. */
 export function ReceiptModal({ receipt, onClose }: { receipt: Receipt; onClose: () => void }) {
+  const lib = useLibrary()
   return (
     <Modal title="Official receipt" onClose={onClose}
       footer={<><button className="btn" onClick={onClose}>Close</button>
@@ -13,7 +15,11 @@ export function ReceiptModal({ receipt, onClose }: { receipt: Receipt; onClose: 
       <div className="print-receipt stack" style={{ gap: 6 }}>
         <div style={{ textAlign: 'center' }}>
           <Logo />
-          <strong>ZSCMST Learning Resource Center</strong><br />
+          <strong>{lib.name}</strong><br />
+          {lib.institution && <span className="small">{lib.institution}<br /></span>}
+          {lib.address && <span className="small">{lib.address}<br /></span>}
+          {(lib.phone || lib.email) && <span className="small">{[lib.phone, lib.email].filter(Boolean).join(' · ')}<br /></span>}
+          {lib.receiptHeader && <span className="small" style={{ whiteSpace: 'pre-line' }}>{lib.receiptHeader}<br /></span>}
           <span className="small">Library fines receipt</span>
         </div>
         <div className="small">
@@ -37,7 +43,7 @@ export function ReceiptModal({ receipt, onClose }: { receipt: Receipt; onClose: 
             </tr>
           </tbody>
         </table>
-        <div className="small" style={{ textAlign: 'center' }}>Thank you!</div>
+        <div className="small" style={{ textAlign: 'center', whiteSpace: 'pre-line' }}>{lib.receiptFooter || 'Thank you!'}</div>
       </div>
     </Modal>
   )

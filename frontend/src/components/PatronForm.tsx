@@ -64,7 +64,7 @@ export function PatronFormModal({ patron, onClose, onSaved }: {
           <Field label="Email"><input type="email" value={f.email} onChange={(e) => set('email', e.target.value)} /></Field>
           <Field label="Mobile number"><input type="tel" value={f.phone} onChange={(e) => set('phone', e.target.value)} /></Field>
           <Field label="Card expiry date"><input type="date" value={f.expiryDate} onChange={(e) => set('expiryDate', e.target.value)} /></Field>
-          <Field label="Photo URL"><input type="url" value={f.photoUrl} onChange={(e) => set('photoUrl', e.target.value)} /></Field>
+
           <label className="check span-all"><input type="checkbox" checked={f.blocked} onChange={(e) => set('blocked', e.target.checked)} /> Block borrowing</label>
           {f.blocked && <Field label="Block reason" className="span-all"><input value={f.blockReason} onChange={(e) => set('blockReason', e.target.value)} /></Field>}
         </div>

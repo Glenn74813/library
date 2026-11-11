@@ -1,11 +1,15 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api/client'
-import { ITEM_STATUSES, MATERIAL_TYPES, type BibRecord, type IsbnResult, type Item, type RecordDetail } from '../../api/types'
+import { ITEM_STATUSES, MATERIAL_TYPES, type BibRecord, type CustomFieldDef, type IsbnResult, type Item, type RecordDetail } from '../../api/types'
+import { HeadingInput } from '../../components/HeadingInput'
+import { useAsync } from '../../hooks/useAsync'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, StatusBadge, Table } from '../../components/ui'
 import { fmtDate, label } from '../../format'
+import { CameraScanButton } from '../../components/CameraScan'
+import { CopyCatalogModal } from '../../components/CopyCatalogModal'
 import { DigitalPanel } from '../../components/DigitalPanel'
 import { Icon } from '../../components/Icon'
 
@@ -13,7 +17,7 @@ type RecordForm = Omit<BibRecord, 'id' | 'totalCopies' | 'availableCopies' | 'cr
 
 const EMPTY: RecordForm = {
   title: '', subtitle: '', authors: '', isbn: '', publisher: '', publicationYear: null, edition: '', subjects: '',
-  callNumber: '', materialType: 'BOOK', language: 'English', summary: '',
+  callNumber: '', materialType: 'BOOK', language: 'English', summary: '', customFields: {},
 }
 
 export function RecordPage() {
@@ -27,6 +31,8 @@ export function RecordPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [editingItem, setEditingItem] = useState<Partial<Item> | null>(null)
+  const [copycat, setCopycat] = useState(false)
+  const { data: fieldDefs } = useAsync(() => api<CustomFieldDef[]>('/api/custom-fields'), [])
 
   async function load() {
     if (isNew) return
@@ -104,7 +110,9 @@ export function RecordPage() {
           <Field label="ISBN" hint="Scan or type, then use lookup to copy-catalog">
             <div className="input-group">
               <input value={form.isbn ?? ''} onChange={(e) => set('isbn', e.target.value)} />
+              <CameraScanButton title="Scan the ISBN barcode" onScan={(t) => set('isbn', t)} />
               <button type="button" className="btn" onClick={lookupIsbn}>Lookup</button>
+              <button type="button" className="btn" onClick={() => setCopycat(true)} title="Search the Library of Congress catalog">LoC</button>
             </div>
           </Field>
           <Field label="Material type">
@@ -114,14 +122,27 @@ export function RecordPage() {
           </Field>
           <Field label="Title *" className="span-all"><input value={form.title} onChange={(e) => set('title', e.target.value)} required /></Field>
           <Field label="Subtitle" className="span-all"><input value={form.subtitle ?? ''} onChange={(e) => set('subtitle', e.target.value)} /></Field>
-          <Field label="Authors" hint="Separate with ;" className="span-all"><input value={form.authors ?? ''} onChange={(e) => set('authors', e.target.value)} /></Field>
+          <Field label="Authors" hint="Separate with ; — suggestions come from the authority list" className="span-all" as="div">
+            <HeadingInput type="AUTHOR" value={form.authors ?? ''} onChange={(v) => set('authors', v)} /></Field>
           <Field label="Publisher"><input value={form.publisher ?? ''} onChange={(e) => set('publisher', e.target.value)} /></Field>
           <Field label="Year"><input type="number" inputMode="numeric" value={form.publicationYear ?? ''}
             onChange={(e) => set('publicationYear', e.target.value ? Number(e.target.value) : null)} /></Field>
           <Field label="Edition"><input value={form.edition ?? ''} onChange={(e) => set('edition', e.target.value)} /></Field>
           <Field label="Call number"><input value={form.callNumber ?? ''} onChange={(e) => set('callNumber', e.target.value)} /></Field>
           <Field label="Language"><input value={form.language ?? ''} onChange={(e) => set('language', e.target.value)} /></Field>
-          <Field label="Subjects" hint="Separate with ;" className="span-all"><input value={form.subjects ?? ''} onChange={(e) => set('subjects', e.target.value)} /></Field>
+          <Field label="Subjects" hint="Separate with ; — suggestions come from the authority list" className="span-all" as="div">
+            <HeadingInput type="SUBJECT" value={form.subjects ?? ''} onChange={(v) => set('subjects', v)} /></Field>
+          {fieldDefs?.map((d) => {
+            const v = form.customFields?.[d.key] ?? ''
+            const setV = (val: string) => set('customFields', { ...(form.customFields ?? {}), [d.key]: val })
+            return (
+              <Field key={d.key} label={d.label} hint={d.showInOpac ? undefined : 'Staff only'}>
+                {d.type === 'SELECT'
+                  ? <select value={v} onChange={(e) => setV(e.target.value)}><option value="">—</option>{d.options.map((o) => <option key={o}>{o}</option>)}</select>
+                  : <input type={d.type === 'NUMBER' ? 'number' : d.type === 'DATE' ? 'date' : 'text'} value={v} onChange={(e) => setV(e.target.value)} />}
+              </Field>
+            )
+          })}
           <Field label="Summary / abstract" className="span-all"><textarea value={form.summary ?? ''} onChange={(e) => set('summary', e.target.value)} /></Field>
         </div>
         <div className="row end actions-stretch"><button className="btn primary" disabled={busy}>{isNew ? 'Create record' : 'Save changes'}</button></div>
@@ -139,10 +160,22 @@ export function RecordPage() {
             { header: 'Barcode', render: (i) => <span className="mono">{i.barcode}</span> },
             { header: 'RFID EPC', render: (i) => <span className="mono small">{i.rfidEpc ?? '—'}</span> },
             { header: 'Shelf location', render: (i) => i.shelfLocation ?? <span className="muted">Not set</span> },
+            { header: 'Loan', render: (i) => i.roomUseOnly ? <span className="badge warn">Room use only</span> : <span className="muted small">Can be borrowed</span> },
             { header: 'Status', render: (i) => <><StatusBadge status={i.status} />{i.dueAt && <span className="small muted"> due {fmtDate(i.dueAt)}</span>}</> },
           ]} />
         </div>
       )}
+      {copycat && <CopyCatalogModal initialIsbn={form.isbn ?? ''} initialTitle={form.title} onClose={() => setCopycat(false)}
+        onUse={(c) => {
+          setForm((f) => ({
+            ...f, title: c.title ?? f.title, subtitle: c.subtitle ?? f.subtitle, authors: c.authors ?? f.authors, isbn: c.isbn ?? f.isbn,
+            publisher: c.publisher ?? f.publisher, publicationYear: c.publicationYear ?? f.publicationYear, edition: c.edition ?? f.edition,
+            subjects: c.subjects ?? f.subjects, callNumber: c.callNumber ?? f.callNumber, materialType: c.materialType ?? f.materialType,
+            language: c.language ?? f.language, summary: c.summary ?? f.summary,
+          }))
+          setCopycat(false)
+          toast('Filled from the Library of Congress record — review and save')
+        }} />}
       {editingItem && <ItemModal recordId={Number(id)} item={editingItem} canDelete={canDelete} others={items.filter((x) => x.id !== editingItem.id)}
         onClose={() => setEditingItem(null)} onSaved={() => { setEditingItem(null); void load() }} />}
     </>
@@ -153,7 +186,8 @@ const SECTIONS = ['General Circulation', 'Fiction Section', 'Filipiniana', 'Refe
   'Thesis & Research Section', 'Audio-Visual Room', 'Special Collections']
 
 function itemBody(i: Partial<Item>) {
-  return { barcode: i.barcode, rfidEpc: i.rfidEpc, location: i.location, aisle: i.aisle, shelf: i.shelf, status: i.status,
+  return { barcode: i.barcode, rfidEpc: i.rfidEpc, location: i.location, aisle: i.aisle, shelf: i.shelf,
+    roomUseOnly: i.roomUseOverride ?? null, status: i.status,
     acquiredDate: i.acquiredDate || null, price: i.price ?? null, notes: i.notes }
 }
 
@@ -206,11 +240,21 @@ function ItemModal({ recordId, item, canDelete, others, onClose, onSaved }: {
       <div className="stack">
         <ErrorAlert error={error} />
         <div className="form-grid">
-          <Field label="Barcode *"><input className="mono" value={f.barcode ?? ''} onChange={(e) => set('barcode', e.target.value)} autoFocus /></Field>
+          <Field label="Barcode *"><div className="input-group">
+            <input className="mono" value={f.barcode ?? ''} onChange={(e) => set('barcode', e.target.value)} autoFocus />
+            <CameraScanButton onScan={(t) => set('barcode', t)} /></div></Field>
           <Field label="RFID tag EPC" hint="Read with the tagging device"><input className="mono" value={f.rfidEpc ?? ''} onChange={(e) => set('rfidEpc', e.target.value)} /></Field>
           <Field label="Section / area" hint="Pick or type a section">
             <input list="sections" value={f.location ?? ''} onChange={(e) => set('location', e.target.value)} />
             <datalist id="sections">{SECTIONS.map((s) => <option key={s} value={s} />)}</datalist>
+          </Field>
+          <Field label="Loan policy" hint={f.roomUseOverride == null ? `Default for this material type: ${item.roomUseOnly && item.roomUseOverride == null ? 'room use only' : 'can be borrowed'}` : 'Set for this copy'}>
+            <select value={f.roomUseOverride == null ? '' : String(f.roomUseOverride)}
+              onChange={(e) => set('roomUseOverride', e.target.value === '' ? null : e.target.value === 'true')}>
+              <option value="">Follow material type</option>
+              <option value="true">Room use only</option>
+              <option value="false">Can be borrowed</option>
+            </select>
           </Field>
           <Field label="Aisle" hint="e.g. 1, 3A"><input value={f.aisle ?? ''} maxLength={20} onChange={(e) => set('aisle', e.target.value)} /></Field>
           <Field label="Shelf" hint="e.g. 2, top"><input value={f.shelf ?? ''} maxLength={20} onChange={(e) => set('shelf', e.target.value)} /></Field>

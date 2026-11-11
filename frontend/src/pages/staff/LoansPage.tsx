@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, download, qs } from '../../api/client'
+import { api, qs } from '../../api/client'
 import type { Loan, Page } from '../../api/types'
-import { ErrorAlert, Pager, Table, Tabs } from '../../components/ui'
+import { ErrorAlert, Pager, Table, Tabs, ExportMenu } from '../../components/ui'
 import { fmtDate, fmtMoney } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
-import { Icon } from '../../components/Icon'
 
 export function LoansPage() {
   const [tab, setTab] = useState<'all' | 'overdue'>('overdue')
@@ -18,7 +17,7 @@ export function LoansPage() {
     <>
       <div className="page-head">
         <h1>Loans</h1>
-        <button className="btn" onClick={() => download('/api/reports/export/overdue', 'overdue.csv')}><Icon name="download" />Overdue (Excel/CSV)</button>
+        <ExportMenu path="/api/reports/export/overdue" name="overdue" label="Export overdue…" />
       </div>
       <Tabs value={tab} onChange={(t) => { setTab(t); setPage(0) }}
         tabs={[{ id: 'overdue', label: 'Overdue' }, { id: 'all', label: 'All active loans' }]} />

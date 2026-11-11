@@ -23,7 +23,10 @@ public class AppUser {
     @Enumerated(EnumType.STRING)
     private Role role;
     private boolean enabled = true;
+    private int failedLogins;
+    private Instant lockedUntil;
     private Instant createdAt = Instant.now();
+    private int tokenVersion;
 
     protected AppUser() {
     }
@@ -46,4 +49,26 @@ public class AppUser {
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public Instant getCreatedAt() { return createdAt; }
+    public int getFailedLogins() { return failedLogins; }
+    public Instant getLockedUntil() { return lockedUntil; }
+    public boolean isLocked(Instant now) { return lockedUntil != null && lockedUntil.isAfter(now); }
+
+    /** Records a failed sign-in; locks the account for {@code lockMinutes} after {@code max} failures in a row. */
+    public void loginFailed(int max, int lockMinutes, Instant now) {
+        failedLogins++;
+        if (failedLogins >= max) {
+            lockedUntil = now.plusSeconds(lockMinutes * 60L);
+            failedLogins = 0;
+        }
+    }
+
+    public void unlock() {
+        failedLogins = 0;
+        lockedUntil = null;
+    }
+
+    public int getTokenVersion() { return tokenVersion; }
+
+    /** Invalidates every device token issued to this account so far. */
+    public void revokeDeviceTokens() { tokenVersion++; }
 }

@@ -18,13 +18,13 @@ public final class PatronDtos {
     public record PatronDto(Long id, String cardNumber, String rfidUid, String firstName, String lastName,
                             String fullName, String email, String phone, Long categoryId, String categoryName,
                             Long courseId, String courseCode, String photoUrl, LocalDate expiryDate,
-                            boolean blocked, String blockReason, boolean hasPin, Instant createdAt) {
+                            boolean blocked, String blockReason, boolean hasPin, Instant createdAt, Instant anonymizedAt) {
         public static PatronDto of(Patron p) {
             return new PatronDto(p.getId(), p.getCardNumber(), p.getRfidUid(), p.getFirstName(), p.getLastName(),
                     p.getFullName(), p.getEmail(), p.getPhone(), p.getCategory().getId(), p.getCategory().getName(),
                     p.getCourse() == null ? null : p.getCourse().getId(),
                     p.getCourse() == null ? null : p.getCourse().getCode(), p.getPhotoUrl(), p.getExpiryDate(),
-                    p.isBlocked(), p.getBlockReason(), p.getPinHash() != null, p.getCreatedAt());
+                    p.isBlocked(), p.getBlockReason(), p.getPinHash() != null, p.getCreatedAt(), p.getAnonymizedAt());
         }
     }
 

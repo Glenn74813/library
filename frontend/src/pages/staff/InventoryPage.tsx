@@ -1,9 +1,10 @@
 import { useRef, useState, type FormEvent } from 'react'
-import { api, download } from '../../api/client'
+import { api } from '../../api/client'
 import type { ScanResult, StocktakeReport, StocktakeSession } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
-import { ErrorAlert, Field, Modal, Stat, StatusBadge, Table } from '../../components/ui'
+import { CameraScanButton } from '../../components/CameraScan'
+import { ErrorAlert, Field, Modal, Stat, StatusBadge, Table, ExportMenu } from '../../components/ui'
 import { fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
@@ -64,6 +65,7 @@ function SessionView({ session, onBack }: { session: StocktakeSession; onBack: (
   const [report, setReport] = useState<StocktakeReport | null>(null)
   const [closed, setClosed] = useState(!!session.closedAt)
   const ref = useRef<HTMLInputElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const toast = useToast()
   const canClose = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
 
@@ -108,10 +110,11 @@ function SessionView({ session, onBack }: { session: StocktakeSession; onBack: (
       </div>
       <p className="muted">{session.location ? `Location: ${session.location}` : 'Whole collection'}{closed && ' · closed'}</p>
       {!closed && (
-        <form className="card" onSubmit={scan} style={{ marginBottom: 16 }}>
+        <form className="card" onSubmit={scan} style={{ marginBottom: 16 }} ref={formRef}>
           <label className="field"><span>Scan each item on the shelf (barcode or RFID)</span>
             <div className="input-group">
               <input ref={ref} className="scan-input" value={code} onChange={(e) => setCode(e.target.value)} autoFocus autoComplete="off" />
+              <CameraScanButton onScan={(t) => { setCode(t); setTimeout(() => formRef.current?.requestSubmit(), 0) }} />
               <button className="btn primary">Add</button>
             </div>
           </label>
@@ -127,7 +130,7 @@ function SessionView({ session, onBack }: { session: StocktakeSession; onBack: (
             <Stat label="Status mismatch" value={report.unexpectedStatus.length} tone={report.unexpectedStatus.length ? 'warn' : undefined} />
             <Stat label="Unknown codes" value={report.unknownCodes.length} />
           </div>
-          <div className="row"><button className="btn" onClick={() => download(`/api/inventory/sessions/${session.id}/report.csv`, 'stocktake.csv')}><Icon name="download" />Download report</button></div>
+          <div className="row"><ExportMenu path={`/api/inventory/sessions/${session.id}/report/export`} name="stocktake" label="Download report…" /></div>
           {[['Missing', report.missing], ['Misplaced', report.misplaced], ['Found with unexpected status', report.unexpectedStatus]].map(([title, list]) => (
             <div className="card" key={title as string}>
               <h2>{title as string}</h2>

@@ -5,6 +5,7 @@ import { hasRole, STAFF_ROLES, useSession } from '../auth/AuthContext'
 import { Icon, type IconName } from './Icon'
 import { Logo } from './Logo'
 import { NotificationBell } from './NotificationBell'
+import { useLibrary } from '../api/library'
 
 interface NavItem { to: string; label: string; roles?: string[] }
 
@@ -27,6 +28,7 @@ const NAV: { section: string; icon: IconName; items: NavItem[] }[] = [
     items: [
       { to: '/staff/catalog', label: 'Catalog' },
       { to: '/staff/inventory', label: 'Stocktake' },
+      { to: '/staff/authorities', label: 'Authorities' },
     ],
   },
   {
@@ -50,14 +52,20 @@ const NAV: { section: string; icon: IconName; items: NavItem[] }[] = [
     icon: 'settings',
     items: [
       { to: '/staff/settings', label: 'Loan rules & courses' },
+      { to: '/staff/calendar', label: 'Library calendar' },
+      { to: '/staff/catalog-fields', label: 'Catalog fields', roles: ['ADMIN', 'LIBRARIAN'] },
+      { to: '/staff/notifications', label: 'Notifications', roles: ['ADMIN', 'LIBRARIAN'] },
       { to: '/staff/users', label: 'Users & devices', roles: ['ADMIN'] },
       { to: '/staff/audit', label: 'Audit trail', roles: ['ADMIN'] },
+      { to: '/staff/privacy', label: 'Data privacy', roles: ['ADMIN'] },
+      { to: '/staff/system', label: 'System settings', roles: ['ADMIN'] },
     ],
   },
 ]
 
 export function StaffLayout() {
   const session = useSession()
+  const lib = useLibrary()
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
@@ -76,7 +84,7 @@ export function StaffLayout() {
           <Logo size={48} />
           <div>
             <strong>Smart Library</strong>
-            <small>ZSCMST Learning Resource Center</small>
+            <small>{lib.name}</small>
           </div>
         </div>
         <nav className="nav">
@@ -108,7 +116,7 @@ export function StaffLayout() {
       <div className="content">
         <header className="topbar">
           <button className="icon-btn menu-btn" aria-label="Open menu" onClick={() => setOpen(true)}><Icon name="menu" /></button>
-          <Logo /><span className="brand">ZSCMST Smart Library</span>
+          <Logo /><span className="brand">{lib.systemName}</span>
           <NotificationBell />
         </header>
         <main className="main">

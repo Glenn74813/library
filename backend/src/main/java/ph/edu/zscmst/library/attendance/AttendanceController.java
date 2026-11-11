@@ -15,6 +15,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,7 +29,7 @@ import ph.edu.zscmst.library.attendance.AttendanceService.TapRequest;
 import ph.edu.zscmst.library.attendance.AttendanceService.TapResult;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
-import ph.edu.zscmst.library.common.Csv;
+import ph.edu.zscmst.library.common.Pdf;
 import ph.edu.zscmst.library.common.LibraryClock;
 import ph.edu.zscmst.library.common.PageResponse;
 import ph.edu.zscmst.library.common.SettingsService;
@@ -91,11 +92,17 @@ public class AttendanceController {
     @GetMapping("/api/attendance/logs")
     public PageResponse<LogDto> logs(@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+                                     @RequestParam(defaultValue = "") String q,
                                      @RequestParam(defaultValue = "0") int page,
                                      @RequestParam(defaultValue = "50") int size) {
         LocalDate t = to == null ? clock.today() : to;
         LocalDate f = from == null ? t : from;
-        return PageResponse.of(service.logs(f, t, PageRequest.of(page, Math.min(size, 200))), l -> l);
+        return PageResponse.of(service.logs(f, t, q, PageRequest.of(page, Math.min(size, 200))), l -> l);
+    }
+
+    @GetMapping("/api/attendance/patrons/{patronId}")
+    public AttendanceService.PatronAttendance patron(@PathVariable Long patronId) {
+        return service.forPatron(patronId);
     }
 
     @GetMapping("/api/attendance/stats")
@@ -107,14 +114,18 @@ public class AttendanceController {
 
     @GetMapping("/api/attendance/export")
     public ResponseEntity<byte[]> export(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-                                         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+                                         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+                                         @RequestParam(defaultValue = "csv") String format) {
         List<List<?>> rows = service.allLogs(from, to).stream().<List<?>>map(l -> List.of(
                 l.cardNumber(), l.patronName(), l.course() == null ? "" : l.course(), l.category(),
-                l.timeIn().atZone(clock.zone()).toLocalDateTime().toString(),
-                l.timeOut() == null ? "" : l.timeOut().atZone(clock.zone()).toLocalDateTime().toString(),
+                stamp(l.timeIn()), l.timeOut() == null ? "" : stamp(l.timeOut()),
                 l.method())).toList();
-        return Csv.download("attendance-" + from + "-to-" + to + ".csv",
+        return Pdf.export(format, "attendance-" + from + "-to-" + to, "Attendance Log", from + " to " + to,
                 List.of("Card Number", "Name", "Course", "Category", "Time In", "Time Out", "Method"), rows);
+    }
+
+    private String stamp(java.time.Instant i) {
+        return i.atZone(clock.zone()).toLocalDateTime().withNano(0).toString().replace('T', ' ');
     }
 
     @GetMapping("/api/attendance/settings")

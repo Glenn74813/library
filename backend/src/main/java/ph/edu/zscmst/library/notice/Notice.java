@@ -32,6 +32,10 @@ public class Notice {
     private String reference;
     private Instant createdAt = Instant.now();
     private Instant sentAt;
+    /** Channels used, e.g. "EMAIL,SMS"; "NONE" when the patron has no reachable contact. */
+    private String channels;
+    private int attempts;
+    private String lastError;
 
     protected Notice() {
     }
@@ -51,4 +55,10 @@ public class Notice {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getSentAt() { return sentAt; }
     public void setSentAt(Instant sentAt) { this.sentAt = sentAt; }
+    public String getChannels() { return channels; }
+    public void setChannels(String channels) { this.channels = channels; }
+    public int getAttempts() { return attempts; }
+    public void setAttempts(int attempts) { this.attempts = attempts; }
+    public String getLastError() { return lastError; }
+    public void setLastError(String lastError) { this.lastError = lastError == null || lastError.length() <= 300 ? lastError : lastError.substring(0, 300); }
 }

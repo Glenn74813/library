@@ -32,11 +32,16 @@ public class Patron {
     @JoinColumn(name = "course_id")
     private Course course;
     private String photoUrl;
+    /** Storage key of an uploaded photo (photoUrl then points at /api/opac/photos/{key}). */
+    private String photoKey;
     private LocalDate expiryDate;
     private boolean blocked;
     private String blockReason;
     private String pinHash;
+    private int pinFailures;
+    private Instant pinLockedUntil;
     private Instant createdAt = Instant.now();
+    private Instant anonymizedAt;
 
     protected Patron() {
     }
@@ -70,6 +75,8 @@ public class Patron {
     public void setCategory(PatronCategory category) { this.category = category; }
     public Course getCourse() { return course; }
     public void setCourse(Course course) { this.course = course; }
+    public String getPhotoKey() { return photoKey; }
+    public void setPhotoKey(String photoKey) { this.photoKey = photoKey; }
     public String getPhotoUrl() { return photoUrl; }
     public void setPhotoUrl(String photoUrl) { this.photoUrl = photoUrl; }
     public LocalDate getExpiryDate() { return expiryDate; }
@@ -81,4 +88,27 @@ public class Patron {
     public String getPinHash() { return pinHash; }
     public void setPinHash(String pinHash) { this.pinHash = pinHash; }
     public Instant getCreatedAt() { return createdAt; }
+    public boolean isPinLocked(Instant now) { return pinLockedUntil != null && pinLockedUntil.isAfter(now); }
+    public Instant getPinLockedUntil() { return pinLockedUntil; }
+
+    public void pinFailed(int max, int lockMinutes, Instant now) {
+        pinFailures++;
+        if (pinFailures >= max) {
+            pinLockedUntil = now.plusSeconds(lockMinutes * 60L);
+            pinFailures = 0;
+        }
+    }
+
+    public void unlockPin() {
+        pinFailures = 0;
+        pinLockedUntil = null;
+    }
+
+    public Instant getAnonymizedAt() {
+        return anonymizedAt;
+    }
+
+    public void setAnonymizedAt(Instant anonymizedAt) {
+        this.anonymizedAt = anonymizedAt;
+    }
 }

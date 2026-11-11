@@ -1,0 +1,13 @@
+# HTTPS front door for the Smart Library (docker compose --profile https up -d).
+#   DOMAIN=library.zscmst.edu.ph  TLS=admin@zscmst.edu.ph  -> free Let's Encrypt certificate (needs a public DNS name, ports 80/443 open)
+#   DOMAIN=library.lan (or an IP)  TLS=internal             -> Caddy's own certificate for the school LAN (install Caddy's root CA on the PCs)
+{$DOMAIN:localhost} {
+	tls {$TLS:internal}
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	reverse_proxy web:80
+}

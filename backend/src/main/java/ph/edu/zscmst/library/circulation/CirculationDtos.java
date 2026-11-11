@@ -22,13 +22,13 @@ public final class CirculationDtos {
     public record LoanDto(Long id, Long itemId, String barcode, Long recordId, String title, String callNumber,
                           Long patronId, String patronName, String cardNumber, Instant checkoutAt, Instant dueAt,
                           Instant returnedAt, int renewals, int maxRenewals, boolean overdue, long overdueDays,
-                          BigDecimal accruedFine) {
+                          BigDecimal accruedFine, String checkedOutBy) {
     }
 
     public record HoldDto(Long id, Long recordId, String title, Long patronId, String patronName, String cardNumber,
                           HoldStatus status, Instant placedAt, Instant readyAt, Instant expiresAt,
                           String itemBarcode, String itemShelfLocation, Integer queuePosition, LocalDate pickupDate,
-                          boolean atRisk) {
+                          boolean atRisk, Instant closedAt, String closedBy) {
         static HoldDto of(HoldRequest h, Integer queuePosition) {
             return of(h, queuePosition, false);
         }
@@ -38,7 +38,8 @@ public final class CirculationDtos {
             return new HoldDto(h.getId(), h.getRecord().getId(), h.getRecord().getTitle(), p.getId(),
                     p.getFullName(), p.getCardNumber(), h.getStatus(), h.getPlacedAt(), h.getReadyAt(),
                     h.getExpiresAt(), h.getItem() == null ? null : h.getItem().getBarcode(),
-                    h.getItem() == null ? null : h.getItem().getShelfLocation(), queuePosition, h.getPickupDate(), atRisk);
+                    h.getItem() == null ? null : h.getItem().getShelfLocation(), queuePosition, h.getPickupDate(), atRisk,
+                    h.getClosedAt(), h.getClosedBy());
         }
     }
 

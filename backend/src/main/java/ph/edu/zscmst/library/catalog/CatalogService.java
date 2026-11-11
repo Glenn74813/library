@@ -1,8 +1,12 @@
 package ph.edu.zscmst.library.catalog;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -20,6 +24,8 @@ import ph.edu.zscmst.library.catalog.CatalogDtos.RecordDto;
 import ph.edu.zscmst.library.catalog.CatalogDtos.RecordRequest;
 import ph.edu.zscmst.library.circulation.LoanRepository;
 import ph.edu.zscmst.library.common.ApiException;
+import ph.edu.zscmst.library.authority.Authority;
+import ph.edu.zscmst.library.authority.AuthorityService;
 import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.digital.DigitalService;
 import ph.edu.zscmst.library.digital.DigitalService.DigitalSummary;
@@ -34,9 +40,16 @@ public class CatalogService {
     private final LoanRepository loans;
     private final AuditService audit;
     private final DigitalService digital;
+    private final LoanPolicy policy;
+    private final AuthorityService authorities;
+    private final CustomFieldRepository customFields;
 
     public CatalogService(BibRecordRepository records, ItemRepository items, LoanRepository loans,
-                          AuditService audit, DigitalService digital) {
+                          AuditService audit, DigitalService digital, LoanPolicy policy, AuthorityService authorities,
+                          CustomFieldRepository customFields) {
+        this.authorities = authorities;
+        this.customFields = customFields;
+        this.policy = policy;
         this.records = records;
         this.items = items;
         this.loans = loans;
@@ -47,6 +60,17 @@ public class CatalogService {
     @Transactional(readOnly = true)
     public Page<RecordDto> search(String q, String field, MaterialType type, Pageable pageable) {
         String f = field == null || !FIELDS.contains(field) ? "any" : field;
+        // Authority control: a variant form of a name or subject searches its preferred heading.
+        if (q != null && !q.isBlank()) {
+            if (f.equals("author") || f.equals("any")) {
+                String preferred = authorities.preferred(Authority.Type.AUTHOR, q);
+                if (!preferred.equals(q)) { q = preferred; f = "author"; }
+            }
+            if (f.equals("subject") || f.equals("any")) {
+                String preferred = authorities.preferred(Authority.Type.SUBJECT, q);
+                if (!preferred.equals(q)) { q = preferred; f = "subject"; }
+            }
+        }
         Page<BibRecord> page = records.search(q == null ? "" : q.trim(), f, type == null ? "" : type.name(), pageable);
         Map<Long, Availability> availability = availability(page.map(BibRecord::getId).getContent());
         Map<Long, DigitalSummary> ebooks = digital.summaries(page.getContent());
@@ -90,7 +114,7 @@ public class CatalogService {
         Map<Long, Instant> due = dueDates(list);
         Availability a = availability(List.of(id)).getOrDefault(id, Availability.NONE);
         return new RecordDetailDto(RecordDto.of(r, a, digital.summaries(List.of(r)).get(id)),
-                list.stream().map(i -> ItemDto.of(i, due.get(i.getId()))).toList());
+                list.stream().map(i -> ItemDto.of(i, due.get(i.getId()), policy.isRoomUse(i))).toList());
     }
 
     public Map<Long, Instant> dueDates(List<Item> list) {
@@ -132,7 +156,7 @@ public class CatalogService {
         audit.record("RECORD_DELETE", id + " " + r.getTitle());
     }
 
-    private static void apply(BibRecord r, RecordRequest req) {
+    private void apply(BibRecord r, RecordRequest req) {
         r.setTitle(req.title().trim());
         r.setSubtitle(trim(req.subtitle()));
         r.setAuthors(trim(req.authors()));
@@ -145,12 +169,13 @@ public class CatalogService {
         r.setMaterialType(req.materialType());
         r.setLanguage(trim(req.language()));
         r.setSummary(trim(req.summary()));
+        r.setCustomFields(CatalogDtos.customJson(validCustomValues(req.customFields())));
     }
 
     @Transactional(readOnly = true)
     public ItemDto lookupItem(String code) {
         Item i = items.findByIdentifier(code.trim()).orElseThrow(() -> ApiException.notFound("Item"));
-        return ItemDto.of(i, dueDates(List.of(i)).get(i.getId()));
+        return ItemDto.of(i, dueDates(List.of(i)).get(i.getId()), policy.isRoomUse(i));
     }
 
     @Transactional
@@ -159,7 +184,7 @@ public class CatalogService {
         applyItem(i, req, true);
         i = items.save(i);
         audit.record("ITEM_CREATE", i.getBarcode() + " -> record " + recordId);
-        return ItemDto.of(i, null);
+        return ItemDto.of(i, null, policy.isRoomUse(i));
     }
 
     @Transactional
@@ -169,7 +194,7 @@ public class CatalogService {
         applyItem(i, req, false);
         items.flush();
         audit.record("ITEM_UPDATE", i.getBarcode() + " status=" + i.getStatus());
-        return ItemDto.of(i, dueDates(List.of(i)).get(i.getId()));
+        return ItemDto.of(i, dueDates(List.of(i)).get(i.getId()), policy.isRoomUse(i));
     }
 
     @Transactional
@@ -190,6 +215,7 @@ public class CatalogService {
         i.setLocation(trim(req.location()));
         i.setAisle(trim(req.aisle()));
         i.setShelf(trim(req.shelf()));
+        i.setRoomUseOnly(req.roomUseOnly());
         i.setAcquiredDate(req.acquiredDate());
         i.setPrice(req.price());
         i.setNotes(trim(req.notes()));
@@ -199,6 +225,34 @@ public class CatalogService {
             }
             i.setStatus(req.status());
         }
+    }
+
+    /** Keeps only defined fields and checks each value against its type. */
+    private Map<String, String> validCustomValues(Map<String, String> values) {
+        if (values == null || values.isEmpty()) return Map.of();
+        Map<String, String> out = new LinkedHashMap<>();
+        for (CustomField f : customFields.findAll()) {
+            String v = trim(values.get(f.getKey()));
+            if (v == null) continue;
+            switch (f.getType()) {
+                case NUMBER -> {
+                    try { new BigDecimal(v); } catch (NumberFormatException e) {
+                        throw ApiException.badRequest(f.getLabel() + " must be a number");
+                    }
+                }
+                case DATE -> {
+                    try { LocalDate.parse(v); } catch (DateTimeParseException e) {
+                        throw ApiException.badRequest(f.getLabel() + " must be a date");
+                    }
+                }
+                case SELECT -> {
+                    if (!f.optionList().contains(v)) throw ApiException.badRequest(f.getLabel() + ": choose one of the listed options");
+                }
+                default -> { }
+            }
+            out.put(f.getKey(), v);
+        }
+        return out;
     }
 
     private static String trim(String s) {

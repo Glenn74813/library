@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import type { DigitalSummary, Page } from '../api/types'
 import { label } from '../format'
 import { Icon } from './Icon'
+import { download } from '../api/client'
 
 // ------------------------------------------------------------------ table
 
@@ -126,13 +127,15 @@ export function Stat({ label: text, value, tone }: { label: string; value: React
 
 const STATUS_TONE: Record<string, string> = {
   AVAILABLE: 'ok', ON_LOAN: 'info', ON_HOLD: 'warn', LOST: 'bad', MISSING: 'bad', DAMAGED: 'warn',
-  WITHDRAWN: '', SCHEDULED: 'info', PENDING: 'info', READY: 'ok', FULFILLED: '', CANCELLED: '', EXPIRED: 'warn',
+  WITHDRAWN: '', SCHEDULED: 'info', PENDING: 'info', READY: 'ok', FULFILLED: 'ok', CANCELLED: '', EXPIRED: 'warn',
   UNPAID: 'bad', PAID: 'ok', WAIVED: '', ALARM: 'bad', TAMPER: 'bad', POWER_LOSS: 'warn',
   POWER_RESTORED: 'ok', VISITOR: 'info', EMERGENCY_ON: 'bad', EMERGENCY_OFF: 'ok', BROADCAST: 'warn',
   IN: 'ok', OUT: 'info', OK: 'ok', CHECK: 'warn', MISPLACED: 'warn', UNKNOWN: 'bad', DUPLICATE: '',
 }
 
-const STATUS_TEXT: Record<string, string> = { SCHEDULED: 'Booked', PENDING: 'Waiting', READY: 'Ready for pickup' }
+const STATUS_TEXT: Record<string, string> = {
+  SCHEDULED: 'Booked', PENDING: 'Waiting', READY: 'Ready for pickup', FULFILLED: 'Released', EXPIRED: 'Not picked up',
+}
 
 export function StatusBadge({ status }: { status: string }) {
   return <span className={`badge ${STATUS_TONE[status] ?? ''}`}>{STATUS_TEXT[status] ?? label(status)}</span>
@@ -176,4 +179,21 @@ export function EbookBadge({ ebook }: { ebook: DigitalSummary }) {
   return ebook.kind === 'SCHOOL_OWNED'
     ? <span className="badge ok ebook-badge"><Icon name="tablet" size={12} />E-book · {ebook.format}</span>
     : <span className="badge warn ebook-badge"><Icon name="link" size={12} />E-book · {ebook.provider ?? 'vendor'}</span>
+}
+
+/** Adds format=csv|pdf to an export URL that may already carry a query string. */
+export const withFormat = (path: string, format: 'csv' | 'pdf') => `${path}${path.includes('?') ? '&' : '?'}format=${format}`
+
+/** "Export…" picker that downloads the same report as Excel (CSV) or a printable PDF. */
+export function ExportMenu({ path, name, label = 'Export…' }: { path: string; name: string; label?: string }) {
+  return (
+    <select className="btn" style={{ width: 'auto' }} value="" aria-label={label} onChange={(e) => {
+      const f = e.target.value as 'csv' | 'pdf'
+      void download(withFormat(path, f), `${name}.${f}`)
+    }}>
+      <option value="" disabled>{label}</option>
+      <option value="csv">Excel (CSV)</option>
+      <option value="pdf">PDF</option>
+    </select>
+  )
 }

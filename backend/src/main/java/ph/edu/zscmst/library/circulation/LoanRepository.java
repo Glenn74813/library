@@ -62,7 +62,7 @@ public interface LoanRepository extends JpaRepository<Loan, Long> {
 
     @Query("""
             select l.patron.id, l.patron.cardNumber, concat(l.patron.firstName, ' ', l.patron.lastName), count(l)
-            from Loan l where l.checkoutAt >= :from and l.checkoutAt < :to
+            from Loan l where l.checkoutAt >= :from and l.checkoutAt < :to and l.patron.cardNumber <> '__ANONYMIZED__'
             group by l.patron.id, l.patron.cardNumber, l.patron.firstName, l.patron.lastName
             order by count(l) desc
             """)

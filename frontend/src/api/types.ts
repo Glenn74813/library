@@ -31,6 +31,8 @@ export interface User {
   role: Role
   enabled: boolean
   createdAt: string
+  /** Set while the account is locked after repeated failed sign-ins. */
+  lockedUntil: string | null
 }
 
 export interface Category {
@@ -43,6 +45,12 @@ export interface Category {
   maxUnpaidFines: number
   /** Days a reserved copy waits on the hold shelf for pickup. */
   holdPickupDays: number
+  /** Active reservations + bookings allowed; 0 = no limit. */
+  maxHolds: number
+  /** Late open days not charged. */
+  fineGraceDays: number
+  /** Overdue fine cap per item; 0 = no cap. */
+  maxFinePerItem: number
 }
 
 export interface Course {
@@ -70,6 +78,7 @@ export interface Patron {
   blockReason: string | null
   hasPin: boolean
   createdAt: string
+  anonymizedAt: string | null
 }
 
 export const MATERIAL_TYPES = ['BOOK', 'AUDIOVISUAL', 'SERIAL', 'THESIS', 'EBOOK', 'REFERENCE', 'OTHER'] as const
@@ -97,6 +106,18 @@ export interface BibRecord {
   createdAt: string
   updatedAt: string
   ebook: DigitalSummary | null
+  /** Values of library-defined custom fields, by field key. */
+  customFields: Record<string, string>
+}
+
+export interface CustomFieldDef {
+  id: number
+  key: string
+  label: string
+  type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT'
+  options: string[]
+  showInOpac: boolean
+  sortOrder: number
 }
 
 /** School-owned e-books are uploaded and readable in the app; commercial ones only link to the vendor. */
@@ -148,6 +169,10 @@ export interface Item {
   shelf: string | null
   /** "Fiction Section · Aisle 3 · Shelf 2" */
   shelfLocation: string | null
+  /** Effective rule for this copy (material type rule unless overridden). */
+  roomUseOnly: boolean
+  /** null = follow the material type; true/false = set on this copy */
+  roomUseOverride: boolean | null
   status: ItemStatus
   acquiredDate: string | null
   price: number | null
@@ -169,11 +194,14 @@ export interface OpacItem {
   callNumber: string | null
   status: ItemStatus
   dueAt: string | null
+  roomUseOnly: boolean
 }
 
 export interface OpacDetail {
   record: BibRecord
   items: OpacItem[]
+  /** Custom fields marked "show in OPAC", with labels. */
+  extraFields: { label: string; value: string }[]
 }
 
 export interface IsbnResult {
@@ -205,6 +233,8 @@ export interface Loan {
   overdue: boolean
   overdueDays: number
   accruedFine: number
+  /** Staff member who checked the item out (released it to the patron). */
+  checkedOutBy: string | null
 }
 
 export type HoldStatus = 'SCHEDULED' | 'PENDING' | 'READY' | 'FULFILLED' | 'CANCELLED' | 'EXPIRED'
@@ -228,6 +258,9 @@ export interface Hold {
   pickupDate: string | null
   /** Booking that may not get a copy in time (none on the shelf or due back before the date). */
   atRisk: boolean
+  /** When the reservation ended and who did it (staff username, patron card number, or "system ..."). */
+  closedAt: string | null
+  closedBy: string | null
 }
 
 export type FineStatus = 'UNPAID' | 'PAID' | 'WAIVED'
@@ -374,6 +407,17 @@ export interface GateSummary {
   emergencyMode: boolean
   alarmEnabled: boolean
   gates: { gateId: string; lastSeen: string; online: boolean }[]
+  config: GateConfig
+}
+
+export interface GateConfig {
+  emergencyMode: boolean
+  alarmEnabled: boolean
+  /** ALWAYS | OPEN_HOURS | CUSTOM */
+  schedule: 'ALWAYS' | 'OPEN_HOURS' | 'CUSTOM'
+  armFrom: string | null
+  armTo: string | null
+  armedNow: boolean
 }
 
 export interface StocktakeSession {

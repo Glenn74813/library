@@ -35,6 +35,8 @@ public class BibRecord {
     /** Vendor platform link for commercial e-books (the file itself is never hosted here). */
     private String externalUrl;
     private String externalProvider;
+    /** Values of library-defined custom fields as a JSON object (key -> value). */
+    private String customFields;
     private Instant createdAt = Instant.now();
     private Instant updatedAt = Instant.now();
 
@@ -71,6 +73,8 @@ public class BibRecord {
     public String getExternalUrl() { return externalUrl; }
     public void setExternalUrl(String externalUrl) { this.externalUrl = externalUrl; }
     public String getExternalProvider() { return externalProvider; }
+    public String getCustomFields() { return customFields; }
+    public void setCustomFields(String customFields) { this.customFields = customFields; }
     public void setExternalProvider(String externalProvider) { this.externalProvider = externalProvider; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

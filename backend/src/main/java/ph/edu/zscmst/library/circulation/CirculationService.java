@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -27,6 +26,7 @@ import ph.edu.zscmst.library.catalog.BibRecordRepository;
 import ph.edu.zscmst.library.catalog.Item;
 import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.ItemStatus;
+import ph.edu.zscmst.library.catalog.LoanPolicy;
 import ph.edu.zscmst.library.circulation.CirculationDtos.BookingCalendar;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckinResult;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckoutResult;
@@ -38,6 +38,8 @@ import ph.edu.zscmst.library.circulation.CirculationDtos.ReceiptDto;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.common.LibraryClock;
+import ph.edu.zscmst.library.common.SettingsService;
+import ph.edu.zscmst.library.calendar.LibraryCalendar;
 import ph.edu.zscmst.library.notice.NoticeService;
 import ph.edu.zscmst.library.notice.NoticeType;
 import ph.edu.zscmst.library.patron.Patron;
@@ -60,10 +62,17 @@ public class CirculationService {
     private final NoticeService notices;
     private final LibraryClock clock;
     private final AuditService audit;
+    private final LibraryCalendar calendar;
+    private final SettingsService settings;
+    private final LoanPolicy policy;
 
     public CirculationService(LoanRepository loans, HoldRequestRepository holds, FineRepository fines,
                               ItemRepository items, PatronRepository patrons, BibRecordRepository records,
-                              NoticeService notices, LibraryClock clock, AuditService audit) {
+                              NoticeService notices, LibraryClock clock, AuditService audit, LibraryCalendar calendar,
+                              SettingsService settings, LoanPolicy policy) {
+        this.policy = policy;
+        this.calendar = calendar;
+        this.settings = settings;
         this.loans = loans;
         this.holds = holds;
         this.fines = fines;
@@ -79,6 +88,15 @@ public class CirculationService {
 
     @Transactional
     public CheckoutResult checkout(String patronCode, String itemCode, boolean override) {
+        return checkout(patronCode, itemCode, override, null);
+    }
+
+    /**
+     * Checkout. {@code offlineAt} is the original time of a checkout recorded while the desk was offline:
+     * the due date is counted from it, and limits are reported as warnings since the item has already left.
+     */
+    @Transactional
+    public CheckoutResult checkout(String patronCode, String itemCode, boolean override, Instant offlineAt) {
         Patron p = patrons.findByIdentifier(patronCode.trim()).orElseThrow(() -> ApiException.notFound("Patron"));
         Item item = items.findByIdentifier(itemCode.trim()).orElseThrow(() -> ApiException.notFound("Item"));
         PatronCategory cat = p.getCategory();
@@ -87,7 +105,8 @@ public class CirculationService {
         if (p.isBlocked()) {
             throw ApiException.conflict("Patron is blocked" + (p.getBlockReason() == null ? "" : ": " + p.getBlockReason()));
         }
-        LocalDate today = clock.today();
+        Instant now = offlineAt == null ? Instant.now() : offlineAt;
+        LocalDate today = clock.toDate(now);
         limit(p.isExpired(today), "Library card expired on " + p.getExpiryDate(), override, warnings);
         long active = loans.countByPatronIdAndReturnedAtIsNull(p.getId());
         limit(active >= cat.getMaxLoans(), "Loan limit reached (" + cat.getMaxLoans() + " items for "
@@ -96,6 +115,9 @@ public class CirculationService {
         limit(unpaid.compareTo(cat.getMaxUnpaidFines()) > 0, "Unpaid fines of PHP " + unpaid
                 + " exceed the PHP " + cat.getMaxUnpaidFines() + " limit", override, warnings);
 
+        limit(policy.isRoomUse(item), "Room use only: this copy may not leave the library", override, warnings);
+
+        HoldRequest released = null;
         switch (item.getStatus()) {
             case AVAILABLE -> { }
             case ON_HOLD -> {
@@ -104,29 +126,36 @@ public class CirculationService {
                 if (!hold.getPatron().getId().equals(p.getId())) {
                     throw ApiException.conflict("Item is on hold for " + hold.getPatron().getFullName());
                 }
-                hold.setStatus(HoldStatus.FULFILLED);
+                hold.close(HoldStatus.FULFILLED, AuditService.currentActor(), now);
+                released = hold;
             }
             case ON_LOAN -> throw ApiException.conflict("Item is already checked out");
             default -> throw ApiException.conflict("Item cannot be borrowed (status: " + item.getStatus() + ")");
         }
 
-        Instant now = Instant.now();
-        LocalDate dueDate = today.plusDays(cat.getLoanDays());
+        int loanDays = policy.loanDays(item, cat);
+        LibraryCalendar.Snapshot cal = calendar.snapshot(today, today.plusDays(loanDays));
+        LocalDate dueDate = cal.nextOpenOnOrAfter(today.plusDays(loanDays));
         String notice = null;
         Optional<BookingLimit> limit = bookingLimit(item, p.getId(), dueDate);
         if (limit.isPresent() && limit.get().lastDueDate().isBefore(dueDate)) {
-            dueDate = limit.get().lastDueDate().isBefore(today) ? today : limit.get().lastDueDate();
+            LocalDate last = cal.previousOpenOnOrBefore(limit.get().lastDueDate());
+            dueDate = last.isBefore(today) ? today : last;
             notice = "Due " + clock.format(clock.endOfDay(dueDate)) + ": this title is booked by another patron for "
                     + clock.format(clock.endOfDay(limit.get().bookedFor()));
         }
         // Borrowing a title you booked for later fulfils your own booking.
         holds.findFirstByRecordIdAndPatronIdAndStatus(item.getRecord().getId(), p.getId(), HoldStatus.SCHEDULED)
-                .ifPresent(b -> b.setStatus(HoldStatus.FULFILLED));
+                .ifPresent(b -> b.close(HoldStatus.FULFILLED, AuditService.currentActor(), now));
         item.setStatus(ItemStatus.ON_LOAN);
         Loan loan = loans.save(new Loan(item, p, now, clock.endOfDay(dueDate), AuditService.currentActor()));
         audit.record("CHECKOUT", item.getBarcode() + " -> " + p.getCardNumber()
                 + (warnings.isEmpty() ? "" : " OVERRIDE: " + String.join("; ", warnings))
-                + (notice == null ? "" : " SHORTENED: " + notice));
+                + (notice == null ? "" : " SHORTENED: " + notice) + offlineNote(offlineAt));
+        if (released != null) {
+            audit.record("HOLD_RELEASE", "\"" + item.getRecord().getTitle() + "\" copy " + item.getBarcode()
+                    + " released to " + p.getCardNumber() + " " + p.getFullName() + " (hold " + released.getId() + ")");
+        }
         return new CheckoutResult(toDto(loan), warnings, notice);
     }
 
@@ -136,8 +165,18 @@ public class CirculationService {
         warnings.add(message);
     }
 
+    private String offlineNote(Instant offlineAt) {
+        return offlineAt == null ? "" : " (offline, at " + clock.format(offlineAt) + ")";
+    }
+
     @Transactional
     public CheckinResult checkin(String itemCode) {
+        return checkin(itemCode, null);
+    }
+
+    /** Check-in; {@code offlineAt} is the original return time of a check-in recorded offline (fines stop there). */
+    @Transactional
+    public CheckinResult checkin(String itemCode, Instant offlineAt) {
         Item item = items.findByIdentifier(itemCode.trim()).orElseThrow(() -> ApiException.notFound("Item"));
         Optional<Loan> activeLoan = loans.findByItemIdAndReturnedAtIsNull(item.getId());
         if (activeLoan.isEmpty()) {
@@ -156,12 +195,13 @@ public class CirculationService {
             throw ApiException.badRequest("Item is not checked out");
         }
         Loan loan = activeLoan.get();
-        Instant now = Instant.now();
+        Instant now = offlineAt == null ? Instant.now() : offlineAt;
+        if (now.isBefore(loan.getCheckoutAt())) now = loan.getCheckoutAt();
         loan.setReturnedAt(now);
         BigDecimal fine = assessOverdueFine(loan, now);
         String holdFor = routeReturnedItem(item);
         audit.record("CHECKIN", item.getBarcode() + " from " + loan.getPatron().getCardNumber()
-                + (fine.signum() > 0 ? " fine=" + fine : ""));
+                + (fine.signum() > 0 ? " fine=" + fine : "") + offlineNote(offlineAt));
         String where = item.getShelfLocation();
         String message = holdFor != null ? "Place on hold shelf for " + holdFor
                 : where != null ? "Return to " + where : "Return to shelf";
@@ -187,10 +227,12 @@ public class CirculationService {
         if (holds.existsByRecordIdAndStatus(loan.getItem().getRecord().getId(), HoldStatus.PENDING)) {
             throw ApiException.conflict("Another patron has reserved this title");
         }
-        LocalDate wanted = clock.today().plusDays(cat.getLoanDays());
+        int loanDays = policy.loanDays(loan.getItem(), cat);
+        LibraryCalendar.Snapshot cal = calendar.snapshot(clock.today(), clock.today().plusDays(loanDays));
+        LocalDate wanted = cal.nextOpenOnOrAfter(clock.today().plusDays(loanDays));
         Optional<BookingLimit> limit = bookingLimit(loan.getItem(), p.getId(), wanted);
         if (limit.isPresent() && limit.get().lastDueDate().isBefore(wanted)) {
-            wanted = limit.get().lastDueDate();
+            wanted = cal.previousOpenOnOrBefore(limit.get().lastDueDate());
             if (!clock.endOfDay(wanted).isAfter(loan.getDueAt())) {
                 throw ApiException.conflict("Cannot renew: this title is booked by another patron for "
                         + clock.format(clock.endOfDay(limit.get().bookedFor())) + ". Please return it by the due date.");
@@ -221,7 +263,7 @@ public class CirculationService {
 
     private BigDecimal assessOverdueFine(Loan loan, Instant returnedAt) {
         long days = overdueDays(loan, returnedAt);
-        BigDecimal amount = loan.getPatron().getCategory().getFinePerDay().multiply(BigDecimal.valueOf(days));
+        BigDecimal amount = overdueFine(loan.getPatron().getCategory(), days);
         if (amount.signum() > 0) {
             fines.save(new Fine(loan.getPatron(), loan, amount,
                     "Overdue " + days + " day(s): " + loan.getItem().getRecord().getTitle()));
@@ -229,12 +271,28 @@ public class CirculationService {
         return amount;
     }
 
+    /** Fine for {@code days} late open days: the category's grace days are free and the total is capped per item. */
+    static BigDecimal overdueFine(PatronCategory cat, long days) {
+        long charged = Math.max(0, days - cat.getFineGraceDays());
+        BigDecimal amount = cat.getFinePerDay().multiply(BigDecimal.valueOf(charged));
+        BigDecimal cap = cat.getMaxFinePerItem();
+        return cap != null && cap.signum() > 0 ? amount.min(cap) : amount;
+    }
+
+    /** Late days that are charged: only days the library was open after the due date. */
     long overdueDays(Loan loan, Instant at) {
-        return Math.max(0, ChronoUnit.DAYS.between(clock.toDate(loan.getDueAt()), clock.toDate(at)));
+        LocalDate due = clock.toDate(loan.getDueAt());
+        LocalDate until = clock.toDate(at);
+        if (!until.isAfter(due)) return 0;
+        return calendar.snapshot(due, until).openDaysAfter(due, until);
     }
 
     /** Sends a returned copy to the next waiting hold, or back to the shelf. */
     private String routeReturnedItem(Item item) {
+        if (policy.isRoomUse(item)) {
+            item.setStatus(ItemStatus.AVAILABLE);
+            return null;
+        }
         Optional<HoldRequest> next = holds.findQueue(item.getRecord().getId(), HoldStatus.PENDING, PageRequest.of(0, 1))
                 .stream().findFirst();
         if (next.isEmpty()) {
@@ -248,7 +306,7 @@ public class CirculationService {
     private void setAside(HoldRequest hold, Item item) {
         item.setStatus(ItemStatus.ON_HOLD);
         int window = hold.getPatron().getCategory().getHoldPickupDays();
-        hold.markReady(item, Instant.now(), clock.endOfDay(clock.today().plusDays(window)));
+        hold.markReady(item, Instant.now(), clock.endOfDay(calendar.nextOpenOnOrAfter(clock.today().plusDays(window))));
         notices.queue(hold.getPatron(), NoticeType.HOLD_READY, hold.getRecord().getTitle(), hold.getExpiresAt(),
                 "hold:" + hold.getId());
     }
@@ -296,10 +354,10 @@ public class CirculationService {
         Instant now = Instant.now();
         boolean overdue = l.isActive() && l.getDueAt().isBefore(now);
         long days = l.isActive() ? overdueDays(l, now) : 0;
-        BigDecimal accrued = p.getCategory().getFinePerDay().multiply(BigDecimal.valueOf(days));
+        BigDecimal accrued = overdueFine(p.getCategory(), days);
         return new LoanDto(l.getId(), i.getId(), i.getBarcode(), r.getId(), r.getTitle(), r.getCallNumber(),
                 p.getId(), p.getFullName(), p.getCardNumber(), l.getCheckoutAt(), l.getDueAt(), l.getReturnedAt(),
-                l.getRenewals(), p.getCategory().getMaxRenewals(), overdue, days, accrued);
+                l.getRenewals(), p.getCategory().getMaxRenewals(), overdue, days, accrued, l.getCheckedOutBy());
     }
 
     // ---------------------------------------------------------------- holds
@@ -326,13 +384,22 @@ public class CirculationService {
         if (!items.existsByRecordIdAndStatusNot(recordId, ItemStatus.WITHDRAWN)) {
             throw ApiException.badRequest("The library has no copies of this title");
         }
+        int maxHolds = p.getCategory().getMaxHolds();
+        if (maxHolds > 0 && holds.countByPatronIdAndStatusIn(patronId,
+                EnumSet.of(HoldStatus.SCHEDULED, HoldStatus.PENDING, HoldStatus.READY)) >= maxHolds) {
+            throw ApiException.conflict("Reservation limit reached (" + maxHolds + " for " + p.getCategory().getName() + ")");
+        }
+        if (circulatingCopies(recordId).isEmpty()) {
+            throw ApiException.badRequest("This title is for room use only and can't be reserved; read it in the library");
+        }
         if (pickupDate != null) {
             LocalDate today = clock.today();
             if (!pickupDate.isAfter(today)) {
                 throw ApiException.badRequest("Choose a pickup date from tomorrow onwards (use Reserve to get it now)");
             }
-            if (pickupDate.isAfter(today.plusDays(BOOKING_HORIZON_DAYS))) {
-                throw ApiException.badRequest("Bookings can be made up to " + BOOKING_HORIZON_DAYS + " days ahead");
+            int horizon = policy.bookingHorizonDays();
+            if (pickupDate.isAfter(today.plusDays(horizon))) {
+                throw ApiException.badRequest("Bookings can be made up to " + horizon + " days ahead");
             }
             records.findByIdForUpdate(recordId); // serialise bookings of one title so capacity can't be oversold
             if (unavailableDates(recordId, p).contains(pickupDate)) {
@@ -344,8 +411,7 @@ public class CirculationService {
             return HoldDto.of(booking, null);
         }
         HoldRequest hold = holds.save(new HoldRequest(r, p));
-        items.findFirstByRecordIdAndStatusOrderByIdAsc(recordId, ItemStatus.AVAILABLE)
-                .ifPresent(item -> setAside(hold, item));
+        freeLoanableCopy(recordId).ifPresent(item -> setAside(hold, item));
         audit.record("HOLD_PLACE", p.getCardNumber() + " -> record " + recordId);
         return HoldDto.of(hold, queuePosition(hold));
     }
@@ -361,7 +427,7 @@ public class CirculationService {
             throw ApiException.badRequest("Hold is already " + h.getStatus());
         }
         HoldStatus was = h.getStatus();
-        h.setStatus(HoldStatus.CANCELLED);
+        h.close(HoldStatus.CANCELLED, AuditService.currentActor(), Instant.now());
         if (was == HoldStatus.READY && h.getItem() != null) {
             routeReturnedItem(h.getItem());
         }
@@ -371,7 +437,7 @@ public class CirculationService {
     @Transactional(readOnly = true)
     public List<HoldDto> activeHolds() {
         Set<Long> atRisk = new HashSet<>();
-        bookingsAtRisk(RISK_DAYS).forEach(h -> atRisk.add(h.getId()));
+        bookingsAtRisk(policy.atRiskDays()).forEach(h -> atRisk.add(h.getId()));
         return holds.findByStatusInOrderByPlacedAtAsc(EnumSet.of(HoldStatus.SCHEDULED, HoldStatus.PENDING, HoldStatus.READY)).stream()
                 .map(h -> HoldDto.of(h, queuePosition(h), atRisk.contains(h.getId()))).toList();
     }
@@ -390,17 +456,22 @@ public class CirculationService {
 
     // ---------------------------------------------------------------- advance bookings
 
-    static final int BOOKING_HORIZON_DAYS = 60;
-
     /** A loan of a copy must end by {@code lastDueDate} so the booking for {@code bookedFor} gets a copy. */
     record BookingLimit(LocalDate lastDueDate, LocalDate bookedFor) {
     }
 
-    /** Copies that can serve bookings (not withdrawn, lost, missing or damaged). */
+    /** A copy on the shelf that may be lent, locked so no other hold takes it at the same time. */
+    private Optional<Item> freeLoanableCopy(Long recordId) {
+        return items.findByRecordIdAndStatusOrderByIdAsc(recordId, ItemStatus.AVAILABLE).stream()
+                .filter(policy::isLoanable).findFirst();
+    }
+
+    /** Copies that can serve bookings (not withdrawn, lost, missing, damaged or room use only). */
     private List<Item> circulatingCopies(Long recordId) {
         return items.findByRecordIdOrderByBarcodeAsc(recordId).stream()
                 .filter(i -> i.getStatus() == ItemStatus.AVAILABLE || i.getStatus() == ItemStatus.ON_LOAN
                         || i.getStatus() == ItemStatus.ON_HOLD)
+                .filter(policy::isLoanable)
                 .toList();
     }
 
@@ -438,7 +509,7 @@ public class CirculationService {
     List<LocalDate> unavailableDates(Long recordId, Patron p) {
         int copies = circulatingCopies(recordId).size();
         LocalDate first = clock.today().plusDays(1);
-        LocalDate last = clock.today().plusDays(BOOKING_HORIZON_DAYS);
+        LocalDate last = clock.today().plusDays(policy.bookingHorizonDays());
         List<HoldRequest> bookings = holds.findByRecordIdAndStatusOrderByPickupDateAsc(recordId, HoldStatus.SCHEDULED)
                 .stream().filter(b -> !b.getPatron().getId().equals(p.getId())).toList();
         // A copy on loan is busy until its due date; an overdue copy is busy until it actually comes back.
@@ -446,9 +517,10 @@ public class CirculationService {
         List<Item> lent = circulatingCopies(recordId).stream().filter(i -> i.getStatus() == ItemStatus.ON_LOAN).toList();
         List<LocalDate> lentUntil = lent.isEmpty() ? List.of() : loans.findActiveByItemIds(lent.stream().map(Item::getId).toList())
                 .stream().map(l -> clock.toDate(l.getDueAt())).map(due -> due.isBefore(today) ? last.plusDays(365) : due).toList();
+        LibraryCalendar.Snapshot cal = calendar.snapshot(first, last);
         List<LocalDate> out = new ArrayList<>();
         for (LocalDate d = first; !d.isAfter(last); d = d.plusDays(1)) {
-            if (copies == 0) { out.add(d); continue; }
+            if (copies == 0 || !cal.isOpen(d)) { out.add(d); continue; }
             LocalDate end = bookingEnd(d, p);
             int peak = 0;
             for (LocalDate x = d; !x.isAfter(end); x = x.plusDays(1)) {
@@ -469,12 +541,9 @@ public class CirculationService {
     public BookingCalendar bookingCalendar(Long recordId, Long patronId) {
         Patron p = patrons.findById(patronId).orElseThrow(() -> ApiException.notFound("Patron"));
         records.findById(recordId).orElseThrow(() -> ApiException.notFound("Record"));
-        return new BookingCalendar(clock.today().plusDays(1), clock.today().plusDays(BOOKING_HORIZON_DAYS),
+        return new BookingCalendar(clock.today().plusDays(1), clock.today().plusDays(policy.bookingHorizonDays()),
                 unavailableDates(recordId, p), circulatingCopies(recordId).size());
     }
-
-    /** Days ahead to look for bookings that may not get a copy. */
-    public static final int RISK_DAYS = 2;
 
     /**
      * Bookings (pickup within {@code days}) that may not get a copy: per title, the copies on the
@@ -521,7 +590,7 @@ public class CirculationService {
     @Transactional
     public void activateBookings() {
         for (HoldRequest b : holds.findByStatusAndPickupDateLessThanEqual(HoldStatus.SCHEDULED, clock.today())) {
-            Optional<Item> free = items.findFirstByRecordIdAndStatusOrderByIdAsc(b.getRecord().getId(), ItemStatus.AVAILABLE);
+            Optional<Item> free = freeLoanableCopy(b.getRecord().getId());
             if (free.isPresent()) setAside(b, free.get());
             else b.setStatus(HoldStatus.PENDING);
         }
@@ -531,7 +600,7 @@ public class CirculationService {
     @Transactional
     public void expireHolds() {
         for (HoldRequest h : holds.findByStatusAndExpiresAtBefore(HoldStatus.READY, Instant.now())) {
-            h.setStatus(HoldStatus.EXPIRED);
+            h.close(HoldStatus.EXPIRED, "system (pickup window ended)", Instant.now());
             if (h.getItem() != null) routeReturnedItem(h.getItem());
         }
     }

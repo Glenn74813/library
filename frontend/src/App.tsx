@@ -17,8 +17,15 @@ import { GatePage } from './pages/staff/GatePage'
 import { InventoryPage } from './pages/staff/InventoryPage'
 import { ReportsPage } from './pages/staff/ReportsPage'
 import { SettingsPage } from './pages/staff/SettingsPage'
+import { CalendarPage } from './pages/staff/CalendarPage'
+import { AuthoritiesPage } from './pages/staff/AuthoritiesPage'
+import { CatalogFieldsPage } from './pages/staff/CatalogFieldsPage'
+import { NotificationsPage } from './pages/staff/NotificationsPage'
 import { UsersPage } from './pages/staff/UsersPage'
 import { AuditPage } from './pages/staff/AuditPage'
+import { PrivacyPage } from './pages/staff/PrivacyPage'
+import { SystemSettingsPage } from './pages/staff/SystemSettingsPage'
+import { PrivacyNotice } from './pages/public/PrivacyNotice'
 import { AccountPage } from './pages/staff/AccountPage'
 import { OpacKiosk } from './pages/opac/OpacKiosk'
 import { AttendanceKiosk } from './pages/kiosk/AttendanceKiosk'
@@ -49,10 +56,17 @@ export default function App() {
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="calendar" element={<CalendarPage />} />
+        <Route path="authorities" element={<AuthoritiesPage />} />
+        <Route path="catalog-fields" element={<CatalogFieldsPage />} />
+        <Route path="notifications" element={<NotificationsPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="audit" element={<AuditPage />} />
+        <Route path="privacy" element={<PrivacyPage />} />
+        <Route path="system" element={<SystemSettingsPage />} />
         <Route path="account" element={<AccountPage />} />
       </Route>
+      <Route path="/privacy" element={<PrivacyNotice />} />
       <Route path="/opac" element={<OpacKiosk />} />
       <Route path="/kiosk/attendance" element={<AttendanceKiosk />} />
       <Route path="/my/login" element={<PatronLogin />} />

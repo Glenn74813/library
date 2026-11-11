@@ -30,6 +30,8 @@ public interface HoldRequestRepository extends JpaRepository<HoldRequest, Long> 
 
     boolean existsByRecordIdAndStatus(Long recordId, HoldStatus status);
 
+    long countByPatronIdAndStatusIn(Long patronId, Collection<HoldStatus> statuses);
+
     boolean existsByRecordIdAndPatronIdAndStatusIn(Long recordId, Long patronId, Collection<HoldStatus> statuses);
 
     long countByRecordIdAndStatusAndPlacedAtBefore(Long recordId, HoldStatus status, Instant placedAt);

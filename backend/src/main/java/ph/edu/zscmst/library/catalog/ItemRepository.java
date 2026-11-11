@@ -31,6 +31,12 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     long countByStatus(ItemStatus status);
 
+    boolean existsByBarcodeIgnoreCase(String barcode);
+
+    /** Locks the copies on the shelf of a title, so two holds can't set aside the same copy. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    List<Item> findByRecordIdAndStatusOrderByIdAsc(Long recordId, ItemStatus status);
+
     /** Locks the copy it returns, so two holds can't set aside the same copy at the same time. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Item> findFirstByRecordIdAndStatusOrderByIdAsc(Long recordId, ItemStatus status);

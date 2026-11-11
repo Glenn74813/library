@@ -12,7 +12,7 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
     boolean existsByTypeAndReference(NoticeType type, String reference);
 
     @EntityGraph(attributePaths = "patron")
-    List<Notice> findTop200BySentAtIsNullOrderByCreatedAtAsc();
+    List<Notice> findTop200BySentAtIsNullAndAttemptsLessThanOrderByCreatedAtAsc(int attempts);
 
     @EntityGraph(attributePaths = "patron")
     Page<Notice> findAllByOrderByCreatedAtDesc(Pageable pageable);

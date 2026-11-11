@@ -37,6 +37,30 @@ services:
       - files:/data/files          # uploaded e-books (back this up together with the database)
     ports:
       - "8080:8080"
+      # SIP2 for self-check kiosks and RFID stations (keep it on the library LAN; it is not encrypted)
+      - "6001:6001"
+
+  # Daily database + uploaded-files backups into ./backups (copy that folder off the server too).
+  backup:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    user: "${BACKUP_UID:-1000}:${BACKUP_GID:-1000}"   # files in ./backups belong to this host user
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: smartlibrary
+      PGDATABASE: smartlibrary
+      PGPASSWORD: ${DB_PASSWORD:-smartlibrary}
+      TZ: ${LIBRARY_TIMEZONE:-Asia/Manila}
+      BACKUP_HOUR: ${BACKUP_HOUR:-2}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+      - files:/data/files
+      - ./scripts/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh", "loop"]
 
   web:
     # Context is the repo root so the build can read the shared feather/ icon folder.
@@ -49,6 +73,25 @@ services:
     ports:
       - "8081:80"
 
+  # Optional HTTPS (required for real deployments; also enables the microphone on the Security gate page).
+  #   docker compose --profile https up -d
+  https:
+    image: caddy:2.10-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      - web
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      TLS: ${TLS:-internal}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
 volumes:
   pgdata:
   files:
+  caddy-data:

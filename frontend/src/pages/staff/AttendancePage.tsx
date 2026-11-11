@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
-import { api, download, qs } from '../../api/client'
+import { Link } from 'react-router-dom'
+import { useDebounced } from '../../hooks/useDebounced'
+import { api, qs } from '../../api/client'
 import type { AttendanceLog, AttendanceStats, Page } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
-import { ErrorAlert, Field, Pager, Stat, StatusBadge, Table, Tabs } from '../../components/ui'
+import { ErrorAlert, Field, Pager, Stat, StatusBadge, Table, Tabs, ExportMenu } from '../../components/ui'
 import { ColumnChart, PieChart, dayLabel, dayTick, fillDays, fillHours, hourLabel } from '../../components/charts'
 import { daysAgo, fmtDateTime, fmtTime, isoDate } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
-import { Icon } from '../../components/Icon'
 
 export function AttendancePage() {
   const [tab, setTab] = useState<'stats' | 'logs' | 'settings'>('stats')
@@ -19,7 +20,7 @@ export function AttendancePage() {
     <>
       <div className="page-head">
         <h1>Library attendance</h1>
-        <button className="btn" onClick={() => download(`/api/attendance/export${qs({ from, to })}`, 'attendance.csv')}><Icon name="download" />Download report</button>
+        <ExportMenu path={`/api/attendance/export${qs({ from, to })}`} name="attendance" label="Download report…" />
       </div>
       <div className="form-grid card" style={{ marginBottom: 16 }}>
         <Field label="From"><input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></Field>
@@ -67,12 +68,16 @@ function StatsTab({ from, to }: { from: string; to: string }) {
 
 function LogsTab({ from, to }: { from: string; to: string }) {
   const [page, setPage] = useState(0)
-  const { data, error } = useAsync(() => api<Page<AttendanceLog>>(`/api/attendance/logs${qs({ from, to, page })}`), [from, to, page])
+  const [q, setQ] = useState('')
+  const dq = useDebounced(q)
+  const { data, error } = useAsync(() => api<Page<AttendanceLog>>(`/api/attendance/logs${qs({ from, to, q: dq, page })}`), [from, to, dq, page])
   return (
     <div className="card">
+      <input type="search" placeholder="Filter by patron name or card number…" value={q} style={{ marginBottom: 12 }}
+        onChange={(e) => { setQ(e.target.value); setPage(0) }} />
       <ErrorAlert error={error} />
       <Table rows={data?.content} rowKey={(l) => l.id} empty="No visits in this period" columns={[
-        { header: 'Patron', render: (l) => <>{l.patronName}<div className="muted small mono">{l.cardNumber}</div></> },
+        { header: 'Patron', render: (l) => <><Link to={`/staff/patrons/${l.patronId}`}>{l.patronName}</Link><div className="muted small mono">{l.cardNumber}</div></> },
         { header: 'Course', render: (l) => l.course ?? '—' },
         { header: 'Category', render: (l) => l.category },
         { header: 'Time in', render: (l) => fmtDateTime(l.timeIn) },

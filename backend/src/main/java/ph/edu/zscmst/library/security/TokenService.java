@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import ph.edu.zscmst.library.common.AuditService;
+import ph.edu.zscmst.library.common.SystemSettings;
 import ph.edu.zscmst.library.patron.Patron;
 import ph.edu.zscmst.library.patron.PatronRepository;
 import ph.edu.zscmst.library.user.AppUser;
@@ -52,9 +53,11 @@ public class TokenService {
     private final AppUserRepository users;
     private final PatronRepository patrons;
     private final AuditService audit;
+    private final SystemSettings system;
 
     public TokenService(JwtEncoder encoder, JwtProperties props, RefreshTokenRepository refreshTokens,
-                        AppUserRepository users, PatronRepository patrons, AuditService audit) {
+                        AppUserRepository users, PatronRepository patrons, AuditService audit, SystemSettings system) {
+        this.system = system;
         this.encoder = encoder;
         this.props = props;
         this.refreshTokens = refreshTokens;
@@ -76,19 +79,20 @@ public class TokenService {
     @Transactional
     public TokenPair issue(AppUser user) {
         PrincipalInfo p = principalOf(user);
-        return new TokenPair(accessToken(p, props.accessTokenTtl().toSeconds()),
+        return new TokenPair(accessToken(p, system.accessTokenTtl().toSeconds()),
                 newRefreshToken(SubjectType.USER, user.getId()), p);
     }
 
     @Transactional
     public TokenPair issue(Patron patron) {
         PrincipalInfo p = principalOf(patron);
-        return new TokenPair(accessToken(p, props.accessTokenTtl().toSeconds()),
+        return new TokenPair(accessToken(p, system.accessTokenTtl().toSeconds()),
                 newRefreshToken(SubjectType.PATRON, patron.getId()), p);
     }
 
+    /** Long-lived token for unattended hardware; carries the account's token version so it can be revoked. */
     public IssuedToken issueDeviceToken(AppUser device) {
-        return accessToken(principalOf(device), props.kioskTokenTtl().toSeconds());
+        return accessToken(principalOf(device), system.deviceTokenTtl().toSeconds(), device.getTokenVersion());
     }
 
     @Transactional(noRollbackFor = BadCredentialsException.class)
@@ -135,6 +139,10 @@ public class TokenService {
     }
 
     private IssuedToken accessToken(PrincipalInfo p, long ttlSeconds) {
+        return accessToken(p, ttlSeconds, null);
+    }
+
+    private IssuedToken accessToken(PrincipalInfo p, long ttlSeconds, Integer deviceTokenVersion) {
         Instant now = Instant.now();
         Instant exp = now.plusSeconds(ttlSeconds);
         JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
@@ -148,6 +156,9 @@ public class TokenService {
         if (p.patronId() != null) {
             claims.claim("patronId", p.patronId());
         }
+        if (deviceTokenVersion != null) {
+            claims.claim(DeviceTokenValidator.VERSION_CLAIM, deviceTokenVersion);
+        }
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
         String value = encoder.encode(JwtEncoderParameters.from(header, claims.build())).getTokenValue();
         return new IssuedToken(value, exp);
@@ -157,7 +168,7 @@ public class TokenService {
         byte[] bytes = new byte[32];
         RANDOM.nextBytes(bytes);
         String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        Instant exp = Instant.now().plus(props.refreshTokenTtl());
+        Instant exp = Instant.now().plus(system.refreshTokenTtl());
         refreshTokens.save(new RefreshToken(hash(raw), type, subjectId, exp));
         return new IssuedToken(raw, exp);
     }

@@ -33,6 +33,8 @@ public class Item {
     private String location;
     private String aisle;
     private String shelf;
+    /** Null = follow the material-type rule; true/false = override for this copy. */
+    private Boolean roomUseOnly;
     @Enumerated(EnumType.STRING)
     private ItemStatus status = ItemStatus.AVAILABLE;
     private LocalDate acquiredDate;
@@ -56,6 +58,8 @@ public class Item {
     public void setRfidEpc(String rfidEpc) { this.rfidEpc = rfidEpc; }
     public String getLocation() { return location; }
     public void setLocation(String location) { this.location = location; }
+    public Boolean getRoomUseOnly() { return roomUseOnly; }
+    public void setRoomUseOnly(Boolean roomUseOnly) { this.roomUseOnly = roomUseOnly; }
     public String getAisle() { return aisle; }
     public void setAisle(String aisle) { this.aisle = aisle; }
     public String getShelf() { return shelf; }

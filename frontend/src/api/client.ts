@@ -1,4 +1,4 @@
-import type { AuthResponse, Principal } from './types'
+import type { AuthResponse, CheckoutResult, Principal } from './types'
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
@@ -99,6 +99,8 @@ export interface RequestOptions {
   slot?: Slot
   /** Send without Authorization header (public endpoints). */
   anonymous?: boolean
+  /** Give up after this long (treated like a network failure), e.g. so the desk can switch to offline mode. */
+  timeoutMs?: number
 }
 
 async function send(path: string, opts: RequestOptions, retry: boolean): Promise<Response> {
@@ -113,6 +115,7 @@ async function send(path: string, opts: RequestOptions, retry: boolean): Promise
     method: opts.method ?? (opts.body !== undefined ? 'POST' : 'GET'),
     headers,
     body: opts.body === undefined ? undefined : isForm ? (opts.body as FormData) : JSON.stringify(opts.body),
+    signal: opts.timeoutMs ? AbortSignal.timeout(opts.timeoutMs) : undefined,
   })
   if (res.status === 401 && retry && token && !opts.anonymous && (await refresh(slot))) {
     return send(path, opts, false)
@@ -139,8 +142,8 @@ export async function api<T = void>(path: string, opts: RequestOptions = {}): Pr
 }
 
 /** Fetches a protected file into memory (e-book reader); nothing is saved to disk. */
-export async function fetchBytes(path: string, slot: Slot = 'user') {
-  const res = await send(path, { slot }, true)
+export async function fetchBytes(path: string, slot: Slot = 'user', anonymous = false) {
+  const res = await send(path, { slot, anonymous }, true)
   return { data: await res.arrayBuffer(), contentType: res.headers.get('Content-Type') ?? '' }
 }
 
@@ -191,4 +194,10 @@ export function qs(params: Record<string, string | number | boolean | undefined 
   })
   const s = sp.toString()
   return s ? `?${s}` : ''
+}
+
+/** Hands a ready-for-pickup reserved copy to its patron (checks it out; the hold becomes fulfilled). */
+export function releaseHold(h: { cardNumber: string; itemBarcode: string | null }) {
+  if (!h.itemBarcode) return Promise.reject(new Error('No copy has been set aside for this hold yet'))
+  return api<CheckoutResult>('/api/circulation/checkout', { body: { patron: h.cardNumber, item: h.itemBarcode } })
 }

@@ -51,6 +51,22 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+        <!-- MARC21 (ISO 2709 / MARCXML) reading and writing for catalog migration and interoperability -->
+        <dependency>
+            <groupId>org.marc4j</groupId>
+            <artifactId>marc4j</artifactId>
+            <version>2.9.8</version>
+        </dependency>
+        <!-- PDF exports of reports and logs -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>3.0.5</version>
+        </dependency>
+        <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>

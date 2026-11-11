@@ -1,11 +1,11 @@
 package ph.edu.zscmst.library.notice;
 
-/**
- * Delivery channel for patron notices. The default implementation only logs; plug in an
- * e-mail (JavaMailSender) or SMS gateway bean to deliver for real.
- */
+/** Delivery channel(s) for patron notices. */
 public interface NoticeSender {
 
-    /** @return true if the notice was handed to the channel and can be marked sent */
-    boolean send(Notice notice);
+    /** Outcome of one delivery attempt. */
+    record Delivery(boolean delivered, String channels, String error) {
+    }
+
+    Delivery send(Notice notice);
 }

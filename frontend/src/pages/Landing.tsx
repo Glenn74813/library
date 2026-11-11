@@ -1,13 +1,15 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { Logo } from '../components/Logo'
+import { useLibrary } from '../api/library'
 
 export function Landing() {
+  const lib = useLibrary()
   return (
     <div className="center-page">
       <div className="landing">
-        <div className="hero"><Logo large /><h1 style={{ margin: 0 }}>ZSCMST Smart Library</h1></div>
-        <p className="muted">Learning Resource Center · Zamboanga State College of Marine Sciences and Technology</p>
+        <div className="hero"><Logo large /><h1 style={{ margin: 0 }}>{lib.systemName}</h1></div>
+        <p className="muted">{[lib.name, lib.institution].filter(Boolean).join(' · ')}</p>
         <div className="tiles">
           <Link className="card tile" to="/opac">
             <Icon name="search" className="tile-icon" /><strong>Search the catalog</strong>
@@ -22,6 +24,7 @@ export function Landing() {
             <span className="muted small">Circulation, cataloging, patrons, reports and administration.</span>
           </Link>
         </div>
+        <p className="muted small"><Link to="/privacy">Privacy notice</Link></p>
       </div>
     </div>
   )

@@ -29,6 +29,7 @@ import ph.edu.zscmst.library.catalog.BibRecordRepository;
 import ph.edu.zscmst.library.catalog.MaterialType;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
+import ph.edu.zscmst.library.common.SystemSettings;
 
 /**
  * E-books. A title is either <b>school-owned</b> (the library uploads the PDF/EPUB and every
@@ -64,8 +65,11 @@ public class DigitalService {
     private final FileStorage storage;
     private final AuditService audit;
 
+    private final SystemSettings system;
+
     public DigitalService(BibRecordRepository records, DigitalFileRepository files, EbookViewRepository views,
-                          FileStorage storage, AuditService audit) {
+                          FileStorage storage, AuditService audit, SystemSettings system) {
+        this.system = system;
         this.records = records;
         this.files = files;
         this.views = views;
@@ -115,6 +119,7 @@ public class DigitalService {
                     + "uploaded; remove the vendor link only if the school owns the rights to this title.");
         }
         if (upload.isEmpty()) throw ApiException.badRequest("The file is empty");
+        system.checkUpload(SystemSettings.UploadKind.EBOOK, upload.getSize());
         String filename = cleanFilename(upload.getOriginalFilename());
 
         FileStorage.StoredFile stored;

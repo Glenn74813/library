@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { hasRole, useSession } from '../../auth/AuthContext'
+import { ImportCatalogModal } from '../../components/ImportCatalogModal'
 import { api, download, qs } from '../../api/client'
 import { MATERIAL_TYPES, type BibRecord, type Page } from '../../api/types'
 import { EbookBadge, ErrorAlert, Pager, Table } from '../../components/ui'
@@ -15,6 +17,8 @@ export function CatalogPage() {
   const [page, setPage] = useState(0)
   const dq = useDebounced(q)
   const navigate = useNavigate()
+  const canImport = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
+  const [importing, setImporting] = useState(false)
   const { data, error } = useAsync(
     () => api<Page<BibRecord>>(`/api/catalog/records${qs({ q: dq, field, type, page })}`), [dq, field, type, page])
 
@@ -23,7 +27,20 @@ export function CatalogPage() {
       <div className="page-head">
         <h1>Catalog</h1>
         <div className="row">
-          <button className="btn" onClick={() => download('/api/reports/export/collection', 'collection.csv')}><Icon name="download" />Export</button>
+          {canImport && <button className="btn" onClick={() => setImporting(true)}><Icon name="upload" />Import</button>}
+          <select className="btn" style={{ width: 'auto' }} value="" aria-label="Export catalog" onChange={(e) => {
+            const v = e.target.value
+            if (v === 'csv') void download('/api/reports/export/collection', 'collection.csv')
+            if (v === 'pdf') void download('/api/reports/export/collection?format=pdf', 'collection.pdf')
+            if (v === 'mrc') void download('/api/catalog/export/marc?format=mrc', 'catalog.mrc')
+            if (v === 'xml') void download('/api/catalog/export/marc?format=xml', 'catalog.xml')
+          }}>
+            <option value="" disabled>Export…</option>
+            <option value="csv">Excel / CSV (copies)</option>
+            <option value="pdf">PDF (copies)</option>
+            {canImport && <option value="mrc">MARC21 (.mrc)</option>}
+            {canImport && <option value="xml">MARCXML (.xml)</option>}
+          </select>
           <Link className="btn primary" to="/staff/catalog/new"><Icon name="plus" />New record</Link>
         </div>
       </div>
@@ -53,6 +70,7 @@ export function CatalogPage() {
           ]} />
         <Pager page={data} onPage={setPage} />
       </div>
+      {importing && <ImportCatalogModal onClose={() => setImporting(false)} onDone={() => setPage(0)} />}
     </>
   )
 }

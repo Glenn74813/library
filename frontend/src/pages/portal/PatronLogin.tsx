@@ -5,8 +5,10 @@ import { ErrorAlert, Field } from '../../components/ui'
 import { errorText } from '../../components/Toast'
 import { Logo } from '../../components/Logo'
 import { Icon } from '../../components/Icon'
+import { useLibrary } from '../../api/library'
 
 export function PatronLogin() {
+  const lib = useLibrary()
   const [card, setCard] = useState('')
   const [pin, setPin] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -35,7 +37,7 @@ export function PatronLogin() {
       <form className="card auth-card stack" onSubmit={submit}>
         <div className="logo"><Logo large /></div>
         <h1>My Library</h1>
-        <div className="school">Zamboanga State College of Marine Sciences and Technology</div>
+        <div className="school">{lib.institution || lib.name}</div>
         <ErrorAlert error={error} />
         <Field label="Library card / ID number"><input value={card} onChange={(e) => setCard(e.target.value)} autoComplete="username" required autoFocus /></Field>
         <Field label="PIN" hint="Get your PIN at the circulation desk">
@@ -46,6 +48,7 @@ export function PatronLogin() {
           <Link to="/opac"><Icon name="search" />Search the catalog</Link>
           <Link to="/login"><Icon name="briefcase" />Staff sign in</Link>
         </nav>
+        <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>By signing in you agree to the library's <Link to="/privacy">privacy notice</Link>.</p>
       </form>
     </div>
   )

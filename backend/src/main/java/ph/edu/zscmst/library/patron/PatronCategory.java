@@ -24,6 +24,9 @@ public class PatronCategory {
     private BigDecimal maxUnpaidFines;
     /** Days a reserved copy waits on the hold shelf before the reservation expires. */
     private int holdPickupDays = 3;
+    private int maxHolds;
+    private int fineGraceDays;
+    private BigDecimal maxFinePerItem = BigDecimal.ZERO;
 
     protected PatronCategory() {
     }
@@ -46,5 +49,11 @@ public class PatronCategory {
     public int getHoldPickupDays() { return holdPickupDays; }
     public void setHoldPickupDays(int holdPickupDays) { this.holdPickupDays = holdPickupDays; }
     public BigDecimal getMaxUnpaidFines() { return maxUnpaidFines; }
+    public int getMaxHolds() { return maxHolds; }
+    public void setMaxHolds(int maxHolds) { this.maxHolds = maxHolds; }
+    public int getFineGraceDays() { return fineGraceDays; }
+    public void setFineGraceDays(int fineGraceDays) { this.fineGraceDays = fineGraceDays; }
+    public BigDecimal getMaxFinePerItem() { return maxFinePerItem; }
+    public void setMaxFinePerItem(BigDecimal maxFinePerItem) { this.maxFinePerItem = maxFinePerItem; }
     public void setMaxUnpaidFines(BigDecimal maxUnpaidFines) { this.maxUnpaidFines = maxUnpaidFines; }
 }

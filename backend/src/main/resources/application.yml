@@ -19,8 +19,8 @@ spring:
     enabled: true
   servlet:
     multipart:
-      max-file-size: ${MAX_UPLOAD_SIZE:100MB}
-      max-request-size: ${MAX_UPLOAD_SIZE:100MB}
+      max-file-size: ${MAX_UPLOAD_SIZE:500MB}
+      max-request-size: ${MAX_UPLOAD_SIZE:500MB}
   threads:
     virtual:
       enabled: true
@@ -54,7 +54,6 @@ app:
     password: ${ADMIN_PASSWORD:Admin@12345}
   library:
     timezone: ${LIBRARY_TIMEZONE:Asia/Manila}
-    due-soon-days: 2
   storage:
     # Where uploaded e-book files are kept (outside the web root; served only through the API).
     dir: ${STORAGE_DIR:./data/files}

@@ -8,6 +8,7 @@ import { ErrorAlert, Field } from '../../components/ui'
 import { errorText } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
 import { Logo } from '../../components/Logo'
+import { useLibrary } from '../../api/library'
 
 const QUEUE_KEY = 'smartlib.attendance.offlineQueue'
 const RESULT_MS = 4500
@@ -69,6 +70,7 @@ function KioskSetup() {
 }
 
 function KioskScreen() {
+  const lib = useLibrary()
   const [config, setConfig] = useState<KioskConfig | null>(null)
   const [online, setOnline] = useState(true)
   const [queued, setQueued] = useState(readQueue().length)
@@ -171,7 +173,7 @@ function KioskScreen() {
         <div className="school">
           <Logo large />
           <div>
-            <div className="name">ZSCMST Learning Resource Center</div>
+            <div className="name">{lib.name}</div>
             <div style={{ opacity: 0.8 }}>{standby ? 'Information board' : 'Library attendance'}</div>
           </div>
         </div>

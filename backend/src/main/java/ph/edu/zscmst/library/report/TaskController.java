@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.ItemStatus;
+import ph.edu.zscmst.library.catalog.LoanPolicy;
 import ph.edu.zscmst.library.circulation.CirculationService;
 import ph.edu.zscmst.library.circulation.FineRepository;
 import ph.edu.zscmst.library.circulation.HoldRequest;
@@ -41,6 +42,7 @@ public class TaskController {
     private final FineRepository fines;
     private final ItemRepository items;
     private final CirculationService circulation;
+    private final LoanPolicy policy;
     private final GateEventRepository gateEvents;
     private final StocktakeSessionRepository stocktakes;
     private final SettingsService settings;
@@ -48,8 +50,10 @@ public class TaskController {
 
     public TaskController(HoldRequestRepository holds, LoanRepository loans, FineRepository fines, ItemRepository items,
                           GateEventRepository gateEvents, StocktakeSessionRepository stocktakes,
-                          SettingsService settings, LibraryClock clock, CirculationService circulation) {
+                          SettingsService settings, LibraryClock clock, CirculationService circulation,
+                          LoanPolicy policy) {
         this.circulation = circulation;
+        this.policy = policy;
         this.holds = holds;
         this.loans = loans;
         this.fines = fines;
@@ -114,7 +118,7 @@ public class TaskController {
             tasks.add(new Task("holds-ready", Severity.INFO, ready + " reserved item(s) on the hold shelf",
                     "Waiting for the patrons to pick them up.", ready, "/staff/holds"));
         }
-        List<HoldRequest> risky = circulation.bookingsAtRisk(CirculationService.RISK_DAYS);
+        List<HoldRequest> risky = circulation.bookingsAtRisk(policy.atRiskDays());
         List<HoldRequest> waiting = risky.stream().filter(h -> h.getStatus() == HoldStatus.PENDING).toList();
         List<HoldRequest> upcoming = risky.stream().filter(h -> h.getStatus() == HoldStatus.SCHEDULED).toList();
         if (!waiting.isEmpty()) {

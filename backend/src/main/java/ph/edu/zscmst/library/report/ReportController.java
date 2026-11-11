@@ -29,7 +29,7 @@ import ph.edu.zscmst.library.circulation.HoldStatus;
 import ph.edu.zscmst.library.circulation.Loan;
 import ph.edu.zscmst.library.circulation.LoanRepository;
 import ph.edu.zscmst.library.common.ApiException;
-import ph.edu.zscmst.library.common.Csv;
+import ph.edu.zscmst.library.common.Pdf;
 import ph.edu.zscmst.library.common.LibraryClock;
 import ph.edu.zscmst.library.patron.Patron;
 import ph.edu.zscmst.library.patron.PatronRepository;
@@ -79,7 +79,7 @@ public class ReportController {
         Instant start = clock.startOfDay(clock.today());
         Instant end = clock.startOfDay(clock.today().plusDays(1));
         Instant now = Instant.now();
-        return new Dashboard(records.count(), items.count(), patrons.count(), loans.countByReturnedAtIsNull(),
+        return new Dashboard(records.count(), items.count(), patrons.countByAnonymizedAtIsNull(), loans.countByReturnedAtIsNull(),
                 loans.countByReturnedAtIsNullAndDueAtBefore(now), holds.countByStatus(HoldStatus.PENDING),
                 holds.countByStatus(HoldStatus.READY), fines.totalUnpaid(), loans.countByCheckoutAtBetween(start, end),
                 loans.countByReturnedAtBetween(start, end), attendance.countByTimeInBetween(start, end),
@@ -107,33 +107,34 @@ public class ReportController {
                 borrowers, titles);
     }
 
-    /** CSV exports: loans, overdue, fines, collection, patrons. Opens directly in Excel. */
+    /** CSV (opens in Excel) or PDF exports: loans, overdue, fines, collection, patrons. */
     @GetMapping("/export/{type}")
     @Transactional(readOnly = true)
     public ResponseEntity<byte[]> export(@PathVariable String type,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "csv") String format) {
         LocalDate t = to == null ? clock.today() : to;
         LocalDate f = from == null ? t.minusDays(29) : from;
         return switch (type) {
-            case "loans" -> Csv.download("loans-" + f + "-to-" + t + ".csv",
+            case "loans" -> Pdf.export(format, "loans-" + f + "-to-" + t, "Loans", f + " to " + t,
                     List.of("Checkout", "Due", "Returned", "Barcode", "Title", "Card Number", "Patron", "Renewals"),
                     loans.findByCheckoutAtBetweenOrderByCheckoutAtAsc(clock.startOfDay(f), clock.startOfDay(t.plusDays(1)))
                             .stream().map(this::loanRow).toList());
-            case "overdue" -> Csv.download("overdue-" + clock.today() + ".csv",
+            case "overdue" -> Pdf.export(format, "overdue-" + clock.today(), "Overdue Loans", "As of " + clock.today(),
                     List.of("Checkout", "Due", "Returned", "Barcode", "Title", "Card Number", "Patron", "Renewals"),
                     loans.findByReturnedAtIsNullAndDueAtBefore(Instant.now()).stream().map(this::loanRow).toList());
-            case "fines" -> Csv.download("fines-" + clock.today() + ".csv",
+            case "fines" -> Pdf.export(format, "fines-" + clock.today(), "Fines", null,
                     List.of("Date", "Card Number", "Patron", "Amount", "Reason", "Status", "Receipt", "Settled By"),
                     fines.findAll().stream().map(this::fineRow).toList());
-            case "collection" -> Csv.download("collection-" + clock.today() + ".csv",
+            case "collection" -> Pdf.export(format, "collection-" + clock.today(), "Collection", null,
                     List.of("Barcode", "RFID EPC", "Title", "Authors", "ISBN", "Call Number", "Type", "Location",
                             "Aisle", "Shelf", "Status", "Acquired", "Price"),
                     items.findAll().stream().map(this::itemRow).toList());
-            case "patrons" -> Csv.download("patrons-" + clock.today() + ".csv",
+            case "patrons" -> Pdf.export(format, "patrons-" + clock.today(), "Patrons", null,
                     List.of("Card Number", "Last Name", "First Name", "Category", "Course", "Email", "Phone",
                             "Expiry", "Blocked"),
-                    patrons.findAll().stream().map(this::patronRow).toList());
+                    patrons.findAll().stream().filter(p -> p.getAnonymizedAt() == null).map(this::patronRow).toList());
             default -> throw ApiException.notFound("Report type '" + type + "'");
         };
     }

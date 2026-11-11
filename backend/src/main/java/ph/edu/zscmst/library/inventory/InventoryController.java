@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import ph.edu.zscmst.library.catalog.Item;
@@ -27,7 +28,7 @@ import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.ItemStatus;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
-import ph.edu.zscmst.library.common.Csv;
+import ph.edu.zscmst.library.common.Pdf;
 
 /** Scanner-based shelf stocktake with missing/found reports. */
 @RestController
@@ -153,15 +154,15 @@ public class InventoryController {
         return new Report(toDto(s), expected.size(), found, missing, misplaced, unexpected, unknown);
     }
 
-    @GetMapping("/{id}/report.csv")
-    public ResponseEntity<byte[]> reportCsv(@PathVariable Long id) {
+    @GetMapping({"/{id}/report.csv", "/{id}/report/export"})
+    public ResponseEntity<byte[]> reportCsv(@PathVariable Long id, @RequestParam(defaultValue = "csv") String format) {
         Report r = report(id);
         List<List<?>> rows = new java.util.ArrayList<>();
         r.missing().forEach(i -> rows.add(row("MISSING", i)));
         r.misplaced().forEach(i -> rows.add(row("MISPLACED", i)));
         r.unexpectedStatus().forEach(i -> rows.add(row("FOUND_" + i.status(), i)));
         r.unknownCodes().forEach(c -> rows.add(java.util.Arrays.asList("UNKNOWN", c, "", "", "", "")));
-        return Csv.download("stocktake-" + id + ".csv",
+        return Pdf.export(format, "stocktake-" + id, "Stocktake Report: " + r.session().name(), r.found() + " of " + r.expected() + " found",
                 List.of("Result", "Barcode", "Title", "Call Number", "Location", "Catalog Status"), rows);
     }
 

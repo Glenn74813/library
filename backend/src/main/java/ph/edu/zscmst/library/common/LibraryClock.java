@@ -22,6 +22,7 @@ public class LibraryClock {
 
     public LibraryClock(@Value("${app.library.timezone}") String timezone) {
         this.zone = ZoneId.of(timezone);
+        Pdf.useZone(zone);
     }
 
     public ZoneId zone() {

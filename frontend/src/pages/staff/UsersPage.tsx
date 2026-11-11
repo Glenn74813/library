@@ -20,8 +20,10 @@ const DEVICE_TYPES: { id: Role; title: string; text: string }[] = [
 
 const isDevice = (u: User) => u.role === 'KIOSK' || u.role === 'GATE'
 
-const statusBadge = (u: User) =>
-  u.enabled ? <span className="badge ok">Enabled</span> : <span className="badge bad">Disabled</span>
+const statusBadge = (u: User) => <span className="row" style={{ gap: 4 }}>
+  {u.enabled ? <span className="badge ok">Enabled</span> : <span className="badge bad">Disabled</span>}
+  {u.lockedUntil && <span className="badge bad" title={`Locked until ${new Date(u.lockedUntil).toLocaleTimeString()}`}>Locked</span>}
+</span>
 
 /** Random password for gate accounts, which authenticate with a device token instead. */
 function randomSecret() {
@@ -76,6 +78,7 @@ export function UsersPage() {
         ]} />
       </div>
 
+      <SignInProtection />
       {user && <UserModal value={user} onClose={() => setUser(null)} onSaved={done} />}
       {device && <DeviceModal value={device} onClose={() => setDevice(null)} onSaved={done} />}
     </>
@@ -103,6 +106,15 @@ function UserModal({ value, onClose, onSaved }: { value: Partial<User>; onClose:
       footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={save}>Save</button></>}>
       <div className="stack">
         <ErrorAlert error={error} />
+        {f.lockedUntil && (
+          <div className="alert warn small row" style={{ justifyContent: 'space-between' }}>
+            <span>Locked after repeated failed sign-ins (until {new Date(f.lockedUntil).toLocaleTimeString()}).</span>
+            <button className="btn small" onClick={async () => {
+              try { setF(await api<User>(`/api/users/${f.id}/unlock`, { method: 'POST' })); toast('Account unlocked') }
+              catch (e) { setError(errorText(e)) }
+            }}>Unlock now</button>
+          </div>
+        )}
         <div className="form-grid">
           <Field label="Username"><input value={f.username ?? ''} disabled={!!f.id} onChange={(e) => setF({ ...f, username: e.target.value })} autoComplete="off" /></Field>
           <Field label="Full name"><input value={f.fullName ?? ''} onChange={(e) => setF({ ...f, fullName: e.target.value })} /></Field>
@@ -172,6 +184,14 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
 
   const closeAfterToken = token && !value.id ? onSaved : onClose
 
+  async function revokeTokens(id: number) {
+    if (!confirm('Revoke every token issued to this device? The gate stops working until you issue a new token and enter it in the gate software.')) return
+    try {
+      await api(`/api/users/${id}/device-token/revoke`, { method: 'POST' })
+      toast('All tokens of this device were revoked')
+    } catch (e) { setError(errorText(e)) }
+  }
+
   return (
     <Modal title={f.id ? `Device: ${f.fullName}` : 'Add device'} onClose={closeAfterToken}
       footer={token && !value.id
@@ -211,9 +231,13 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
         {isGate ? (
           <div className="alert small stack" style={{ gap: 8 }}>
             <span>The gate (or its bridge software) sends this token as <span className="mono">Authorization: Bearer &lt;token&gt;</span> on
-              every call to <span className="mono">/api/gate/device/*</span>. It is valid for one year.</span>
-            {f.id && !token && <div><button className="btn small" onClick={() => issueToken(f.id!).catch((e) => setError(errorText(e)))}>
-              <Icon name="key" />Issue new device token</button></div>}
+              every call to <span className="mono">/api/gate/device/*</span>. Its lifetime is set in System settings
+              (default one year). Disabling the device stops its tokens at once.</span>
+            {f.id && !token && <div className="row">
+              <button className="btn small" onClick={() => issueToken(f.id!).catch((e) => setError(errorText(e)))}>
+                <Icon name="key" />Issue new device token</button>
+              <button className="btn small danger" onClick={() => revokeTokens(f.id!)}>Revoke all tokens</button>
+            </div>}
             {token && <>
               <textarea readOnly className="mono small" value={token} onFocus={(e) => e.target.select()} />
               <div className="row"><button className="btn small primary" onClick={copy}>Copy token</button>
@@ -228,5 +252,32 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
         )}
       </div>
     </Modal>
+  )
+}
+
+/** Lock accounts after repeated failed sign-ins (staff passwords and patron PINs). */
+function SignInProtection() {
+  const { data, setData } = useAsync(() => api<{ maxAttempts: number; lockMinutes: number }>('/api/users/security-settings'), [])
+  const toast = useToast()
+  if (!data) return null
+  async function save() {
+    try {
+      setData(await api<{ maxAttempts: number; lockMinutes: number }>('/api/users/security-settings', { method: 'PUT', body: data }))
+      toast('Sign-in protection saved')
+    } catch (e) { toast(errorText(e), 'error') }
+  }
+  return (
+    <div className="card stack">
+      <h2 style={{ margin: 0 }}>Sign-in protection</h2>
+      <p className="muted small" style={{ margin: 0 }}>After this many wrong passwords or PINs in a row, the account is locked for a while.
+        Unlock staff here (open the user) and patrons by setting a new PIN.</p>
+      <div className="form-grid">
+        <Field label="Failed attempts before locking"><input type="number" min={3} max={20} value={data.maxAttempts}
+          onChange={(e) => setData({ ...data, maxAttempts: Number(e.target.value) })} /></Field>
+        <Field label="Lock duration (minutes)"><input type="number" min={1} max={1440} value={data.lockMinutes}
+          onChange={(e) => setData({ ...data, lockMinutes: Number(e.target.value) })} /></Field>
+      </div>
+      <div className="row end"><button className="btn primary" onClick={save}>Save</button></div>
+    </div>
   )
 }

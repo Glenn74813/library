@@ -1,14 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, download, qs } from '../../api/client'
+import { api, qs } from '../../api/client'
 import type { Fine, FineStatus, Page, Receipt } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { ReceiptModal } from '../../components/ReceiptModal'
 import { errorText, useToast } from '../../components/Toast'
-import { ErrorAlert, Pager, StatusBadge, Table, Tabs } from '../../components/ui'
+import { ErrorAlert, Pager, StatusBadge, Table, Tabs, ExportMenu } from '../../components/ui'
 import { fmtDate, fmtMoney } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
-import { Icon } from '../../components/Icon'
 
 export function FinesPage() {
   const [status, setStatus] = useState<FineStatus | 'ALL'>('UNPAID')
@@ -53,7 +52,7 @@ export function FinesPage() {
     <>
       <div className="page-head">
         <h1>Fines & payments</h1>
-        <button className="btn" onClick={() => download('/api/reports/export/fines', 'fines.csv')}><Icon name="download" />Export</button>
+        <ExportMenu path="/api/reports/export/fines" name="fines" />
       </div>
       <p className="muted small">To pay several fines on one receipt, open the patron's record.</p>
       <Tabs value={status} onChange={(s) => { setStatus(s); setPage(0) }} tabs={[

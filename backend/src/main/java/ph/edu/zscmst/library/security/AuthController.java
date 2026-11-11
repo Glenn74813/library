@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
+import ph.edu.zscmst.library.common.SettingsService;
 import ph.edu.zscmst.library.patron.Patron;
 import ph.edu.zscmst.library.patron.PatronRepository;
 import ph.edu.zscmst.library.user.AppUser;
@@ -58,11 +59,13 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokens;
     private final AuditService audit;
+    private final SettingsService settings;
     /** Compared against for unknown accounts so they take as long to reject as wrong passwords. */
     private final String dummyHash;
 
     public AuthController(AppUserRepository users, PatronRepository patrons, PasswordEncoder passwordEncoder,
-                          TokenService tokens, AuditService audit) {
+                          TokenService tokens, AuditService audit, SettingsService settings) {
+        this.settings = settings;
         this.users = users;
         this.patrons = patrons;
         this.passwordEncoder = passwordEncoder;
@@ -74,10 +77,26 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest req) {
         AppUser user = users.findByUsernameIgnoreCase(req.username().trim()).orElse(null);
+        Instant now = Instant.now();
+        if (user != null && user.isLocked(now)) {
+            throw locked(user.getLockedUntil(), now);
+        }
         String hash = user != null ? user.getPasswordHash() : dummyHash;
         if (!passwordEncoder.matches(req.password(), hash) || user == null || !user.isEnabled()) {
             audit.record(req.username(), "LOGIN_FAILED", "Staff login");
+            if (user != null) {
+                user.loginFailed(maxAttempts(), lockMinutes(), now);
+                users.save(user);
+                if (user.isLocked(now)) {
+                    audit.record(user.getUsername(), "LOGIN_LOCKED", "Locked after repeated failed sign-ins");
+                    throw locked(user.getLockedUntil(), now);
+                }
+            }
             throw new BadCredentialsException("Invalid username or password");
+        }
+        if (user.getFailedLogins() > 0 || user.getLockedUntil() != null) {
+            user.unlock();
+            users.save(user);
         }
         audit.record(user.getUsername(), "LOGIN", "Staff login");
         return AuthResponse.of(tokens.issue(user));
@@ -86,12 +105,42 @@ public class AuthController {
     @PostMapping("/patron-login")
     public AuthResponse patronLogin(@Valid @RequestBody PatronLoginRequest req) {
         Patron patron = patrons.findByCardNumberIgnoreCase(req.cardNumber().trim()).orElse(null);
+        Instant now = Instant.now();
+        if (patron != null && patron.isPinLocked(now)) {
+            throw locked(patron.getPinLockedUntil(), now);
+        }
         String hash = patron != null && patron.getPinHash() != null ? patron.getPinHash() : dummyHash;
         if (!passwordEncoder.matches(req.pin(), hash) || patron == null || patron.getPinHash() == null) {
             audit.record(req.cardNumber(), "LOGIN_FAILED", "Patron login");
+            if (patron != null && patron.getPinHash() != null) {
+                patron.pinFailed(maxAttempts(), lockMinutes(), now);
+                patrons.save(patron);
+                if (patron.isPinLocked(now)) {
+                    audit.record(patron.getCardNumber(), "LOGIN_LOCKED", "Patron PIN locked after repeated failures");
+                    throw locked(patron.getPinLockedUntil(), now);
+                }
+            }
             throw new BadCredentialsException("Invalid card number or PIN");
         }
+        if (patron.getPinLockedUntil() != null) {
+            patron.unlockPin();
+            patrons.save(patron);
+        }
         return AuthResponse.of(tokens.issue(patron));
+    }
+
+    private int maxAttempts() {
+        return Math.max(1, Integer.parseInt(settings.get("security.maxAttempts", "5")));
+    }
+
+    private int lockMinutes() {
+        return Math.max(1, Integer.parseInt(settings.get("security.lockMinutes", "15")));
+    }
+
+    private static ApiException locked(Instant until, Instant now) {
+        long minutes = Math.max(1, (until.getEpochSecond() - now.getEpochSecond() + 59) / 60);
+        return new ApiException(HttpStatus.LOCKED, "Too many failed attempts. Try again in " + minutes
+                + " minute(s), or ask the library to unlock your account.");
     }
 
     @PostMapping("/refresh")

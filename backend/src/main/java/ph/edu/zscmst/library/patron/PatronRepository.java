@@ -25,12 +25,14 @@ public interface PatronRepository extends JpaRepository<Patron, Long> {
 
     @Query("""
             select p from Patron p
-            where :q = '' or lower(p.cardNumber) like lower(concat('%', :q, '%'))
+            where p.cardNumber <> '__ANONYMIZED__' and (:q = '' or lower(p.cardNumber) like lower(concat('%', :q, '%'))
                or lower(p.firstName) like lower(concat('%', :q, '%'))
                or lower(p.lastName) like lower(concat('%', :q, '%'))
-               or lower(coalesce(p.email, '')) like lower(concat('%', :q, '%'))
+               or lower(coalesce(p.email, '')) like lower(concat('%', :q, '%')))
             """)
     Page<Patron> search(String q, Pageable pageable);
+
+    long countByAnonymizedAtIsNull();
 
     boolean existsByCategoryId(Long categoryId);
 

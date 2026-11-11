@@ -1,4 +1,4 @@
-import { api } from '../../api/client'
+import { api, releaseHold } from '../../api/client'
 import type { Hold } from '../../api/types'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, StatusBadge, Table } from '../../components/ui'
@@ -11,6 +11,17 @@ export function HoldsPage() {
   const ready = data?.filter((h) => h.status === 'READY')
   const pending = data?.filter((h) => h.status === 'PENDING')
   const booked = data?.filter((h) => h.status === 'SCHEDULED').sort((a, b) => (a.pickupDate ?? '').localeCompare(b.pickupDate ?? ''))
+
+  async function release(h: Hold) {
+    if (!confirm(`Check out "${h.title}" (copy ${h.itemBarcode}) to ${h.patronName}?`)) return
+    try {
+      const r = await releaseHold(h)
+      toast(`Released to ${h.patronName} — due ${fmtDate(r.loan.dueAt)}${r.notice ? ` (${r.notice})` : ''}`)
+      void reload()
+    } catch (e) {
+      toast(errorText(e), 'error')
+    }
+  }
 
   async function cancel(h: Hold) {
     if (!confirm(`Cancel hold of ${h.patronName} on "${h.title}"?`)) return
@@ -35,7 +46,10 @@ export function HoldsPage() {
       ? <>Copy <span className="mono">{h.itemBarcode}</span>{h.itemShelfLocation && <> from <strong>{h.itemShelfLocation}</strong></>} · pick up by {fmtDate(h.expiresAt)}</>
       : h.pickupDate ? <>Booked for <strong>{fmtDate(h.pickupDate)}</strong> · first in line for the next returned copy</>
       : `Queue #${h.queuePosition}` },
-    { header: '', render: (h: Hold) => <button className="btn small danger" onClick={() => cancel(h)}>Cancel</button> },
+    { header: '', render: (h: Hold) => <span className="row">
+      {h.status === 'READY' && <button className="btn small primary" onClick={() => release(h)}>Release (check out)</button>}
+      <button className="btn small danger" onClick={() => cancel(h)}>Cancel</button>
+    </span> },
   ]
 
   return (

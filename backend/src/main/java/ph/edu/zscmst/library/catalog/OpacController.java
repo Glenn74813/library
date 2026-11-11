@@ -30,8 +30,13 @@ public class OpacController {
     private final CatalogService service;
     private final ItemRepository items;
     private final DigitalService digital;
+    private final LoanPolicy policy;
+    private final CustomFieldRepository customFields;
 
-    public OpacController(CatalogService service, ItemRepository items, DigitalService digital) {
+    public OpacController(CatalogService service, ItemRepository items, DigitalService digital, LoanPolicy policy,
+                          CustomFieldRepository customFields) {
+        this.customFields = customFields;
+        this.policy = policy;
         this.service = service;
         this.items = items;
         this.digital = digital;
@@ -60,10 +65,13 @@ public class OpacController {
                 .toList();
         Map<Long, Instant> due = service.dueDates(list);
         Availability a = service.availability(List.of(id)).getOrDefault(id, Availability.NONE);
+        var values = CatalogDtos.customValues(r.getCustomFields());
+        List<CatalogDtos.LabeledValue> extra = customFields.findAllByOrderBySortOrderAscLabelAsc().stream()
+                .filter(f -> f.isShowInOpac() && values.containsKey(f.getKey()))
+                .map(f -> new CatalogDtos.LabeledValue(f.getLabel(), values.get(f.getKey()))).toList();
         return new OpacDetailDto(RecordDto.of(r, a, digital.summaries(List.of(r)).get(id)), list.stream()
                 .map(i -> new OpacItemDto(i.getBarcode(), i.getLocation(), i.getAisle(), i.getShelf(), i.getShelfLocation(),
-                        r.getCallNumber(), i.getStatus(),
-                        due.get(i.getId())))
-                .toList());
+                        r.getCallNumber(), i.getStatus(), due.get(i.getId()), policy.isRoomUse(i)))
+                .toList(), extra);
     }
 }

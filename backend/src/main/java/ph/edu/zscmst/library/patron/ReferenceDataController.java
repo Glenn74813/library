@@ -33,17 +33,22 @@ import ph.edu.zscmst.library.common.AuditService;
 public class ReferenceDataController {
 
     public record CategoryDto(Long id, String name, int loanDays, int maxLoans, int maxRenewals,
-                              BigDecimal finePerDay, BigDecimal maxUnpaidFines, int holdPickupDays) {
+                              BigDecimal finePerDay, BigDecimal maxUnpaidFines, int holdPickupDays,
+                              int maxHolds, int fineGraceDays, BigDecimal maxFinePerItem) {
         static CategoryDto of(PatronCategory c) {
             return new CategoryDto(c.getId(), c.getName(), c.getLoanDays(), c.getMaxLoans(), c.getMaxRenewals(),
-                    c.getFinePerDay(), c.getMaxUnpaidFines(), c.getHoldPickupDays());
+                    c.getFinePerDay(), c.getMaxUnpaidFines(), c.getHoldPickupDays(), c.getMaxHolds(),
+                    c.getFineGraceDays(), c.getMaxFinePerItem());
         }
     }
 
     public record CategoryRequest(@NotBlank @Size(max = 60) String name, @Min(1) int loanDays, @Min(0) int maxLoans,
                                   @Min(0) int maxRenewals, @NotNull @DecimalMin("0") BigDecimal finePerDay,
                                   @NotNull @DecimalMin("0") BigDecimal maxUnpaidFines,
-                                  @Min(1) @Max(30) int holdPickupDays) {
+                                  @Min(1) @Max(30) int holdPickupDays,
+                                  @Min(0) @Max(100) int maxHolds,
+                                  @Min(0) @Max(60) int fineGraceDays,
+                                  @DecimalMin("0") BigDecimal maxFinePerItem) {
     }
 
     public record CourseDto(Long id, String code, String name) {
@@ -113,6 +118,9 @@ public class ReferenceDataController {
         c.setFinePerDay(req.finePerDay());
         c.setMaxUnpaidFines(req.maxUnpaidFines());
         c.setHoldPickupDays(req.holdPickupDays());
+        c.setMaxHolds(req.maxHolds());
+        c.setFineGraceDays(req.fineGraceDays());
+        c.setMaxFinePerItem(req.maxFinePerItem() == null ? BigDecimal.ZERO : req.maxFinePerItem());
     }
 
     @GetMapping("/courses")

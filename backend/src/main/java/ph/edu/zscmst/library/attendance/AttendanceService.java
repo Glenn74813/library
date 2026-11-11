@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.LibraryClock;
 import ph.edu.zscmst.library.common.SettingsService;
+import ph.edu.zscmst.library.common.SystemSettings;
 import ph.edu.zscmst.library.common.VoiceSettings;
 import ph.edu.zscmst.library.gate.BroadcastService;
 import ph.edu.zscmst.library.patron.Patron;
@@ -57,17 +58,16 @@ public class AttendanceService {
                         List<Count> topCategories, List<Count> daily, List<Count> hourly) {
     }
 
-    /** Ignore repeated taps of the same card within this window (people double-tap). */
-    private static final Duration DEBOUNCE = Duration.ofSeconds(15);
-
     private final AttendanceLogRepository logs;
     private final PatronRepository patrons;
     private final SettingsService settings;
     private final LibraryClock clock;
     private final BroadcastService broadcasts;
+    private final SystemSettings system;
 
     public AttendanceService(AttendanceLogRepository logs, PatronRepository patrons, SettingsService settings,
-                             LibraryClock clock, BroadcastService broadcasts) {
+                             LibraryClock clock, BroadcastService broadcasts, SystemSettings system) {
+        this.system = system;
         this.broadcasts = broadcasts;
         this.logs = logs;
         this.patrons = patrons;
@@ -105,7 +105,8 @@ public class AttendanceService {
         if (last.isPresent()) {
             AttendanceLog l = last.get();
             Instant lastAction = l.getTimeOut() != null ? l.getTimeOut() : l.getTimeIn();
-            if (Duration.between(lastAction, now).abs().compareTo(DEBOUNCE) < 0) {
+            // Ignore repeated taps of the same card within this window (people double-tap).
+            if (Duration.between(lastAction, now).abs().compareTo(duplicateTapWindow()) < 0) {
                 String action = l.getTimeOut() != null ? "OUT" : "IN";
                 return result(p, action, "Already recorded", lastAction, warnings);
             }
@@ -125,9 +126,29 @@ public class AttendanceService {
     }
 
     @Transactional(readOnly = true)
-    public Page<LogDto> logs(LocalDate from, LocalDate to, Pageable pageable) {
-        return logs.findByTimeInBetweenOrderByTimeInDesc(clock.startOfDay(from), clock.startOfDay(to.plusDays(1)),
-                pageable).map(LogDto::of);
+    public Page<LogDto> logs(LocalDate from, LocalDate to, String q, Pageable pageable) {
+        Instant start = clock.startOfDay(from);
+        Instant end = clock.startOfDay(to.plusDays(1));
+        return (q == null || q.isBlank() ? logs.findByTimeInBetweenOrderByTimeInDesc(start, end, pageable)
+                : logs.search(start, end, q.trim(), pageable)).map(LogDto::of);
+    }
+
+    public record PatronAttendance(long totalVisits, long visitsThisMonth, long totalMinutes, long averageMinutes,
+                                   Instant lastVisit, List<LogDto> recent) {
+    }
+
+    /** One patron's visit history and totals (patron record, "Attendance" tab). */
+    @Transactional(readOnly = true)
+    public PatronAttendance forPatron(Long patronId) {
+        LocalDate today = clock.today();
+        long total = logs.countByPatronId(patronId);
+        long month = logs.countByPatronIdAndTimeInBetween(patronId, clock.startOfDay(today.withDayOfMonth(1)),
+                clock.startOfDay(today.plusDays(1)));
+        long minutes = Math.round(logs.totalMinutes(patronId));
+        List<LogDto> recent = logs.findByPatronIdOrderByTimeInDesc(patronId, PageRequest.of(0, 50)).map(LogDto::of).getContent();
+        long completed = logs.countByPatronIdAndTimeOutIsNotNull(patronId);
+        return new PatronAttendance(total, month, minutes, completed == 0 ? 0 : minutes / completed,
+                recent.isEmpty() ? null : recent.getFirst().timeIn(), recent);
     }
 
     @Transactional(readOnly = true)
@@ -150,5 +171,9 @@ public class AttendanceService {
 
     private static List<Count> counts(List<Object[]> rows) {
         return rows.stream().map(r -> new Count(String.valueOf(r[0]), ((Number) r[1]).longValue())).toList();
+    }
+
+    private Duration duplicateTapWindow() {
+        return Duration.ofSeconds(system.duplicateTapSeconds());
     }
 }
