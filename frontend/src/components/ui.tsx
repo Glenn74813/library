@@ -169,24 +169,6 @@ export function BarList({ data, empty = 'No data' }: { data: { label: string; co
   )
 }
 
-export function ColumnChart({ data, format }: {
-  data: { label: string; count: number }[]
-  format?: (label: string) => string
-}) {
-  if (!data.length) return <p className="muted small">No data</p>
-  const max = Math.max(...data.map((d) => d.count), 1)
-  return (
-    <div className="columns" role="img" aria-label="Column chart">
-      {data.map((d) => (
-        <div className="col" key={d.label} title={`${d.label}: ${d.count}`}>
-          <div className="fill" style={{ height: `${(d.count / max) * 100}%` }} />
-          <span className="cap">{format ? format(d.label) : d.label}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 /** Small badge telling whether a title can be read in the app (school-owned) or on a vendor platform. */
 export function EbookBadge({ ebook }: { ebook: DigitalSummary }) {
   return ebook.kind === 'SCHOOL_OWNED'

@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.LibraryClock;
 import ph.edu.zscmst.library.common.SettingsService;
+import ph.edu.zscmst.library.common.VoiceSettings;
 import ph.edu.zscmst.library.patron.Patron;
 import ph.edu.zscmst.library.patron.PatronRepository;
 
@@ -25,7 +26,7 @@ import ph.edu.zscmst.library.patron.PatronRepository;
 public class AttendanceService {
 
     public record KioskConfig(String mode, boolean singleTap, String entryMessage, String exitMessage,
-                              List<String> standbyMessages, String videoUrl, Broadcast broadcast) {
+                              List<String> standbyMessages, String videoUrl, Broadcast broadcast, VoiceSettings voice) {
     }
 
     public record Broadcast(String message, Instant at) {
@@ -80,7 +81,7 @@ public class AttendanceService {
                 k.getOrDefault("entryMessage", ""), k.getOrDefault("exitMessage", ""),
                 Arrays.stream(k.getOrDefault("standbyMessages", "").split("\\|"))
                         .map(String::trim).filter(s -> !s.isEmpty()).toList(),
-                k.getOrDefault("videoUrl", ""), broadcast);
+                k.getOrDefault("videoUrl", ""), broadcast, VoiceSettings.load(settings));
     }
 
     @Transactional

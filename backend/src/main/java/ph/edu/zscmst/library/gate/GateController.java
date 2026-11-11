@@ -25,6 +25,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
+
 import ph.edu.zscmst.library.catalog.Item;
 import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.ItemStatus;
@@ -33,6 +36,7 @@ import ph.edu.zscmst.library.common.Csv;
 import ph.edu.zscmst.library.common.LibraryClock;
 import ph.edu.zscmst.library.common.PageResponse;
 import ph.edu.zscmst.library.common.SettingsService;
+import ph.edu.zscmst.library.common.VoiceSettings;
 
 /**
  * RFID security gate integration. The gate controller (or its middleware) calls the {@code /device}
@@ -60,6 +64,10 @@ public class GateController {
     public record BroadcastRequest(@NotBlank @Size(max = 500) String message) {
     }
 
+    /** Ready-made announcement (evacuation, drill, closing...) shown as a button on the gate page. */
+    public record Preset(@NotBlank @Size(max = 40) String name, @NotBlank @Size(max = 500) String message) {
+    }
+
     public record EventDto(Long id, String gateId, GateEventType type, String epc, String barcode, String title,
                            Integer visitorCount, String message, Instant occurredAt) {
         static EventDto of(GateEvent e) {
@@ -82,14 +90,16 @@ public class GateController {
     private final SettingsService settings;
     private final LibraryClock clock;
     private final AuditService audit;
+    private final JsonMapper json;
 
     public GateController(GateEventRepository events, ItemRepository items, SettingsService settings,
-                          LibraryClock clock, AuditService audit) {
+                          LibraryClock clock, AuditService audit, JsonMapper json) {
         this.events = events;
         this.items = items;
         this.settings = settings;
         this.clock = clock;
         this.audit = audit;
+        this.json = json;
     }
 
     private GateConfig config() {
@@ -210,6 +220,40 @@ public class GateController {
         e.setMessage(req.message().trim());
         events.save(e);
         audit.record("BROADCAST", req.message());
+    }
+
+    @GetMapping("/api/gate/presets")
+    public List<Preset> presets() {
+        String raw = settings.get("broadcast.presets", "[]");
+        try {
+            return List.of(json.readValue(raw, Preset[].class));
+        } catch (JacksonException e) {
+            return List.of();
+        }
+    }
+
+    @PutMapping("/api/gate/presets")
+    @PreAuthorize("hasAnyRole('ADMIN','LIBRARIAN')")
+    public List<Preset> updatePresets(@RequestBody @Size(max = 12, message = "at most 12 presets") List<@Valid Preset> presets) {
+        List<Preset> cleaned = presets.stream().map(p -> new Preset(p.name().trim(), p.message().trim())).toList();
+        settings.put("broadcast.presets", json.writeValueAsString(cleaned));
+        audit.record("BROADCAST_PRESETS", cleaned.size() + " preset(s): "
+                + String.join(", ", cleaned.stream().map(Preset::name).toList()));
+        return cleaned;
+    }
+
+    @GetMapping("/api/gate/voice")
+    public VoiceSettings voice() {
+        return VoiceSettings.load(settings);
+    }
+
+    @PutMapping("/api/gate/voice")
+    @PreAuthorize("hasAnyRole('ADMIN','LIBRARIAN')")
+    public VoiceSettings updateVoice(@Valid @RequestBody VoiceSettings voice) {
+        voice.save(settings);
+        audit.record("BROADCAST_VOICE", (voice.name() == null || voice.name().isBlank() ? "default" : voice.name())
+                + " / " + voice.lang() + " rate=" + voice.rate() + " pitch=" + voice.pitch() + " x" + voice.repeat());
+        return VoiceSettings.load(settings);
     }
 
     @GetMapping("/api/gate/export")

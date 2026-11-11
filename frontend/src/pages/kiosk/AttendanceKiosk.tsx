@@ -166,7 +166,7 @@ function KioskScreen() {
 
   return (
     <div className="att">
-      <BroadcastOverlay broadcast={config?.broadcast} />
+      <BroadcastOverlay broadcast={config?.broadcast} voice={config?.voice} />
       <header>
         <div className="school">
           <Logo large />

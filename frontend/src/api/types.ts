@@ -270,6 +270,17 @@ export interface KioskConfig {
   standbyMessages: string[]
   videoUrl: string
   broadcast: { message: string; at: string } | null
+  voice: VoiceSettings
+}
+
+/** Announcement text-to-speech settings (shared by every kiosk/display). */
+export interface VoiceSettings {
+  /** Browser voice name; used only where that voice is installed. Empty = best voice for `lang`. */
+  name: string
+  lang: string
+  rate: number
+  pitch: number
+  repeat: number
 }
 
 export type EntryMethod = 'RFID' | 'BARCODE' | 'MANUAL'

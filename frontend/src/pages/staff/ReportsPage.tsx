@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api, download, qs } from '../../api/client'
 import type { CirculationStats } from '../../api/types'
 import { BarList, ErrorAlert, Field, Stat } from '../../components/ui'
+import { ChartHead, dayLabel } from '../../components/charts'
 import { daysAgo, fmtMoney, isoDate } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
@@ -35,8 +36,14 @@ export function ReportsPage() {
             <Stat label="Fines collected" value={fmtMoney(data.finesCollected)} />
           </div>
           <div className="grid cols-2">
-            <div className="card"><h2>Top borrowers</h2><BarList data={data.topBorrowers.map((b) => ({ label: b.label, count: b.count }))} /></div>
-            <div className="card"><h2>Most borrowed titles</h2><BarList data={data.topTitles.map((t) => ({ label: t.label, count: t.count }))} /></div>
+            <div className="card chart">
+              <ChartHead title="Top borrowers" subtitle={`Check-outs · ${dayLabel(from)} – ${dayLabel(to)}`} />
+              <BarList data={data.topBorrowers.map((b) => ({ label: b.label, count: b.count }))} />
+            </div>
+            <div className="card chart">
+              <ChartHead title="Most borrowed titles" subtitle={`Check-outs · ${dayLabel(from)} – ${dayLabel(to)}`} />
+              <BarList data={data.topTitles.map((t) => ({ label: t.label, count: t.count }))} />
+            </div>
           </div>
         </div>
       )}

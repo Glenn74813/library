@@ -1,14 +1,16 @@
 import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
 import type { AttendanceStats, Dashboard } from '../../api/types'
-import { BarList, ColumnChart, ErrorAlert, Stat } from '../../components/ui'
-import { fmtMoney } from '../../format'
+import { ErrorAlert, Stat } from '../../components/ui'
+import { ColumnChart, PieChart, dayLabel, dayTick, fillDays } from '../../components/charts'
+import { daysAgo, fmtMoney, isoDate } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
 
 export function DashboardPage() {
   const { data: d, error } = useAsync(() => api<Dashboard>('/api/reports/dashboard'), [])
   const { data: att } = useAsync(() => api<AttendanceStats>('/api/attendance/stats'), [])
+  const visits = att ? fillDays(att.daily, daysAgo(29), isoDate()) : []
 
   return (
     <>
@@ -51,12 +53,12 @@ export function DashboardPage() {
       {att && (
         <div className="grid cols-2" style={{ marginTop: 16 }}>
           <div className="card">
-            <h2>Visits, last 30 days</h2>
-            <ColumnChart data={att.daily} format={(l) => l.slice(8)} />
+            <ColumnChart title="Library visits" subtitle="Attendance · last 30 days" data={visits}
+              format={dayTick} tooltipLabel={dayLabel} total={att.totalVisits.toLocaleString('en-PH')}
+              totalNote={`Today: ${visits[visits.length - 1]?.count ?? 0}`} unit=" visit(s)" />
           </div>
           <div className="card">
-            <h2>Top 5 programs / courses</h2>
-            <BarList data={att.topCourses} />
+            <PieChart title="Top 5 programs / courses" subtitle="Library visits · last 30 days" data={att.topCourses} unit=" visit(s)" />
           </div>
         </div>
       )}

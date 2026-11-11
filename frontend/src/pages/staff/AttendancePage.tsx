@@ -3,7 +3,8 @@ import { api, download, qs } from '../../api/client'
 import type { AttendanceLog, AttendanceStats, Page } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
-import { BarList, ColumnChart, ErrorAlert, Field, Pager, Stat, StatusBadge, Table, Tabs } from '../../components/ui'
+import { ErrorAlert, Field, Pager, Stat, StatusBadge, Table, Tabs } from '../../components/ui'
+import { ColumnChart, PieChart, dayLabel, dayTick, fillDays, fillHours, hourLabel } from '../../components/charts'
 import { daysAgo, fmtDateTime, fmtTime, isoDate } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
@@ -37,6 +38,10 @@ function StatsTab({ from, to }: { from: string; to: string }) {
   const { data, error } = useAsync(() => api<AttendanceStats>(`/api/attendance/stats${qs({ from, to })}`), [from, to])
   if (error) return <ErrorAlert error={error} />
   if (!data) return <p className="muted">Loading…</p>
+  const period = from === to ? dayLabel(from) : `${dayLabel(from)} – ${dayLabel(to)}`
+  const days = fillDays(data.daily, from, to)
+  const hours = fillHours(data.hourly)
+  const peak = data.hourly.length ? hours.reduce((a, b) => (b.count > a.count ? b : a)) : null
   return (
     <div className="stack">
       <div className="stats">
@@ -45,10 +50,16 @@ function StatsTab({ from, to }: { from: string; to: string }) {
         <Stat label="Inside now" value={data.currentlyInside} />
       </div>
       <div className="grid cols-2">
-        <div className="card"><h2>Top 5 programs / courses</h2><BarList data={data.topCourses} /></div>
-        <div className="card"><h2>Top 5 patron categories</h2><BarList data={data.topCategories} /></div>
-        <div className="card"><h2>Visits per day</h2><ColumnChart data={data.daily} format={(l) => l.slice(5)} /></div>
-        <div className="card"><h2>Busiest hours</h2><ColumnChart data={data.hourly} format={(h) => `${h}h`} /></div>
+        <div className="card"><PieChart title="Top 5 programs / courses" subtitle={period} data={data.topCourses} unit=" visit(s)" /></div>
+        <div className="card"><PieChart title="Top 5 patron categories" subtitle={period} data={data.topCategories} unit=" visit(s)" /></div>
+        <div className="card">
+          <ColumnChart title="Visits per day" subtitle={period} data={days} format={dayTick} tooltipLabel={dayLabel}
+            total={data.totalVisits.toLocaleString('en-PH')} totalNote={`${dayLabel(to)}: ${days[days.length - 1]?.count ?? 0}`} unit=" visit(s)" />
+        </div>
+        <div className="card">
+          <ColumnChart title="Busiest hours" subtitle={`Time-ins by hour · ${period}`} data={hours} format={hourLabel} emphasis="max"
+            total={peak ? hourLabel(peak.label) : '—'} totalNote="peak hour" unit=" visit(s)" />
+        </div>
       </div>
     </div>
   )
