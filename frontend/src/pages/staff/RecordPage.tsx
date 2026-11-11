@@ -107,7 +107,7 @@ export function RecordPage() {
       <form className="card stack" onSubmit={save}>
         <ErrorAlert error={error} />
         <div className="form-grid">
-          <Field label="ISBN" hint="Scan or type, then use lookup to copy-catalog">
+          <Field label="ISBN" className="span-all" hint="Scan or type, then press Lookup (Open Library) or LoC (Library of Congress) to copy-catalog">
             <div className="input-group">
               <input value={form.isbn ?? ''} onChange={(e) => set('isbn', e.target.value)} />
               <CameraScanButton title="Scan the ISBN barcode" onScan={(t) => set('isbn', t)} />

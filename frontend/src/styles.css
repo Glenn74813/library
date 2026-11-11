@@ -318,8 +318,9 @@ label.check { display: inline-flex; align-items: center; gap: 8px; cursor: point
 .form-grid > .field > .hint:empty { display: block; }
 
 /* Text box with an attached action button (ISBN lookup, scan boxes, search). */
-.input-group { display: flex; gap: 8px; align-items: stretch; }
-.input-group > input, .input-group > select { flex: 1; min-width: 0; }
+/* The box keeps a usable width; when the column is too narrow the buttons wrap below it. */
+.input-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.input-group > input, .input-group > select { flex: 1 1 12rem; min-width: min(100%, 12rem); }
 .input-group > .btn { flex: none; min-height: 0; }
 .form-grid .span-all { grid-column: 1 / -1; }
 
