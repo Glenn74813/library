@@ -226,7 +226,7 @@ function SearchTab({ onReserved, onBook }: { onReserved: () => void; onBook: (r:
       {data && <Table rows={data.content} rowKey={(r) => r.id} empty="No titles found" columns={[
         { header: 'Title', render: (r) => <><strong>{r.title}</strong><div className="muted small">{r.authors}</div></> },
         { header: 'Available', render: (r) => <span className={`badge ${r.availableCopies ? 'ok' : 'warn'}`}>{r.availableCopies}/{r.totalCopies}</span> },
-        { header: '', render: (r) => r.totalCopies > 0 && <span className="row">
+        { header: '', render: (r) => r.totalCopies > 0 && <span className="row-actions">
           <button className="btn small primary" disabled={busy !== null} onClick={() => reserve(r)}>{busy === r.id ? 'Reserving…' : 'Reserve'}</button>
           <button className="btn small" onClick={() => onBook(r)}>Book a date</button>
         </span> },

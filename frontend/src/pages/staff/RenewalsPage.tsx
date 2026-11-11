@@ -48,7 +48,7 @@ export function RenewalsPage() {
             { header: 'Renewals', render: (r) => `${r.renewals}/${r.maxRenewals}` },
             { header: '', render: (r) => <div className="stack" style={{ gap: 4 }}>
               {r.problem && <span className="small" style={{ color: 'var(--danger)' }}>{r.problem}</span>}
-              <span className="row" style={{ flexWrap: 'nowrap' }}>
+              <span className="row-actions">
                 <button className="btn small primary" disabled={!!r.problem} onClick={() => approve(r)}>Approve</button>
                 <button className="btn small danger" onClick={() => setRejecting(r)}>Reject</button>
               </span>

@@ -66,7 +66,7 @@ export function FinesPage() {
           { header: 'Amount', render: (f) => <strong>{fmtMoney(f.amount)}</strong> },
           { header: 'Status', render: (f) => <StatusBadge status={f.status} /> },
           { header: '', render: (f) => f.status === 'UNPAID' ? (
-            <div className="row">
+            <div className="row-actions">
               <button className="btn small primary" onClick={() => pay(f)}>Receive payment</button>
               {canWaive && <button className="btn small" onClick={() => waive(f)}>Waive</button>}
             </div>

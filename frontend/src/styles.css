@@ -243,6 +243,10 @@ img { max-width: 100%; }
 .stack > h2 { margin: 8px 0 0; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .row.end { justify-content: flex-end; }
+/* Buttons in a table row (Release / Cancel, Renew / Lost …): side by side when they fit, otherwise
+   stacked at the same width so they line up. */
+.row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.row-actions > .btn { flex: 1 0 auto; justify-content: center; }
 .spacer { flex: 1; }
 .muted { color: var(--muted); }
 .small { font-size: 0.85rem; }
@@ -323,7 +327,9 @@ label.check { display: inline-flex; align-items: center; gap: 8px; cursor: point
 /* Text box with an attached action button (ISBN lookup, scan boxes, search). */
 /* The box keeps a usable width; when the column is too narrow the buttons wrap below it. */
 .input-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
-.input-group > input, .input-group > select { flex: 1 1 12rem; min-width: min(100%, 12rem); }
+/* Small enough that a box with one icon button (camera scan) stays on one line in a normal form column,
+   so it lines up with the plain boxes beside it; several text buttons still wrap below on narrow screens. */
+.input-group > input, .input-group > select { flex: 1 1 7rem; min-width: min(100%, 7rem); }
 .input-group > .btn { flex: none; min-height: 0; }
 .form-grid .span-all { grid-column: 1 / -1; }
 
