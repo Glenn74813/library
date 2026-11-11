@@ -52,6 +52,9 @@ html {
 }
 
 html, body { overflow-x: clip; }
+/* Keep the scrollbar's space so the page doesn't shift sideways when a dialog locks scrolling. */
+html { scrollbar-gutter: stable; }
+html.scroll-locked { overflow: hidden; }
 
 body {
   margin: 0;
