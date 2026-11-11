@@ -243,10 +243,14 @@ img { max-width: 100%; }
 .stack > h2 { margin: 8px 0 0; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .row.end { justify-content: flex-end; }
-/* Buttons in a table row (Release / Cancel, Renew / Lost …): side by side when they fit, otherwise
-   stacked at the same width so they line up. */
-.row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.row-actions > .btn { flex: 1 0 auto; justify-content: center; }
+/* Buttons in a table row (Release / Cancel, Renew / Lost …) stay side by side on one line, so rows stay
+   short; only on phone widths do they stack, at equal width. */
+.row-actions { display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; }
+.row-actions > .btn { flex: none; white-space: nowrap; }
+@media (max-width: 640px) {
+  .row-actions { flex-wrap: wrap; }
+  .row-actions > .btn { flex: 1 0 auto; justify-content: center; }
+}
 .spacer { flex: 1; }
 .muted { color: var(--muted); }
 .small { font-size: 0.85rem; }
