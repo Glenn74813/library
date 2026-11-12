@@ -197,7 +197,8 @@ A title is either **school-owned** or **commercial**, never both:
 
 ## Not included (needs vendor hardware, specs or a school decision)
 
-- NCIP and a native Z39.50 client (copy cataloging uses Open Library and the Library of Congress SRU service).
+- NCIP and a native Z39.50 client (copy cataloging uses Open Library, the Library of Congress SRU service and the National Library of the
+  Philippines' public Koha catalog).
 - Writing RFID tags (AFI/EAS security bit) — done by the tagging station's vendor software; the
   library system only stores each copy's EPC.
 - Native Android/iOS apps (the patron portal is a responsive web app; can be wrapped as a PWA).

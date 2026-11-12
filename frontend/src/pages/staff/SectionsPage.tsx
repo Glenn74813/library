@@ -6,6 +6,7 @@ import { Icon } from '../../components/Icon'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Table } from '../../components/ui'
 import { useAsync } from '../../hooks/useAsync'
+import { shelvesLabel } from '../../format'
 
 /**
  * Administration → Sections & Aisles: the library's layout. A copy's section, aisle and shelf, and a
@@ -60,7 +61,7 @@ export function SectionsPage() {
         <Table rows={data} rowKey={(s) => s.id} onRowClick={isAdmin ? setEditing : undefined} empty="No sections yet" columns={[
           { header: 'Section / area', render: (s) => <strong>{s.name}</strong> },
           { header: 'Aisles', render: (s) => s.aisles.length
-            ? s.aisles.map((a) => `${a.name} (${a.shelves} shelves)`).join(', ')
+            ? s.aisles.map((a) => `${a.name} (${shelvesLabel(a.shelves)})`).join(', ')
             : <span className="muted">None yet</span> },
           { header: 'Copies', render: (s) => s.copies },
           ...(isAdmin ? [{ header: 'Order', render: (s: LibrarySection) => {
@@ -131,7 +132,7 @@ function SectionModal({ section, others, onClose, onChanged, onRemoved }: {
         <h3 style={{ margin: '8px 0 0' }}>Aisles</h3>
         <Table rows={section.aisles} rowKey={(a) => a.id} onRowClick={setEditingAisle} empty="No aisles yet" columns={[
           { header: 'Aisle', render: (a) => <strong>Aisle {a.name}</strong> },
-          { header: 'Shelves', render: (a) => `1 to ${a.shelves}` },
+          { header: 'Shelves', render: (a) => a.shelves === 1 ? 'Shelf 1 only' : `1 to ${a.shelves}` },
           { header: 'Copies', render: (a) => a.copies },
         ]} />
         <form className="card stack" onSubmit={addAisles} style={{ padding: 12 }}>

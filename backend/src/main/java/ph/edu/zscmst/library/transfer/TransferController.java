@@ -33,12 +33,16 @@ public class TransferController {
         this.audit = audit;
     }
 
-    /** Copy cataloging: search the Library of Congress (SRU / Z39.50) by ISBN or title/author. */
+    /**
+     * Copy cataloging by ISBN or title/author: {@code source=loc} (default) searches the Library of Congress,
+     * {@code source=nlp} the National Library of the Philippines.
+     */
     @GetMapping("/api/catalog/copycat")
-    public CopyCatalogService.SearchResult copycat(@RequestParam(required = false) String isbn,
+    public CopyCatalogService.SearchResult copycat(@RequestParam(defaultValue = "loc") String source,
+                                                   @RequestParam(required = false) String isbn,
                                                    @RequestParam(required = false) String title,
                                                    @RequestParam(required = false) String author) {
-        return copycat.search(isbn, title, author);
+        return copycat.search(source, isbn, title, author);
     }
 
     /** {@code commit=false} only validates and previews; {@code commit=true} saves. */

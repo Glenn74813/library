@@ -33,3 +33,6 @@ export function fmtBytes(n?: number | null) {
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++ }
   return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
 }
+
+/** "1 shelf", "5 shelves". */
+export const shelvesLabel = (n: number) => `${n} ${n === 1 ? 'shelf' : 'shelves'}`

@@ -7,6 +7,8 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -32,8 +34,9 @@ import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.SettingsService;
 
 /**
- * Copy cataloging over SRU (the HTTP form of Z39.50 offered by the Library of Congress and many
- * other catalogs). Results are MARC21 records mapped to catalog fields for the record form.
+ * Copy cataloging from two sources, both returning MARC21 records mapped to catalog fields for the record
+ * form: the Library of Congress over SRU (the HTTP form of Z39.50), and the National Library of the
+ * Philippines through its public Koha catalog (an RSS search, then each record's MARCXML export).
  */
 @Service
 public class CopyCatalogService {
@@ -59,6 +62,67 @@ public class CopyCatalogService {
         f.setReadTimeout(20000);
         this.http = RestClient.builder().requestFactory(f).build();
     }
+
+    /** Most NLP records fetched per search (each is one request to the NLP catalog). */
+    private static final int NLP_MAX = 8;
+    private static final Pattern BIBLIO = Pattern.compile("biblionumber=(\\d+)");
+    private static final Pattern TOTAL = Pattern.compile("<opensearch:totalResults>\\s*(\\d+)");
+
+    /** {@code source}: "nlp" for the National Library of the Philippines, otherwise the Library of Congress. */
+    public SearchResult search(String source, String isbn, String title, String author) {
+        return "nlp".equalsIgnoreCase(source) ? searchNlp(isbn, title, author) : search(isbn, title, author);
+    }
+
+    /**
+     * National Library of the Philippines: its Koha OPAC's RSS search finds the records, then each one's
+     * MARCXML export is read. The NLP's site allows search use; requests are made only when staff search.
+     */
+    SearchResult searchNlp(String isbn, String title, String author) {
+        String target = "National Library of the Philippines";
+        String base = settings.get("copycat.nlpUrl", "https://koha.nlp.gov.ph").replaceAll("/+$", "");
+        String ccl;
+        if (isbn != null && !isbn.isBlank()) {
+            ccl = "nb:" + isbn.replaceAll("[^0-9Xx]", "");
+        } else {
+            List<String> parts = new ArrayList<>();
+            if (title != null && !title.isBlank()) parts.add("ti:" + kohaTerms(title));
+            if (author != null && !author.isBlank()) parts.add("au:" + kohaTerms(author));
+            if (parts.isEmpty()) throw ApiException.badRequest("Enter an ISBN, or a title and/or author");
+            ccl = String.join(" and ", parts);
+        }
+        String rss;
+        try {
+            byte[] body = http.get().uri(URI.create(base + "/cgi-bin/koha/opac-search.pl?format=rss&count=" + NLP_MAX + "&q="
+                    + URLEncoder.encode(ccl, StandardCharsets.UTF_8))).header("User-Agent", AGENT).retrieve().body(byte[].class);
+            rss = body == null ? "" : new String(body, StandardCharsets.UTF_8);
+        } catch (RestClientException e) {
+            log.warn("NLP search failed: {}", e.getMessage());
+            throw ApiException.badRequest(target + " did not answer. Check the internet connection and try again.");
+        }
+        Matcher t = TOTAL.matcher(rss);
+        int total = t.find() ? Integer.parseInt(t.group(1)) : 0;
+        List<String> ids = new ArrayList<>();
+        Matcher m = BIBLIO.matcher(rss);
+        while (m.find() && ids.size() < NLP_MAX) if (!ids.contains(m.group(1))) ids.add(m.group(1));
+        List<Candidate> out = new ArrayList<>();
+        for (String id : ids) {
+            try {
+                byte[] marc = http.get().uri(URI.create(base + "/cgi-bin/koha/opac-export.pl?op=export&format=marcxml&bib=" + id))
+                        .header("User-Agent", AGENT).retrieve().body(byte[].class);
+                if (marc != null) out.addAll(parse(target, marc).records());
+            } catch (RuntimeException e) {
+                log.warn("NLP record {} could not be read: {}", id, e.getMessage()); // skip that one record
+            }
+        }
+        return new SearchResult(target, Math.max(total, out.size()), out);
+    }
+
+    /** Words only: Koha's query language treats punctuation (colons, parentheses...) as operators. */
+    private static String kohaTerms(String s) {
+        return s.replaceAll("[^\\p{L}\\p{N}\\s'-]", " ").trim().replaceAll("\\s+", " ");
+    }
+
+    private static final String AGENT = "ZSCMST-SmartLibrary/1.0 (library copy cataloging)";
 
     public SearchResult search(String isbn, String title, String author) {
         String target = settings.get("copycat.name", "Library of Congress");

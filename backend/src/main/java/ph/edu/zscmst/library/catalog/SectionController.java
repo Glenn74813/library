@@ -157,7 +157,7 @@ public class SectionController {
                     values (?, ?, ?, (select coalesce(max(sort_order), 0) + 1 from library_aisle where section_id = ?))""",
                     id, name, req.shelves(), id);
         }
-        audit.record("AISLE_ADD", section + ": aisle " + String.join(", ", names) + " (" + req.shelves() + " shelves)");
+        audit.record("AISLE_ADD", section + ": aisle " + String.join(", ", names) + " (" + req.shelves() + (req.shelves() == 1 ? " shelf)" : " shelves)"));
         return sections.list();
     }
 
@@ -188,7 +188,7 @@ public class SectionController {
                     update stocktake_session set aisle = ? where closed_at is null and lower(location) = lower(?)
                     and lower(aisle) = lower(?)""", name, section, old);
         }
-        audit.record("AISLE_UPDATE", section + ": aisle " + old + " -> " + name + ", " + req.shelves() + " shelves");
+        audit.record("AISLE_UPDATE", section + ": aisle " + old + " -> " + name + ", " + req.shelves() + (req.shelves() == 1 ? " shelf" : " shelves"));
         return sections.list();
     }
 

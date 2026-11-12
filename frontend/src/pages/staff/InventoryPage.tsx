@@ -5,7 +5,7 @@ import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
 import { CameraScanButton } from '../../components/CameraScan'
 import { ErrorAlert, Field, Modal, Stat, StatusBadge, Table, Tabs, ExportMenu } from '../../components/ui'
-import { fmtDateTime } from '../../format'
+import { fmtDateTime, shelvesLabel } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
 
@@ -68,7 +68,7 @@ function NewSession({ onClose, onCreated }: { onClose: () => void; onCreated: (s
         {location && <Field label="Aisle" hint="Count one aisle at a time; the shelf list and report then cover just that aisle">
           <select value={aisle} onChange={(e) => setAisle(e.target.value)}>
             <option value="">All aisles of {location}</option>
-            {aisles.map((a) => <option key={a.id} value={a.name}>Aisle {a.name} · {a.shelves} shelves ({a.copies})</option>)}
+            {aisles.map((a) => <option key={a.id} value={a.name}>Aisle {a.name} · {shelvesLabel(a.shelves)} ({a.copies})</option>)}
           </select></Field>}
       </div>
     </Modal>

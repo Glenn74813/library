@@ -126,8 +126,10 @@ can be added from the patron's page.
 ### 1.8 Catalog
 **Collection → Catalog**
 
-- **New record**: type the ISBN and press **Lookup** (Open Library), or **LoC** to search the Library of
-  Congress catalog by ISBN, title or author. Check the copied data, then save.
+- **New record**: type the ISBN and press **Lookup** (Open Library), or **Copy-catalog** to search the
+  **Library of Congress** (foreign books, LC call numbers) or the **National Library of the Philippines**
+  (Philippine books, Dewey call numbers) by ISBN, title or author. The window remembers the last source
+  used. Check the copied data, then save.
 - Authors and subjects suggest existing headings as you type, which keeps the catalog consistent.
   Variant names are managed under **Authorities**.
 - Add **copies** (barcode, RFID EPC, call number, section, aisle, shelf, price). Mark room-use-only

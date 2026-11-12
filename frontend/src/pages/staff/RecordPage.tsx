@@ -7,7 +7,7 @@ import { useAsync } from '../../hooks/useAsync'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Pager, StatusBadge, Table } from '../../components/ui'
-import { fmtDate, fmtDateTime, label } from '../../format'
+import { fmtDate, fmtDateTime, label, shelvesLabel } from '../../format'
 import { CameraScanButton } from '../../components/CameraScan'
 import { CopyCatalogModal } from '../../components/CopyCatalogModal'
 import { DigitalPanel } from '../../components/DigitalPanel'
@@ -115,12 +115,12 @@ export function RecordPage() {
       <form className="card stack" onSubmit={save}>
         <ErrorAlert error={error} />
         <div className="form-grid">
-          <Field label="ISBN" className="span-all" hint="Scan or type, then press Lookup (Open Library) or LoC (Library of Congress) to copy-catalog">
+          <Field label="ISBN" className="span-all" hint="Scan or type, then press Lookup (Open Library) or Copy-catalog (Library of Congress or National Library of the Philippines)">
             <div className="input-group">
               <input value={form.isbn ?? ''} onChange={(e) => set('isbn', e.target.value)} />
               <CameraScanButton title="Scan the ISBN barcode" onScan={(t) => set('isbn', t)} />
               <button type="button" className="btn" onClick={lookupIsbn}>Lookup</button>
-              <button type="button" className="btn" onClick={() => setCopycat(true)} title="Search the Library of Congress catalog">LoC</button>
+              <button type="button" className="btn" onClick={() => setCopycat(true)} title="Search the Library of Congress or the National Library of the Philippines">Copy-catalog</button>
             </div>
           </Field>
           <Field label="Material type">
@@ -198,7 +198,7 @@ export function RecordPage() {
             language: c.language ?? f.language, summary: c.summary ?? f.summary,
           }))
           setCopycat(false)
-          toast('Filled from the Library of Congress record — review and save')
+          toast(`Filled from the ${c.source} record — review and save`)
         }} />}
       {editingItem && <ItemModal recordId={Number(id)} item={editingItem} canDelete={canDelete} others={items.filter((x) => x.id !== editingItem.id)}
         onClose={() => setEditingItem(null)} onSaved={() => { setEditingItem(null); void load() }} />}
@@ -335,7 +335,7 @@ function ItemModal({ recordId, item, canDelete, others, onClose, onSaved }: {
               {f.aisle && section && !aisle && <option value={f.aisle}>{f.aisle} (not on the list)</option>}
             </select>
           </Field>
-          <Field label="Shelf" hint={aisle ? `Aisle ${aisle.name} has ${aisle.shelves} shelves` : undefined}>
+          <Field label="Shelf" hint={aisle ? `Aisle ${aisle.name} has ${shelvesLabel(aisle.shelves)}` : undefined}>
             <select value={f.shelf ?? ''} disabled={!aisle} onChange={(e) => set('shelf', e.target.value || null)}>
               <option value="">{aisle ? 'Not set' : 'Choose an aisle first'}</option>
               {aisle && Array.from({ length: aisle.shelves }, (_, n) => String(n + 1)).map((n) => <option key={n} value={n}>Shelf {n}</option>)}

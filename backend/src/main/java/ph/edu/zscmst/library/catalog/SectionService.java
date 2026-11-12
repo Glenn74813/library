@@ -92,7 +92,7 @@ public class SectionService {
         int shelves = ((Number) aisle(s, a).orElseThrow().get("shelves")).intValue();
         String t = shelf.trim();
         if (!t.matches("\\d{1,2}") || Integer.parseInt(t) < 1 || Integer.parseInt(t) > shelves) {
-            throw ApiException.badRequest("Aisle " + a + " of " + s + " has shelves 1 to " + shelves + ".");
+            throw ApiException.badRequest("Aisle " + a + " of " + s + (shelves == 1 ? " has only shelf 1." : " has shelves 1 to " + shelves + "."));
         }
         return new Spot(s, a, String.valueOf(Integer.parseInt(t)));
     }
