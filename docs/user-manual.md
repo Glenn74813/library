@@ -65,15 +65,15 @@ The 80 mm receipt printer prints these slips (only the slip prints, sized to its
 
 | Slip | Where |
 |---|---|
-| Borrowing slip (items, due dates, QR to My Library) | Circulation desk → **Slip** next to the patron, or automatically on **Next patron** |
-| Return receipt (items returned, time, any fine) | Check in → **Print return slip**, or one per return automatically |
-| Hold shelf slip (card no. and initials, pickup-by date) | Prints by itself when a returned copy is set aside for a reservation; put it in the book |
+| Borrowing slip (items, due dates, QR to My Library) | Circulation desk → **Print receipt** next to the patron |
+| Return receipt (items returned, time, any fine) | Check in → **Print receipt** (one per patron) |
+| Hold shelf slip (card no. and initials, pickup-by date) | Check in → **Print hold slip** when a returned copy is set aside for a reservation; put it in the book |
 | PIN slip | When staff set or reset a patron's PIN (the library ID is the only card; print it from **Print… → Library ID**) |
 | Library clearance (reference no. + QR) | Patron page → **Print… → Library clearance…** (only with nothing on loan and no unpaid fines). Check one with **Patrons → Verify clearance** |
 | Official receipt | When fines are paid, or **Receipt** on the Fines page |
 | End-of-day collection report | **Fines & payments → End-of-day report** |
 
-Which slips print automatically is set per desk under **Receipt printer on this computer** on the circulation desk.
+Nothing prints by itself: staff check the details on screen, then press the print button. Releasing a hold shows the loan with a **Print receipt** button.
 
 **Print log.** Every slip, official receipt, clearance and library ID that is printed is recorded with who printed it and when.
 - Each patron's page has a **Printed** tab (also **Print… → Print history**) listing everything printed for them.

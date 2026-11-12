@@ -1,16 +1,16 @@
 import { api, releaseHold } from '../../api/client'
-import type { Hold } from '../../api/types'
+import type { Hold, Loan } from '../../api/types'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, StatusBadge, Table } from '../../components/ui'
 import { fmtDate, fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
-import { useLibrary } from '../../api/library'
-import { printReleaseSlip } from '../../print/slips'
+import { useState } from 'react'
+import { ReleasedReceipt } from '../../components/ReleasedReceipt'
 
 export function HoldsPage() {
   const { data, error, reload } = useAsync(() => api<Hold[]>('/api/holds'), [])
   const toast = useToast()
-  const lib = useLibrary()
+  const [released, setReleased] = useState<Loan | null>(null)
   const ready = data?.filter((h) => h.status === 'READY')
   const pending = data?.filter((h) => h.status === 'PENDING')
   const booked = data?.filter((h) => h.status === 'SCHEDULED').sort((a, b) => (a.pickupDate ?? '').localeCompare(b.pickupDate ?? ''))
@@ -21,7 +21,7 @@ export function HoldsPage() {
       const r = await releaseHold(h)
       toast(`Released to ${h.patronName} — due ${fmtDate(r.loan.dueAt)}${r.notice ? ` (${r.notice})` : ''}`)
       void reload()
-      printReleaseSlip(lib, r.loan).catch((e) => toast(`Released, but the slip did not print: ${errorText(e)}`, 'warn'))
+      setReleased(r.loan)
     } catch (e) {
       toast(errorText(e), 'error')
     }
@@ -60,6 +60,7 @@ export function HoldsPage() {
     <>
       <div className="page-head"><h1>Holds / reservations</h1></div>
       <ErrorAlert error={error} />
+      {released && <ReleasedReceipt loan={released} onClose={() => setReleased(null)} />}
       <div className="card">
         <h2>On the hold shelf ({ready?.length ?? 0})</h2>
         <Table rows={ready} rowKey={(h) => h.id} columns={cols} empty="No items waiting for pickup" />

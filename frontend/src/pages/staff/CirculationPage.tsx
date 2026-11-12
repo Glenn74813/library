@@ -10,7 +10,7 @@ import { StatusBadge, Table, Tabs } from '../../components/ui'
 import { Icon } from '../../components/Icon'
 import { fmtDate, fmtDateTime, fmtMoney } from '../../format'
 import { useLibrary } from '../../api/library'
-import { CheckoutSlip, getPrintPrefs, HoldShelfSlip, printRecorded, ReturnSlip, setPrintPrefs, type HoldSlipData, type PrintPrefs, type ReturnedItem } from '../../print/slips'
+import { CheckoutSlip, HoldShelfSlip, printRecorded, ReturnSlip, type HoldSlipData, type ReturnedItem } from '../../print/slips'
 
 type Mode = 'out' | 'in'
 
@@ -101,7 +101,7 @@ export function CirculationPage() {
       <div className="grid cols-2" style={{ alignItems: 'start' }}>
         {mode === 'out' ? <Checkout addLog={addLog} off={off} /> : <Checkin addLog={addLog} off={off} />}
         <div className="stack">
-        <PrintSettings />
+        <PrintHelp />
         <div className="card">
           <h2>This session</h2>
           {log.length === 0 ? <p className="muted small">Transactions will appear here.</p> : (
@@ -144,9 +144,8 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
       otherLoans={s.loans.filter((l) => !borrowed.some((b) => b.id === l.id))} />)
   }
 
-  /** Done with this patron: print their slip if this desk does that automatically, then clear. */
+  /** Done with this patron. Slips are never printed by themselves: staff press Print receipt after checking. */
   function finishPatron() {
-    if (summary && visit.length > 0 && getPrintPrefs().checkoutOnFinish) printCheckoutSlip(summary, visit)
     patronSeq.current++
     setSummary(null)
     setPatronCode('')
@@ -154,10 +153,7 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
   }
 
   async function loadPatron(e?: FormEvent) {
-    if (summary && visit.length > 0 && summary.patron.cardNumber !== patronCode.trim()) {
-      if (getPrintPrefs().checkoutOnFinish) printCheckoutSlip(summary, visit)
-      setVisit([])
-    }
+    if (summary && visit.length > 0 && summary.patron.cardNumber !== patronCode.trim()) setVisit([])
     e?.preventDefault()
     const code = patronCode.trim()
     if (!code) return
@@ -306,8 +302,8 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
               </div>
             </div>
             <div className="row-actions">
-              <button className="btn small" title="Print the borrowing slip for this visit"
-                onClick={() => printCheckoutSlip(summary, visit)}><Icon name="printer" />Slip{visit.length > 0 && ` (${visit.length})`}</button>
+              <button className={`btn small ${visit.length > 0 ? 'primary' : ''}`} title="Print the borrowing receipt for this visit"
+                onClick={() => printCheckoutSlip(summary, visit)}><Icon name="printer" />Print receipt{visit.length > 0 && ` (${visit.length})`}</button>
               <button className="btn small" onClick={finishPatron}>Next patron</button>
             </div>
           </div>
@@ -407,14 +403,12 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
     try {
       const r = await api<CheckinResult>('/api/circulation/checkin', { body: { item }, timeoutMs: DESK_TIMEOUT })
       setLast(r)
-      const prefs = getPrintPrefs()
+      // Nothing prints by itself: staff check the details, then press the print buttons below.
       if (r.loan) {
         const item: ReturnedItem = { title: r.loan.title, barcode: r.loan.barcode, patronName: r.loan.patronName,
           cardNumber: r.loan.cardNumber, returnedAt: r.loan.returnedAt ?? new Date().toISOString(), fine: r.fineAmount }
-        if (prefs.returnEach) printReturns([item])
-        else setReturns((list) => [...list, item])
+        setReturns((list) => [...list, item])
       }
-      if (r.holdSlip && prefs.holdSlip) printHoldSlip(r.holdSlip)
       addLog(true, `IN ${r.loan?.barcode ?? item} ${r.loan ? `"${r.loan.title}" from ${r.loan.patronName}` : ''} — ${r.message}`
         + (r.fineAmount > 0 ? ` · fine ${fmtMoney(r.fineAmount)}` : ''))
       off.markOnline()
@@ -451,41 +445,44 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
           {last.fineAmount > 0 && <div><StatusBadge status="UNPAID" /> Overdue fine {fmtMoney(last.fineAmount)} added</div>}
           {last.holdSlip && <div className="row" style={{ marginTop: 6 }}>
             <button className="btn small" onClick={() => printHoldSlip(last.holdSlip!)}>
-              <Icon name="printer" />{getPrintPrefs().holdSlip ? 'Reprint hold slip' : 'Print hold slip'}</button>
+              <Icon name="printer" />Print hold slip</button>
           </div>}
         </div>
       )}
-      {returns.length > 0 && (
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <span className="muted small">{returns.length} return(s) not printed yet</span>
+      {/* One receipt per patron, so a slip never lists someone else's returns. */}
+      {byPatron(returns).map(([who, items]) => (
+        <div key={who} className="row" style={{ justifyContent: 'space-between' }}>
+          <span className="small"><strong>{items[0].patronName ?? who}</strong>
+            <span className="muted"> · {items.length} return(s) · receipt not printed yet</span></span>
           <span className="row-actions">
-            <button className="btn small" onClick={() => { printReturns(returns); setReturns([]) }}>
-              <Icon name="printer" />Print return slip</button>
-            <button className="btn small" onClick={() => setReturns([])}>Clear</button>
+            <button className="btn small primary" onClick={() => { printReturns(items); setReturns((l) => l.filter((i) => !items.includes(i))) }}>
+              <Icon name="printer" />Print receipt</button>
+            <button className="btn small" onClick={() => setReturns((l) => l.filter((i) => !items.includes(i)))}>No receipt</button>
           </span>
         </div>
-      )}
+      ))}
     </div>
   )
 }
 
-/** Which slips this desk's receipt printer prints by itself; saved on this computer. */
-function PrintSettings() {
-  const [prefs, setPrefs] = useState<PrintPrefs>(getPrintPrefs)
-  const set = (patch: Partial<PrintPrefs>) => { const next = { ...prefs, ...patch }; setPrefs(next); setPrintPrefs(next) }
+/** Groups returns by patron, in the order they came back. */
+function byPatron(items: ReturnedItem[]): [string, ReturnedItem[]][] {
+  const groups = new Map<string, ReturnedItem[]>()
+  for (const i of items) {
+    const key = i.cardNumber ?? ''
+    groups.set(key, [...(groups.get(key) ?? []), i])
+  }
+  return [...groups.entries()]
+}
+
+/** Receipts print only when staff press a print button, after checking the details on screen. */
+function PrintHelp() {
   return (
     <details className="card">
       <summary style={{ cursor: 'pointer' }}><strong><Icon name="printer" /> Receipt printer on this computer</strong></summary>
-      <div className="stack" style={{ gap: 6, marginTop: 8 }}>
-        <label className="check"><input type="checkbox" checked={prefs.holdSlip} onChange={(e) => set({ holdSlip: e.target.checked })} />
-          Print a hold shelf slip when a returned copy is set aside for a reservation</label>
-        <label className="check"><input type="checkbox" checked={prefs.checkoutOnFinish} onChange={(e) => set({ checkoutOnFinish: e.target.checked })} />
-          Print the borrowing slip when I press Next patron</label>
-        <label className="check"><input type="checkbox" checked={prefs.returnEach} onChange={(e) => set({ returnEach: e.target.checked })} />
-          Print a return slip for every returned item</label>
-        <p className="muted small" style={{ margin: 0 }}>Slips are 80 mm wide. To print without the print dialog, start this browser with
-          <span className="mono"> --kiosk-printing</span> and make the receipt printer the default printer.</p>
-      </div>
+      <p className="muted small" style={{ margin: '8px 0 0' }}>Nothing prints by itself: check the details, then press <strong>Print receipt</strong>.
+        Slips are 80 mm wide. To print without the print dialog, start this browser with
+        <span className="mono"> --kiosk-printing</span> and make the receipt printer the default printer.</p>
     </details>
   )
 }

@@ -6,6 +6,7 @@ import { hasRole, useSession } from '../../auth/AuthContext'
 import { PatronFormModal } from '../../components/PatronForm'
 import { BookModal } from '../../components/BookModal'
 import { PatronPhotoModal } from '../../components/PatronPhotoModal'
+import { ReleasedReceipt } from '../../components/ReleasedReceipt'
 import { ReceiptModal } from '../../components/ReceiptModal'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Pager, StatusBadge, Table, Tabs } from '../../components/ui'
@@ -14,7 +15,7 @@ import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
 import { useLibrary } from '../../api/library'
-import { ClearanceSlip, confirmReprint, PatronSlip, printRecorded, printReleaseSlip, type PrintEntry } from '../../print/slips'
+import { ClearanceSlip, confirmReprint, PatronSlip, printRecorded, type PrintEntry } from '../../print/slips'
 
 type Tab = 'loans' | 'history' | 'holds' | 'fines' | 'attendance' | 'printed'
 
@@ -30,12 +31,12 @@ export function PatronDetailPage() {
   const [photoOpen, setPhotoOpen] = useState(false)
   const [erasing, setErasing] = useState(false)
   const [clearanceOpen, setClearanceOpen] = useState(false)
-  const lib = useLibrary()
   const [params, setParams] = useSearchParams()
   const justRegistered = params.get('new') === '1'
   const isAdmin = hasRole(useSession(), 'ADMIN')
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [selected, setSelected] = useState<number[]>([])
+  const [released, setReleased] = useState<Loan | null>(null)
   const [histPage, setHistPage] = useState(0)
   const { data: s, error, reload } = useAsync(() => api<PatronSummary>(`/api/circulation/patrons/${id}/summary`), [id])
   const { data: fines, reload: reloadFines } = useAsync(() => api<Fine[]>(`/api/fines/patron/${id}`), [id])
@@ -69,7 +70,7 @@ export function PatronDetailPage() {
       const r = await releaseHold(h)
       toast(`Released "${h.title}" to ${h.patronName} — due ${fmtDate(r.loan.dueAt)}${r.notice ? ` (${r.notice})` : ''}`)
       refreshAll()
-      printReleaseSlip(lib, r.loan).catch((e) => toast(`Released, but the slip did not print: ${errorText(e)}`, 'warn'))
+      setReleased(r.loan)
       setTab('loans')
     } catch (e) {
       toast(errorText(e), 'error')
@@ -173,6 +174,7 @@ export function PatronDetailPage() {
           <button className="btn primary" onClick={() => setEditing(true)}>Edit</button>
         </div>
       </div>
+      {released && <ReleasedReceipt loan={released} onClose={() => setReleased(null)} />}
       {justRegistered && <div className="alert success row" style={{ marginBottom: 16, justifyContent: 'space-between' }}>
         <span><strong>Patron registered.</strong> Print their library ID
           {p.hasPin ? '' : ', and set a PIN so they can sign in'}.</span>

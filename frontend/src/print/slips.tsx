@@ -104,29 +104,6 @@ export function fitPageToSlip(doc: Document | null) {
   doc.head.appendChild(style)
 }
 
-// ------------------------------------------------------------------ per-desk preferences
-
-/** Which slips this desk prints by itself (kept per computer, since each desk has its own printer). */
-export interface PrintPrefs {
-  /** Print the checkout slip when staff finish with a patron (Next patron). */
-  checkoutOnFinish: boolean
-  /** Print a return slip for every item checked in. */
-  returnEach: boolean
-  /** Print a hold shelf slip as soon as a returned copy is set aside for a reservation. */
-  holdSlip: boolean
-}
-
-const PREFS_KEY = 'smartlib.print'
-const DEFAULT_PREFS: PrintPrefs = { checkoutOnFinish: false, returnEach: true, holdSlip: true }
-
-export function getPrintPrefs(): PrintPrefs {
-  try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') } } catch { return DEFAULT_PREFS }
-}
-
-export function setPrintPrefs(prefs: PrintPrefs) {
-  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)) } catch { /* not saved on this computer */ }
-}
-
 // ------------------------------------------------------------------ building blocks
 
 function qrDataUrl(value: string) {
