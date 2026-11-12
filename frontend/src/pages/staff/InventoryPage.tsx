@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { api } from '../../api/client'
-import type { ScanResult, StocktakeReport, StocktakeSession } from '../../api/types'
+import type { LibrarySection, ScanResult, StocktakeReport, StocktakeSession } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
 import { CameraScanButton } from '../../components/CameraScan'
@@ -40,6 +40,7 @@ export function InventoryPage() {
 function NewSession({ onClose, onCreated }: { onClose: () => void; onCreated: (s: StocktakeSession) => void }) {
   const [name, setName] = useState(`Stocktake ${new Date().toLocaleDateString()}`)
   const [location, setLocation] = useState('')
+  const { data: sections } = useAsync(() => api<LibrarySection[]>('/api/sections'), [])
   const [error, setError] = useState<string | null>(null)
   async function create() {
     try {
@@ -53,7 +54,11 @@ function NewSession({ onClose, onCreated }: { onClose: () => void; onCreated: (s
       <div className="stack">
         <ErrorAlert error={error} />
         <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-        <Field label="Shelf / location" hint="Leave empty to count the whole collection"><input value={location} onChange={(e) => setLocation(e.target.value)} /></Field>
+        <Field label="Section / area" hint="Copies from another section are reported as misplaced. Sections are listed under Collection → Sections.">
+          <select value={location} onChange={(e) => setLocation(e.target.value)}>
+            <option value="">Whole collection (no misplaced check)</option>
+            {sections?.map((s) => <option key={s.id} value={s.name}>{s.name} ({s.copies})</option>)}
+          </select></Field>
       </div>
     </Modal>
   )

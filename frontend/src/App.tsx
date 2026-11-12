@@ -19,6 +19,7 @@ import { SettingsPage } from './pages/staff/SettingsPage'
 import { CalendarPage } from './pages/staff/CalendarPage'
 import { AuthoritiesPage } from './pages/staff/AuthoritiesPage'
 import { CatalogFieldsPage } from './pages/staff/CatalogFieldsPage'
+import { SectionsPage } from './pages/staff/SectionsPage'
 import { NotificationsPage } from './pages/staff/NotificationsPage'
 import { UsersPage } from './pages/staff/UsersPage'
 import { AuditPage } from './pages/staff/AuditPage'
@@ -64,6 +65,7 @@ export default function App() {
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="authorities" element={<AuthoritiesPage />} />
         <Route path="catalog-fields" element={<CatalogFieldsPage />} />
+        <Route path="sections" element={<SectionsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="audit" element={<AuditPage />} />

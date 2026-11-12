@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, openPdf, qs } from '../../api/client'
-import { ITEM_STATUSES, MATERIAL_TYPES, type BibRecord, type CustomFieldDef, type IsbnResult, type Item, type Loan, type Page, type RecordDetail } from '../../api/types'
+import { ITEM_STATUSES, MATERIAL_TYPES, type BibRecord, type CustomFieldDef, type IsbnResult, type Item, type LibrarySection, type Loan, type Page, type RecordDetail } from '../../api/types'
 import { HeadingInput } from '../../components/HeadingInput'
 import { useAsync } from '../../hooks/useAsync'
 import { hasRole, useSession } from '../../auth/AuthContext'
@@ -247,9 +247,6 @@ function isIsbn(value: string) {
   return false
 }
 
-const SECTIONS = ['General Circulation', 'Fiction Section', 'Filipiniana', 'Reference Section', 'Periodicals Section',
-  'Thesis & Research Section', 'Audio-Visual Room', 'Special Collections']
-
 function itemBody(i: Partial<Item>) {
   return { barcode: i.barcode, rfidEpc: i.rfidEpc, location: i.location, aisle: i.aisle, shelf: i.shelf,
     roomUseOnly: i.roomUseOverride ?? null, status: i.status,
@@ -265,6 +262,7 @@ function ItemModal({ recordId, item, canDelete, others, onClose, onSaved }: {
   const toast = useToast()
   const set = <K extends keyof Item>(k: K, v: Item[K] | null) => setF((x) => ({ ...x, [k]: v }))
   const circulating = f.status === 'ON_LOAN' || f.status === 'ON_HOLD'
+  const { data: sections } = useAsync(() => api<LibrarySection[]>('/api/sections'), [])
 
   async function save() {
     setError(null)
@@ -309,9 +307,13 @@ function ItemModal({ recordId, item, canDelete, others, onClose, onSaved }: {
             <input className="mono" value={f.barcode ?? ''} onChange={(e) => set('barcode', e.target.value)} autoFocus />
             <CameraScanButton onScan={(t) => set('barcode', t)} /></div></Field>
           <Field label="RFID tag EPC" hint="Read with the tagging device"><input className="mono" value={f.rfidEpc ?? ''} onChange={(e) => set('rfidEpc', e.target.value)} /></Field>
-          <Field label="Section / area" hint="Pick or type a section">
-            <input list="sections" value={f.location ?? ''} onChange={(e) => set('location', e.target.value)} />
-            <datalist id="sections">{SECTIONS.map((s) => <option key={s} value={s} />)}</datalist>
+          <Field label="Section / area" as="div" hint={<>Sections are listed under <Link to="/staff/sections">Collection → Sections</Link></>}>
+            <select value={f.location ?? ''} onChange={(e) => set('location', e.target.value || null)}>
+              <option value="">Not set</option>
+              {sections?.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+              {/* A section no longer on the list stays visible until it is changed. */}
+              {f.location && sections && !sections.some((s) => s.name === f.location) && <option value={f.location}>{f.location} (not on the list)</option>}
+            </select>
           </Field>
           <Field label="Loan policy" hint={f.roomUseOverride == null ? `Default for this material type: ${item.roomUseOnly && item.roomUseOverride == null ? 'room use only' : 'can be borrowed'}` : 'Set for this copy'}>
             <select value={f.roomUseOverride == null ? '' : String(f.roomUseOverride)}

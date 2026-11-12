@@ -29,6 +29,7 @@ import ph.edu.zscmst.library.catalog.BibRecordRepository;
 import ph.edu.zscmst.library.catalog.Item;
 import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.MaterialType;
+import ph.edu.zscmst.library.catalog.SectionService;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.circulation.CirculationService;
 import ph.edu.zscmst.library.common.AuditService;
@@ -56,9 +57,11 @@ public class CatalogTransferService {
     private final ItemRepository items;
     private final AuditService audit;
     private final CirculationService circulation;
+    private final SectionService sections;
 
     public CatalogTransferService(BibRecordRepository records, ItemRepository items, AuditService audit,
-                                  CirculationService circulation) {
+                                  CirculationService circulation, SectionService sections) {
+        this.sections = sections;
         this.circulation = circulation;
         this.records = records;
         this.items = items;
@@ -110,7 +113,8 @@ public class CatalogTransferService {
                 } else {
                     if (commit) {
                         Item item = new Item(target, bc);
-                        item.setLocation(trim(c.location(), 100));
+                        // A section new to the library is added to the list, so imported copies keep theirs.
+                        item.setLocation(sections.findOrAdd(c.location()));
                         item.setAisle(trim(c.aisle(), 20));
                         item.setShelf(trim(c.shelf(), 20));
                         item.setAcquiredDate(LocalDate.now());

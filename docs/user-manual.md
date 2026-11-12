@@ -152,6 +152,13 @@ statistics, and **Download report…** as Excel or PDF.
 and stops the alarm), alarm schedule, and **announcements**: pick a preset or type a message,
 choose the voice or play a recorded MP3, and send it to the kiosks.
 
+### 1.11a Sections
+**Collection → Sections** lists the library's sections and areas (Fiction Section, Filipiniana, ...).
+A copy's **Section / area** and a stocktake's location are picked from this list, so they are always
+spelled the same. Add a section here; rename one and its copies move with it; rename it to another
+section's name to merge the two. A section can be removed once no copies are in it. Imported copies
+with a new section add it to the list.
+
 ### 1.12 Stocktake
 **Collection → Stocktake**: start a session for a section, scan every item on the shelves (scanner,
 RFID pad or camera), then open the report: *missing*, *misplaced*, *unexpected status* and *unknown codes*.

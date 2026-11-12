@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 import ph.edu.zscmst.library.catalog.Item;
 import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.ItemStatus;
+import ph.edu.zscmst.library.catalog.SectionService;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.circulation.CirculationService;
 import ph.edu.zscmst.library.common.AuditService;
@@ -69,9 +70,12 @@ public class InventoryController {
     private final ItemRepository items;
     private final AuditService audit;
     private final CirculationService circulation;
+    private final SectionService sections;
 
     public InventoryController(StocktakeSessionRepository sessions, StocktakeScanRepository scans,
-                               ItemRepository items, AuditService audit, CirculationService circulation) {
+                               ItemRepository items, AuditService audit, CirculationService circulation,
+                               SectionService sections) {
+        this.sections = sections;
         this.circulation = circulation;
         this.sessions = sessions;
         this.scans = scans;
@@ -97,7 +101,8 @@ public class InventoryController {
     @ResponseStatus(HttpStatus.CREATED)
     @Transactional
     public SessionDto create(@Valid @RequestBody SessionRequest req) {
-        String location = req.location() == null || req.location().isBlank() ? null : req.location().trim();
+        // Blank = the whole collection; otherwise one of the library's sections, in the list's spelling.
+        String location = sections.require(req.location());
         StocktakeSession s = sessions.save(new StocktakeSession(req.name().trim(), location,
                 AuditService.currentActor()));
         audit.record("STOCKTAKE_START", s.getName());

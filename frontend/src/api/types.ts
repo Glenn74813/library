@@ -547,3 +547,6 @@ export interface RenewalRequest {
   /** Why approving would fail now (e.g. someone reserved the title since). */
   problem: string | null
 }
+
+/** One of the library's sections / areas (Collection → Sections), with how many copies are in it. */
+export interface LibrarySection { id: number; name: string; sortOrder: number; copies: number }

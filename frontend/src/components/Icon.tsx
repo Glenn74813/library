@@ -17,6 +17,7 @@ const files = import.meta.glob<string>([
   '@feather/tablet.svg', '@feather/lock.svg', '@feather/bell.svg', '@feather/check-circle.svg',
   '@feather/music.svg', '@feather/play.svg', '@feather/mic.svg', '@feather/camera.svg',
   '@feather/check.svg', '@feather/chevron-down.svg', '@feather/corner-down-left.svg', '@feather/tag.svg', '@feather/mail.svg', '@feather/eye-off.svg',
+  '@feather/chevron-up.svg', '@feather/map-pin.svg',
 ], { query: '?raw', import: 'default', eager: true })
 
 export type IconName =
@@ -25,7 +26,7 @@ export type IconName =
   | 'external-link' | 'file-text' | 'key' | 'log-out' | 'menu' | 'monitor' | 'package' | 'plus' | 'printer'
   | 'repeat' | 'search' | 'settings' | 'shield' | 'trending-up' | 'type' | 'upload' | 'user' | 'users'
   | 'volume-2' | 'x' | 'eye' | 'link' | 'trash-2' | 'zoom-in' | 'zoom-out' | 'arrow-left' | 'tablet' | 'lock' | 'bell' | 'check-circle' | 'music' | 'play' | 'mic' | 'camera'
-  | 'check' | 'chevron-down' | 'corner-down-left' | 'tag' | 'mail' | 'eye-off'
+  | 'check' | 'chevron-down' | 'corner-down-left' | 'tag' | 'mail' | 'eye-off' | 'chevron-up' | 'map-pin'
 
 // name -> inner SVG markup (paths, circles, ...) so we can render with our own size and class.
 const ICONS: Record<string, string> = {}

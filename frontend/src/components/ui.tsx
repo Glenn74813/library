@@ -107,7 +107,7 @@ export function Modal({ title, onClose, children, footer }: {
 
 export function Field({ label: text, hint, children, className, as: Tag = 'label' }: {
   label: string
-  hint?: string
+  hint?: ReactNode
   children: ReactNode
   className?: string
   /** Use 'div' when the control brings its own <label> (checkboxes), since labels can't nest. */

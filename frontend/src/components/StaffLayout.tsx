@@ -29,6 +29,7 @@ const NAV: { section: string; icon: IconName; items: NavItem[] }[] = [
     items: [
       { to: '/staff/catalog', label: 'Catalog' },
       { to: '/staff/inventory', label: 'Stocktake' },
+      { to: '/staff/sections', label: 'Sections' },
       { to: '/staff/authorities', label: 'Authorities' },
       { to: '/staff/labels', label: 'Labels & library IDs' },
     ],

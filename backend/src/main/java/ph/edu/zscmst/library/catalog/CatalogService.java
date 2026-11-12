@@ -49,10 +49,13 @@ public class CatalogService {
 
     /** Lazy: circulation needs the catalog only indirectly, but keep the two from depending on start order. */
     private final CirculationService circulation;
+    private final SectionService sections;
 
     public CatalogService(BibRecordRepository records, ItemRepository items, LoanRepository loans,
                           AuditService audit, DigitalService digital, LoanPolicy policy, AuthorityService authorities,
-                          CustomFieldRepository customFields, @Lazy CirculationService circulation) {
+                          CustomFieldRepository customFields, @Lazy CirculationService circulation,
+                          SectionService sections) {
+        this.sections = sections;
         this.circulation = circulation;
         this.authorities = authorities;
         this.customFields = customFields;
@@ -233,9 +236,9 @@ public class CatalogService {
         }
     }
 
-    private static void applyItem(Item i, ItemRequest req, boolean isNew) {
+    private void applyItem(Item i, ItemRequest req, boolean isNew) {
         i.setRfidEpc(trim(req.rfidEpc()) == null ? null : req.rfidEpc().trim().toUpperCase());
-        i.setLocation(trim(req.location()));
+        i.setLocation(sections.require(req.location()));
         i.setAisle(trim(req.aisle()));
         i.setShelf(trim(req.shelf()));
         i.setRoomUseOnly(req.roomUseOnly());
