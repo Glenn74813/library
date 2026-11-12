@@ -46,7 +46,7 @@ export function PatronLogin() {
         <button className="btn primary block" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
         <nav className="auth-links" aria-label="Other options">
           <Link to="/my/forgot-pin"><Icon name="key" />Forgot PIN?</Link>
-          <Link to="/opac?view=student"><Icon name="search" />Search the catalog</Link>
+          <Link to="/my/catalog"><Icon name="search" />Search the catalog</Link>
         </nav>
         <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>By signing in you agree to the library's <Link to="/privacy">privacy notice</Link>.</p>
       </form>

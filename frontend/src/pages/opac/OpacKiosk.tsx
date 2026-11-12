@@ -1,5 +1,5 @@
 import { useCallback, useState, type FormEvent } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { api, qs } from '../../api/client'
 import { MATERIAL_TYPES, type BibRecord, type OpacDetail, type Page } from '../../api/types'
 import { BroadcastOverlay } from '../../components/BroadcastOverlay'
@@ -16,14 +16,12 @@ import { KioskReserveModal } from './KioskReserveModal'
 /**
  * Online Public Access Catalog. Live link to the LMS catalog with real-time availability.
  * /opac is the touch-kiosk view: large controls, on-screen keyboard, auto-reset after inactivity.
- * Students get the ordinary web view (with Privacy and My account) through the catalog links on the My Library
- * pages (?view=student). Being signed in doesn't change it, so a student who forgets to sign out on a library
- * PC can't turn that kiosk into the web view. ?kiosk=1 always forces the kiosk view.
+ * Students use /my/catalog, the ordinary web view (with Privacy and My account) linked from My Library.
+ * Being signed in doesn't change /opac, so a student who forgets to sign out on a library PC can't turn
+ * that kiosk into the web view.
  */
-export function OpacKiosk() {
+export function OpacKiosk({ student = false }: { student?: boolean }) {
   const config = useLibraryConfig()
-  const [params] = useSearchParams()
-  const student = params.get('kiosk') !== '1' && params.get('view') === 'student'
   const kiosk = !student
   const [input, setInput] = useState('')
   const [query, setQuery] = useState({ q: '', field: 'any', type: '' })

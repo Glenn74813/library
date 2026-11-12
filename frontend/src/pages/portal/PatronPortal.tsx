@@ -80,7 +80,7 @@ export function PatronPortal() {
     <div className="public-shell">
       <div className="public-bar">
         <Logo /><span className="title">My Library</span>
-        <Link className="btn small" to="/opac?view=student"><Icon name="search" />Catalog</Link>
+        <Link className="btn small" to="/my/catalog"><Icon name="search" />Catalog</Link>
         <button className="btn small" onClick={async () => { await logout(); navigate('/my/login') }}><Icon name="log-out" />Sign out</button>
       </div>
       <main className="public-main">

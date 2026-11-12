@@ -10,7 +10,7 @@ administrator, for example `https://library.zscmst.edu.ph`.
 |-----|-------|---------------|
 | Staff | `/staff` | Username and password |
 | Patrons (students, faculty, staff) | `/my` | Library card / ID number and a PIN from the circulation desk |
-| Anyone | `/opac` (kiosk view) or `/opac?view=student` | Nothing; searching the catalog is public |
+| Anyone | `/opac` (kiosk view) or `/my/catalog` (on your own device) | Nothing; searching the catalog is public |
 
 ---
 

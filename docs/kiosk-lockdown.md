@@ -5,7 +5,7 @@ screen. Do this on each kiosk PC after the library server is running over HTTPS.
 
 | Kiosk | Address to open |
 |-------|-----------------|
-| OPAC (catalog search) | `https://<server>/opac?kiosk=1` |
+| OPAC (catalog search) | `https://<server>/opac` |
 | Attendance | `https://<server>/kiosk/attendance` |
 | Self-checkout | `https://<server>/kiosk/selfcheck` |
 
@@ -34,7 +34,7 @@ Kiosks set up earlier with a kiosk username and password keep working (the setup
 Alternatively, Edge kiosk mode from a shortcut:
 
 ```
-msedge.exe --kiosk https://<server>/opac?kiosk=1 --edge-kiosk-type=public-browsing --no-first-run
+msedge.exe --kiosk https://<server>/opac --edge-kiosk-type=public-browsing --no-first-run
 ```
 
 For the self-checkout kiosk with a receipt printer, set the printer as Windows' default and add
@@ -50,7 +50,7 @@ For the self-checkout kiosk with a receipt printer, set the printer as Windows' 
 [Desktop Entry]
 Type=Application
 Name=Library kiosk
-Exec=chromium --kiosk --noerrdialogs --disable-infobars --no-first-run --disable-translate --overscroll-history-navigation=0 --disable-pinch https://<server>/opac?kiosk=1
+Exec=chromium --kiosk --noerrdialogs --disable-infobars --no-first-run --disable-translate --overscroll-history-navigation=0 --disable-pinch https://<server>/opac
 ```
 
 4. Optional: install `unclutter` to hide the mouse pointer on touch screens.

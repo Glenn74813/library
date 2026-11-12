@@ -81,6 +81,7 @@ export default function App() {
       <Route path="/my/login" element={<PatronLogin />} />
       <Route path="/my/forgot-pin" element={<ForgotPin />} />
       <Route path="/my" element={<PatronPortal />} />
+      <Route path="/my/catalog" element={<OpacKiosk student />} />
       <Route path="/read/:recordId" element={<Suspense fallback={<div className="center-page muted">Opening reader…</div>}><EbookReader /></Suspense>} />
       <Route path="*" element={<Navigate to="/staff" replace />} />
     </Routes>
