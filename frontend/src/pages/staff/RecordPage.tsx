@@ -1,13 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, openPdf, qs } from '../../api/client'
-import { ITEM_STATUSES, MATERIAL_TYPES, type BibRecord, type CustomFieldDef, type IsbnResult, type Item, type RecordDetail } from '../../api/types'
+import { ITEM_STATUSES, MATERIAL_TYPES, type BibRecord, type CustomFieldDef, type IsbnResult, type Item, type Loan, type Page, type RecordDetail } from '../../api/types'
 import { HeadingInput } from '../../components/HeadingInput'
 import { useAsync } from '../../hooks/useAsync'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
-import { ErrorAlert, Field, Modal, StatusBadge, Table } from '../../components/ui'
-import { fmtDate, label } from '../../format'
+import { ErrorAlert, Field, Modal, Pager, StatusBadge, Table } from '../../components/ui'
+import { fmtDate, fmtDateTime, label } from '../../format'
 import { CameraScanButton } from '../../components/CameraScan'
 import { CopyCatalogModal } from '../../components/CopyCatalogModal'
 import { DigitalPanel } from '../../components/DigitalPanel'
@@ -28,6 +28,7 @@ export function RecordPage() {
   const canDelete = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
   const [form, setForm] = useState<RecordForm>(EMPTY)
   const [items, setItems] = useState<Item[]>([])
+  const [onLoan, setOnLoan] = useState<Map<number, Loan>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [editingItem, setEditingItem] = useState<Partial<Item> | null>(null)
@@ -40,6 +41,9 @@ export function RecordPage() {
       const d = await api<RecordDetail>(`/api/catalog/records/${id}`)
       setForm(Object.fromEntries(Object.keys(EMPTY).map((k) => [k, d.record[k as keyof RecordForm]])) as RecordForm)
       setItems(d.items)
+      // Current borrower of each copy (current loans come first in the title's loan list).
+      const loans = await api<Page<Loan>>(`/api/circulation/records/${id}/loans?size=100`)
+      setOnLoan(new Map(loans.content.filter((l) => !l.returnedAt).map((l) => [l.itemId, l])))
     } catch (e) {
       setError(errorText(e))
     }
@@ -172,9 +176,15 @@ export function RecordPage() {
             { header: 'Shelf location', render: (i) => i.shelfLocation ?? <span className="muted">Not set</span> },
             { header: 'Loan', render: (i) => i.roomUseOnly ? <span className="badge warn">Room use only</span> : <span className="muted small">Can be borrowed</span> },
             { header: 'Status', render: (i) => <><StatusBadge status={i.status} />{i.dueAt && <span className="small muted"> due {fmtDate(i.dueAt)}</span>}</> },
+            { header: 'Borrowed by', render: (i) => {
+              const l = onLoan.get(i.id)
+              return l ? <PatronLink loan={l} /> : <span className="muted">—</span>
+            } },
           ]} />
         </div>
       )}
+
+      {!isNew && <BorrowerHistory recordId={Number(id)} />}
       {copycat && <CopyCatalogModal initialIsbn={form.isbn ?? ''} initialTitle={form.title} onClose={() => setCopycat(false)}
         onUse={(c) => {
           setForm((f) => ({
@@ -189,6 +199,33 @@ export function RecordPage() {
       {editingItem && <ItemModal recordId={Number(id)} item={editingItem} canDelete={canDelete} others={items.filter((x) => x.id !== editingItem.id)}
         onClose={() => setEditingItem(null)} onSaved={() => { setEditingItem(null); void load() }} />}
     </>
+  )
+}
+
+/** Patron name and card number, linking to the patron's page (stopping the row's own click). */
+function PatronLink({ loan }: { loan: Loan }) {
+  return <Link to={`/staff/patrons/${loan.patronId}`} onClick={(e) => e.stopPropagation()}>
+    {loan.patronName}<div className="muted small mono">{loan.cardNumber}</div></Link>
+}
+
+/** Everyone who has borrowed a copy of this title, current borrowers first. */
+function BorrowerHistory({ recordId }: { recordId: number }) {
+  const [page, setPage] = useState(0)
+  const { data, error } = useAsync(() => api<Page<Loan>>(`/api/circulation/records/${recordId}/loans${qs({ page })}`), [recordId, page])
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>Borrowing history{data ? ` (${data.totalElements})` : ''}</h2>
+      <ErrorAlert error={error} />
+      <Table rows={data?.content} rowKey={(l) => l.id} empty="No one has borrowed this title yet" columns={[
+        { header: 'Patron', render: (l) => <PatronLink loan={l} /> },
+        { header: 'Copy', render: (l) => <span className="mono">{l.barcode}</span> },
+        { header: 'Borrowed', render: (l) => <>{fmtDateTime(l.checkoutAt)}{l.checkedOutBy && <div className="muted small">by {l.checkedOutBy}</div>}</> },
+        { header: 'Due', render: (l) => fmtDate(l.dueAt) },
+        { header: 'Returned', render: (l) => l.returnedAt ? fmtDateTime(l.returnedAt)
+          : <span className={`badge ${l.overdue ? 'bad' : 'ok'}`}>{l.overdue ? `Overdue ${l.overdueDays}d` : 'On loan'}</span> },
+      ]} />
+      <Pager page={data} onPage={setPage} />
+    </div>
   )
 }
 

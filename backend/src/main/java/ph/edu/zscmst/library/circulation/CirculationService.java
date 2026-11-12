@@ -396,6 +396,11 @@ public class CirculationService {
     }
 
     @Transactional(readOnly = true)
+    public Page<LoanDto> recordHistory(Long recordId, Pageable pageable) {
+        return loans.findByRecord(recordId, pageable).map(this::toDto);
+    }
+
+    @Transactional(readOnly = true)
     public List<LoanDto> activeLoansOf(Long patronId) {
         return loans.findByPatronIdAndReturnedAtIsNullOrderByDueAtAsc(patronId).stream().map(this::toDto).toList();
     }

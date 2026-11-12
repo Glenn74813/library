@@ -90,6 +90,13 @@ public class CirculationController {
         return PageResponse.of(service.history(id, PageRequest.of(page, Math.min(size, 100))), l -> l);
     }
 
+    /** Who borrowed copies of this title (current borrowers first). */
+    @GetMapping("/circulation/records/{id}/loans")
+    public PageResponse<LoanDto> recordLoans(@PathVariable Long id, @RequestParam(defaultValue = "0") int page,
+                                             @RequestParam(defaultValue = "20") int size) {
+        return PageResponse.of(service.recordHistory(id, PageRequest.of(page, Math.min(size, 100))), l -> l);
+    }
+
     // holds
 
     @GetMapping("/holds")

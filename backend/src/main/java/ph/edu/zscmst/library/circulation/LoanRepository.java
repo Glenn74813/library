@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface LoanRepository extends JpaRepository<Loan, Long> {
 
@@ -37,6 +38,12 @@ public interface LoanRepository extends JpaRepository<Loan, Long> {
 
     @EntityGraph(attributePaths = {"item", "item.record", "patron"})
     Page<Loan> findByReturnedAtIsNullOrderByDueAtAsc(Pageable pageable);
+
+    /** Everyone who borrowed a copy of this title: current loans first, then newest first. */
+    @EntityGraph(attributePaths = {"item", "item.record", "patron"})
+    @Query("select l from Loan l where l.item.record.id = :recordId "
+            + "order by case when l.returnedAt is null then 0 else 1 end, l.checkoutAt desc")
+    Page<Loan> findByRecord(@Param("recordId") Long recordId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"item", "item.record", "patron"})
     Page<Loan> findByReturnedAtIsNullAndDueAtBeforeOrderByDueAtAsc(Instant now, Pageable pageable);
