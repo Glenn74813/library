@@ -60,6 +60,22 @@ If the server cannot be reached, the desk switches to **Offline mode** by itself
   could not be applied is listed under **Offline transactions that need attention**. Fix those by
   hand, then click **Dismiss all**.
 
+### 1.5a Receipt printer slips
+The 80 mm receipt printer prints these slips (only the slip prints, sized to its length):
+
+| Slip | Where |
+|---|---|
+| Borrowing slip (items, due dates, QR to My Library) | Circulation desk → **Slip** next to the patron, or automatically on **Next patron** |
+| Return receipt (items returned, time, any fine) | Check in → **Print return slip**, or one per return automatically |
+| Hold shelf slip (card no. and initials, pickup-by date) | Prints by itself when a returned copy is set aside for a reservation; put it in the book |
+| Card slip / PIN slip | New patron banner, patron page → **Print… → Card slip**, and when a PIN is set |
+| Library clearance (reference no. + QR) | Patron page → **Print… → Library clearance…** (only with nothing on loan and no unpaid fines). Check one with **Patrons → Verify clearance** |
+| Official receipt | When fines are paid, or **Receipt** on the Fines page |
+| End-of-day collection report | **Fines & payments → End-of-day report** |
+
+Which slips print automatically is set per desk under **Receipt printer on this computer** on the circulation desk.
+Start the desk browser with `--kiosk-printing` (receipt printer as default) to skip the print dialog.
+
 ### 1.6 Holds, reservations and bookings
 **Circulation → Holds**
 

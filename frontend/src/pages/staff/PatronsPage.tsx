@@ -4,8 +4,8 @@ import { api, download, qs } from '../../api/client'
 import type { Page, Patron } from '../../api/types'
 import { PatronFormModal } from '../../components/PatronForm'
 import { errorText, useToast } from '../../components/Toast'
-import { ErrorAlert, Pager, Table } from '../../components/ui'
-import { fmtDate } from '../../format'
+import { ErrorAlert, Field, Modal, Pager, Table } from '../../components/ui'
+import { fmtDate, fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
@@ -14,6 +14,7 @@ export function PatronsPage() {
   const [q, setQ] = useState('')
   const [page, setPage] = useState(0)
   const [creating, setCreating] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const dq = useDebounced(q)
   const navigate = useNavigate()
   const toast = useToast()
@@ -44,6 +45,7 @@ export function PatronsPage() {
           <button className="btn" onClick={() => download('/api/patrons/import-template', 'patron-import-template.csv')}><Icon name="download" />Template</button>
           <button className="btn" onClick={() => fileRef.current?.click()}><Icon name="upload" />Bulk import CSV</button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])} />
+          <button className="btn" onClick={() => setVerifying(true)}><Icon name="check-circle" />Verify clearance</button>
           <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" />Register</button>
         </div>
       </div>
@@ -61,7 +63,45 @@ export function PatronsPage() {
         ]} />
         <Pager page={data} onPage={setPage} />
       </div>
-      {creating && <PatronFormModal patron={null} onClose={() => setCreating(false)} onSaved={(p) => navigate(`/staff/patrons/${p.id}`)} />}
+      {verifying && <VerifyClearanceModal onClose={() => setVerifying(false)} />}
+      {creating && <PatronFormModal patron={null} onClose={() => setCreating(false)} onSaved={(p) => navigate(`/staff/patrons/${p.id}?new=1`)} />}
     </>
+  )
+}
+
+interface Clearance { reference: string; patronName: string; cardNumber: string; category: string; course: string | null
+  purpose: string | null; issuedAt: string; issuedBy: string; stillClear: boolean }
+
+/** Checks a clearance slip someone presents (e.g. the registrar), by its reference number. */
+function VerifyClearanceModal({ onClose }: { onClose: () => void }) {
+  const [ref, setRef] = useState('')
+  const [result, setResult] = useState<Clearance | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  async function check(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null); setResult(null)
+    try { setResult(await api<Clearance>(`/api/clearances/${encodeURIComponent(ref.trim())}`)) } catch (err) { setError(errorText(err)) }
+  }
+  return (
+    <Modal title="Verify a library clearance" onClose={onClose} footer={<button className="btn" onClick={onClose}>Close</button>}>
+      <form className="stack" onSubmit={check}>
+        <Field label="Clearance number" hint="Printed on the slip, e.g. CLR-2026-000012; its QR code holds the same number">
+          <div className="input-group">
+            <input className="mono" value={ref} onChange={(e) => setRef(e.target.value)} autoFocus placeholder="CLR-…" />
+            <button className="btn primary" disabled={!ref.trim()}>Check</button>
+          </div>
+        </Field>
+        <ErrorAlert error={error} />
+        {result && (
+          <div className={`alert ${result.stillClear ? 'success' : 'warn'}`}>
+            <strong className="mono">{result.reference}</strong> is genuine: issued to <strong>{result.patronName}</strong> ({result.cardNumber},
+            {' '}{[result.category, result.course].filter(Boolean).join(' · ')}) on {fmtDateTime(result.issuedAt)} by {result.issuedBy}
+            {result.purpose && <> for <em>{result.purpose}</em></>}.
+            <div style={{ marginTop: 6 }}>{result.stillClear ? 'They are still clear today.'
+              : 'Note: they have borrowed items or unpaid fines again since it was issued.'}</div>
+          </div>
+        )}
+      </form>
+    </Modal>
   )
 }

@@ -9,11 +9,18 @@ screen. Do this on each kiosk PC after the library server is running over HTTPS.
 | Attendance | `https://<server>/kiosk/attendance` |
 | Self-checkout | `https://<server>/kiosk/selfcheck` |
 
-## 1. Accounts and sign-in
+## 1. Connect the kiosk (device key)
 
-1. In **Users & devices → Add device**, create one KIOSK account per kiosk (e.g. `kiosk-opac-1`).
-2. On the kiosk, open the attendance or self-checkout address once and sign in with that account. It stays
-   signed in and renews its own session. (The OPAC kiosk needs no sign-in.)
+1. In **Users & devices → Add device**, choose **Kiosk** and give it a name (e.g. `Lobby attendance kiosk`).
+   After saving, the dialog shows the kiosk's **device key** and two **setup links** (attendance and self-checkout).
+2. On the kiosk PC, open the matching setup link once. The kiosk saves the key and starts; nobody types a password.
+   (Or open the kiosk page and paste the key.) The OPAC search kiosk needs no key.
+3. The kiosk stays connected until an administrator **replaces** or **revokes** its key or disables the device;
+   then it returns to its setup screen. **Last connected** in the device list shows when each kiosk was last online.
+4. To disconnect a kiosk from the kiosk itself, hold the top-left corner of its screen for 5 seconds and confirm.
+
+Kiosks set up earlier with a kiosk username and password keep working (the setup screen still offers
+"Sign in with a kiosk account instead").
 
 ## 2. Windows 10/11: Assigned Access (recommended)
 

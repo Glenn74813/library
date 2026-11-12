@@ -26,6 +26,8 @@ import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.common.SettingsService;
 import ph.edu.zscmst.library.security.TokenService;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import ph.edu.zscmst.library.security.DeviceKeyFilter;
 
 /** Staff and device account management (ADMIN only). */
 @RestController
@@ -33,11 +35,16 @@ import ph.edu.zscmst.library.security.TokenService;
 public class UserController {
 
     public record UserDto(Long id, String username, String fullName, Role role, boolean enabled, Instant createdAt,
-                          Instant lockedUntil) {
+                          Instant lockedUntil, boolean hasDeviceKey, Instant deviceKeyIssuedAt, Instant deviceLastSeenAt) {
         static UserDto of(AppUser u) {
             return new UserDto(u.getId(), u.getUsername(), u.getFullName(), u.getRole(), u.isEnabled(), u.getCreatedAt(),
-                    u.isLocked(Instant.now()) ? u.getLockedUntil() : null);
+                    u.isLocked(Instant.now()) ? u.getLockedUntil() : null, u.getDeviceKeyHash() != null,
+                    u.getDeviceKeyIssuedAt(), u.getDeviceLastSeenAt());
         }
+    }
+
+    /** The key is shown only in this response; the server keeps just its hash. */
+    public record DeviceKeyResponse(String deviceKey, UserDto device) {
     }
 
     public record SecuritySettings(@Min(3) @Max(20) int maxAttempts,
@@ -162,5 +169,29 @@ public class UserController {
         user.revokeDeviceTokens();
         users.save(user);
         audit.record("DEVICE_TOKEN_REVOKED", user.getUsername());
+    }
+
+    /** Issues a device key for a kiosk or gate, replacing any earlier key (which stops working at once). */
+    @PostMapping("/{id}/device-key")
+    @org.springframework.transaction.annotation.Transactional
+    public DeviceKeyResponse issueDeviceKey(@PathVariable Long id) {
+        AppUser device = users.findById(id).orElseThrow(() -> ApiException.notFound("Device"));
+        if (!device.isDevice()) throw ApiException.badRequest("Device keys are only for kiosk and gate accounts");
+        String key = DeviceKeyFilter.newKey();
+        boolean replaced = device.getDeviceKeyHash() != null;
+        device.setDeviceKey(DeviceKeyFilter.hash(key));
+        users.save(device);
+        audit.record(replaced ? "DEVICE_KEY_REPLACED" : "DEVICE_KEY_ISSUED", device.getUsername());
+        return new DeviceKeyResponse(key, UserDto.of(device));
+    }
+
+    @DeleteMapping("/{id}/device-key")
+    @org.springframework.transaction.annotation.Transactional
+    public UserDto revokeDeviceKey(@PathVariable Long id) {
+        AppUser device = users.findById(id).orElseThrow(() -> ApiException.notFound("Device"));
+        device.setDeviceKey(null);
+        users.save(device);
+        audit.record("DEVICE_KEY_REVOKED", device.getUsername());
+        return UserDto.of(device);
     }
 }

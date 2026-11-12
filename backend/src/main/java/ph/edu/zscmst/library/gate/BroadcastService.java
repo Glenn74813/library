@@ -20,8 +20,11 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import tools.jackson.core.JacksonException;
@@ -29,8 +32,10 @@ import tools.jackson.databind.json.JsonMapper;
 
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
+import ph.edu.zscmst.library.common.RealtimeConfig;
 import ph.edu.zscmst.library.common.SystemSettings;
 import ph.edu.zscmst.library.common.SettingsService;
+import ph.edu.zscmst.library.common.VoiceSettings;
 import ph.edu.zscmst.library.digital.FileStorage;
 
 /**
@@ -60,15 +65,23 @@ public class BroadcastService {
         }
     }
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BroadcastService.class);
+
     private final SettingsService settings;
     private final FileStorage storage;
     private final JsonMapper json;
     private final AuditService audit;
     private final SystemSettings system;
+    private final SimpMessagingTemplate messaging;
+
+    /** Same shape as the polled /api/opac/broadcast answer, so kiosks handle both alike. */
+    public record LiveAnnouncement(CurrentBroadcast broadcast, VoiceSettings voice, Long ageSeconds) {
+    }
 
     public BroadcastService(SettingsService settings, FileStorage storage, JsonMapper json, AuditService audit,
-                            SystemSettings system) {
+                            SystemSettings system, SimpMessagingTemplate messaging) {
         this.system = system;
+        this.messaging = messaging;
         this.settings = settings;
         this.storage = storage;
         this.json = json;
@@ -190,6 +203,29 @@ public class BroadcastService {
         settings.put("broadcast.message", message.trim());
         settings.put("broadcast.presetId", pid);
         settings.put("broadcast.at", Instant.now().toString());
+        publishAfterCommit();
+    }
+
+    /** Pushes the new announcement to every connected kiosk once it is saved (kiosks also poll as a fallback). */
+    private void publishAfterCommit() {
+        Runnable send = () -> {
+            try {
+                messaging.convertAndSend(RealtimeConfig.ANNOUNCEMENTS,
+                        new LiveAnnouncement(current(), VoiceSettings.load(settings), 0L));
+            } catch (RuntimeException e) {
+                log.warn("Live announcement push failed: {}", e.getMessage());
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    send.run();
+                }
+            });
+        } else {
+            send.run();
+        }
     }
 
     @Transactional

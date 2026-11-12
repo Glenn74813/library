@@ -2,13 +2,15 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { api } from '../../api/client'
 import { useLibrary } from '../../api/library'
 import type { Loan } from '../../api/types'
-import { useKioskSession } from '../../auth/AuthContext'
+import { useKioskConnected } from '../../auth/AuthContext'
+import { BroadcastOverlay } from '../../components/BroadcastOverlay'
 import { Icon } from '../../components/Icon'
 import { Logo } from '../../components/Logo'
 import { errorText } from '../../components/Toast'
 import { fmtDate, fmtMoney } from '../../format'
 import { useInactivity } from '../../hooks/useInactivity'
-import { KioskSetup } from './AttendanceKiosk'
+import { KioskResetZone, KioskSetup } from '../../components/KioskSetup'
+import { CheckoutSlip, printSlip, type SlipLoan } from '../../print/slips'
 
 interface Config { requirePin: boolean; allowReturns: boolean; idleSeconds: number }
 interface PatronView { firstName: string; fullName: string; cardNumber: string; loans: Loan[]; maxLoans: number; unpaidTotal: number; blocks: string[] }
@@ -23,8 +25,8 @@ type Step = 'card' | 'pin' | 'borrow' | 'return' | 'done'
  * keyboard mode: the scan box always has focus and each scan ends with Enter.
  */
 export function SelfCheckKiosk() {
-  const session = useKioskSession()
-  if (!session) return <KioskSetup title="Self-checkout kiosk setup" />
+  const connected = useKioskConnected()
+  if (!connected) return <KioskSetup title="Self-checkout kiosk setup" />
   return <SelfCheckScreen />
 }
 
@@ -38,6 +40,7 @@ function SelfCheckScreen() {
   const [pin, setPin] = useState('')
   const [patron, setPatron] = useState<PatronView | null>(null)
   const [lines, setLines] = useState<Line[]>([])
+  const [slipLoans, setSlipLoans] = useState<SlipLoan[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
@@ -46,7 +49,7 @@ function SelfCheckScreen() {
   useEffect(() => { void api<Config>('/api/kiosk/selfcheck/config', opts).then(setConfig).catch(() => {}) }, [])
 
   const reset = useCallback(() => {
-    setStep('card'); setCard(''); setPin(''); setPatron(null); setLines([]); setError(null); setScan('')
+    setStep('card'); setCard(''); setPin(''); setPatron(null); setLines([]); setSlipLoans([]); setError(null); setScan('')
   }, [])
   useInactivity((step === 'done' ? 20 : config.idleSeconds) * 1000, reset)
 
@@ -88,6 +91,7 @@ function SelfCheckScreen() {
       if (step === 'borrow') {
         const r = await api<Checkout>('/api/kiosk/selfcheck/checkout', { ...opts, body: { patron: { card, pin: savedPin.current }, item: code } })
         setPatron(r.patron)
+        setSlipLoans((s) => [...s, { title: r.title, barcode: r.barcode, dueAt: r.dueAt }])
         add(true, r.title, `Due ${fmtDate(r.dueAt)}${r.notice ? ` — ${r.notice}` : ''}`)
       } else if (step === 'return') {
         const r = await api<Returned>('/api/kiosk/selfcheck/return', { ...opts, body: { item: code } })
@@ -118,6 +122,8 @@ function SelfCheckScreen() {
 
   return (
     <div className="selfcheck">
+      <BroadcastOverlay />
+      <KioskResetZone />
       <header>
         <Logo size={56} />
         <div><div className="name">{lib.name}</div><div className="sub">Self-checkout</div></div>
@@ -197,7 +203,7 @@ function SelfCheckScreen() {
         )}
 
         {step === 'done' && (
-          <div className="center stack print-receipt">
+          <div className="center stack">
             <div className="big-icon ok"><Icon name="check-circle" size="1em" /></div>
             <h1>{patron ? `Thank you, ${patron.firstName}!` : 'Thank you!'}</h1>
             {borrowed.length > 0 && <div className="card stack" style={{ textAlign: 'left', minWidth: 'min(100%, 480px)' }}>
@@ -206,7 +212,10 @@ function SelfCheckScreen() {
               {borrowed.map((l) => <div key={l.id}><strong>{l.title}</strong><br /><span>{l.detail}</span></div>)}
             </div>}
             <div className="row" style={{ justifyContent: 'center' }}>
-              {borrowed.length > 0 && <button className="btn big" onClick={() => window.print()}><Icon name="printer" />Print slip</button>}
+              {slipLoans.length > 0 && patron && <button className="btn big" onClick={() => void printSlip(
+                <CheckoutSlip lib={lib} patron={patron} borrowed={slipLoans}
+                  otherLoans={patron.loans.filter((l) => !slipLoans.some((s) => s.barcode === l.barcode))} />)}>
+                <Icon name="printer" />Print slip</button>}
               <button className="btn primary big" onClick={reset}>Done</button>
             </div>
           </div>

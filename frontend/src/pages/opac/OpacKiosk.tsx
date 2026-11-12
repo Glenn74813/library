@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, qs } from '../../api/client'
-import { MATERIAL_TYPES, type BibRecord, type KioskConfig, type OpacDetail, type Page, type VoiceSettings } from '../../api/types'
+import { MATERIAL_TYPES, type BibRecord, type OpacDetail, type Page } from '../../api/types'
 import { BroadcastOverlay } from '../../components/BroadcastOverlay'
 import { applyKey, OnScreenKeyboard } from '../../components/OnScreenKeyboard'
 import { EbookBadge, Modal, Pager, StatusBadge, Table } from '../../components/ui'
@@ -34,16 +34,6 @@ export function OpacKiosk() {
     [query, page])
   const { data: arrivals } = useAsync(() => api<BibRecord[]>('/api/opac/new-arrivals', { anonymous: true }), [])
 
-  // Public displays show emergency/announcement broadcasts too (polled; no sign-in needed).
-  const [broadcast, setBroadcast] = useState<{ broadcast: KioskConfig['broadcast']; voice: VoiceSettings } | null>(null)
-  useEffect(() => {
-    if (!kiosk) return
-    const load = () => api<{ broadcast: KioskConfig['broadcast']; voice: VoiceSettings }>('/api/opac/broadcast', { anonymous: true })
-      .then(setBroadcast).catch(() => {})
-    load()
-    const t = setInterval(load, 15_000)
-    return () => clearInterval(t)
-  }, [kiosk])
 
   const reset = useCallback(() => {
     setInput(''); setQuery({ q: '', field: 'any', type: '' }); setField('any'); setType(''); setPage(0); setDetailId(null)
@@ -61,7 +51,8 @@ export function OpacKiosk() {
 
   return (
     <div className={`public-shell ${kiosk ? 'kiosk' : ''}`}>
-      {kiosk && <BroadcastOverlay broadcast={broadcast?.broadcast} voice={broadcast?.voice} audioPath="/api/opac/broadcast-audio" anonymous />}
+      {/* Library kiosks show announcements from the Security gate page; the public website does not. */}
+      {kiosk && <BroadcastOverlay />}
       <div className="public-bar">
         <Logo /><span className="title">{config.profile.shortName} Library Catalog</span>
         {!kiosk && <Link className="btn small ghost" to="/privacy">Privacy</Link>}

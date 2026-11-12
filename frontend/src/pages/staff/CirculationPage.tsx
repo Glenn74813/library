@@ -2,12 +2,15 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api, qs } from '../../api/client'
 import { clearFailed, enqueue, failedSyncs, isOffline, offlineQueue, syncOffline } from '../../api/offlineCirculation'
-import type { CheckinResult, CheckoutResult, Patron, PatronSummary } from '../../api/types'
+import type { CheckinResult, CheckoutResult, Loan, Patron, PatronSummary } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
 import { CameraScanButton } from '../../components/CameraScan'
 import { StatusBadge, Table, Tabs } from '../../components/ui'
+import { Icon } from '../../components/Icon'
 import { fmtDate, fmtDateTime, fmtMoney } from '../../format'
+import { useLibrary } from '../../api/library'
+import { CheckoutSlip, getPrintPrefs, HoldShelfSlip, printSlip, ReturnSlip, setPrintPrefs, type PrintPrefs, type ReturnedItem } from '../../print/slips'
 
 type Mode = 'out' | 'in'
 
@@ -94,6 +97,8 @@ export function CirculationPage() {
       <Tabs value={mode} onChange={setMode} tabs={[{ id: 'out', label: 'Check out / renew' }, { id: 'in', label: 'Check in (return)' }]} />
       <div className="grid cols-2" style={{ alignItems: 'start' }}>
         {mode === 'out' ? <Checkout addLog={addLog} off={off} /> : <Checkin addLog={addLog} off={off} />}
+        <div className="stack">
+        <PrintSettings />
         <div className="card">
           <h2>This session</h2>
           {log.length === 0 ? <p className="muted small">Transactions will appear here.</p> : (
@@ -101,6 +106,7 @@ export function CirculationPage() {
               {log.map((e) => <div key={e.id} className={`alert ${e.ok ? 'success' : 'error'} small`}>{e.text}</div>)}
             </div>
           )}
+        </div>
         </div>
       </div>
     </>
@@ -117,12 +123,32 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
   const [itemCode, setItemCode] = useState('')
   const [override, setOverride] = useState(false)
   const [busy, setBusy] = useState(false)
+  /** Items this patron borrowed during the current visit, for the checkout slip. */
+  const [visit, setVisit] = useState<Loan[]>([])
   const itemRef = useRef<HTMLInputElement>(null)
   const patronForm = useRef<HTMLFormElement>(null)
   const itemForm = useRef<HTMLFormElement>(null)
   const toast = useToast()
+  const lib = useLibrary()
+
+  function printCheckoutSlip(s: PatronSummary, borrowed: Loan[]) {
+    void printSlip(<CheckoutSlip lib={lib} patron={s.patron} borrowed={borrowed}
+      otherLoans={s.loans.filter((l) => !borrowed.some((b) => b.id === l.id))} />)
+  }
+
+  /** Done with this patron: print their slip if this desk does that automatically, then clear. */
+  function finishPatron() {
+    if (summary && visit.length > 0 && getPrintPrefs().checkoutOnFinish) printCheckoutSlip(summary, visit)
+    setSummary(null)
+    setPatronCode('')
+    setVisit([])
+  }
 
   async function loadPatron(e?: FormEvent) {
+    if (summary && visit.length > 0 && summary.patron.cardNumber !== patronCode.trim()) {
+      if (getPrintPrefs().checkoutOnFinish) printCheckoutSlip(summary, visit)
+      setVisit([])
+    }
     e?.preventDefault()
     if (!patronCode.trim()) return
     try {
@@ -167,6 +193,7 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
       const r = await api<CheckoutResult>('/api/circulation/checkout', {
         body: { patron: summary.patron.cardNumber, item: itemCode.trim(), override }, timeoutMs: DESK_TIMEOUT,
       })
+      setVisit((v) => [...v, r.loan])
       addLog(true, `OUT ${r.loan.barcode} "${r.loan.title}" → ${r.loan.patronName}, due ${fmtDate(r.loan.dueAt)}`
         + (r.warnings.length ? ` (override: ${r.warnings.join('; ')})` : '')
         + (r.notice ? ` — SHORT LOAN: ${r.notice}` : ''))
@@ -242,7 +269,11 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
                 {summary.unpaidTotal > 0 && <> · <span style={{ color: 'var(--danger)' }}>{fmtMoney(summary.unpaidTotal)} unpaid</span></>}
               </div>
             </div>
-            <button className="btn small" onClick={() => { setSummary(null); setPatronCode('') }}>Clear</button>
+            <div className="row-actions">
+              <button className="btn small" title="Print the borrowing slip for this visit"
+                onClick={() => printCheckoutSlip(summary, visit)}><Icon name="printer" />Slip{visit.length > 0 && ` (${visit.length})`}</button>
+              <button className="btn small" onClick={finishPatron}>Next patron</button>
+            </div>
           </div>
           {summary.blocks.length > 0 && (
             <div className="alert warn small"><strong>Attention:</strong><ul>{summary.blocks.map((b) => <li key={b}>{b}</li>)}</ul></div>
@@ -283,8 +314,11 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
 }
 
 function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; off: Offline }) {
+  const lib = useLibrary()
   const [code, setCode] = useState('')
   const [last, setLast] = useState<CheckinResult | null>(null)
+  /** Returns not printed yet, for one return slip covering several items. */
+  const [returns, setReturns] = useState<ReturnedItem[]>([])
   const [busy, setBusy] = useState(false)
   const ref = useRef<HTMLInputElement>(null)
   const form = useRef<HTMLFormElement>(null)
@@ -296,6 +330,14 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
     try {
       const r = await api<CheckinResult>('/api/circulation/checkin', { body: { item: code.trim() }, timeoutMs: DESK_TIMEOUT })
       setLast(r)
+      const prefs = getPrintPrefs()
+      if (r.loan) {
+        const item: ReturnedItem = { title: r.loan.title, barcode: r.loan.barcode, patronName: r.loan.patronName,
+          cardNumber: r.loan.cardNumber, returnedAt: r.loan.returnedAt ?? new Date().toISOString(), fine: r.fineAmount }
+        if (prefs.returnEach) void printSlip(<ReturnSlip lib={lib} items={[item]} />)
+        else setReturns((list) => [...list, item])
+      }
+      if (r.holdSlip && prefs.holdSlip) void printSlip(<HoldShelfSlip lib={lib} hold={r.holdSlip} />)
       addLog(true, `IN ${r.loan?.barcode ?? code} ${r.loan ? `"${r.loan.title}" from ${r.loan.patronName}` : ''} — ${r.message}`
         + (r.fineAmount > 0 ? ` · fine ${fmtMoney(r.fineAmount)}` : ''))
       setCode('')
@@ -334,8 +376,43 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
           {last.loan && <div className="small">{last.loan.title} · returned by {last.loan.patronName}
             {last.loan.overdueDays > 0 || last.fineAmount > 0 ? '' : ' · on time'}</div>}
           {last.fineAmount > 0 && <div><StatusBadge status="UNPAID" /> Overdue fine {fmtMoney(last.fineAmount)} added</div>}
+          {last.holdSlip && <div className="row" style={{ marginTop: 6 }}>
+            <button className="btn small" onClick={() => void printSlip(<HoldShelfSlip lib={lib} hold={last.holdSlip!} />)}>
+              <Icon name="printer" />{getPrintPrefs().holdSlip ? 'Reprint hold slip' : 'Print hold slip'}</button>
+          </div>}
+        </div>
+      )}
+      {returns.length > 0 && (
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <span className="muted small">{returns.length} return(s) not printed yet</span>
+          <span className="row-actions">
+            <button className="btn small" onClick={() => { void printSlip(<ReturnSlip lib={lib} items={returns} />); setReturns([]) }}>
+              <Icon name="printer" />Print return slip</button>
+            <button className="btn small" onClick={() => setReturns([])}>Clear</button>
+          </span>
         </div>
       )}
     </div>
+  )
+}
+
+/** Which slips this desk's receipt printer prints by itself; saved on this computer. */
+function PrintSettings() {
+  const [prefs, setPrefs] = useState<PrintPrefs>(getPrintPrefs)
+  const set = (patch: Partial<PrintPrefs>) => { const next = { ...prefs, ...patch }; setPrefs(next); setPrintPrefs(next) }
+  return (
+    <details className="card">
+      <summary style={{ cursor: 'pointer' }}><strong><Icon name="printer" /> Receipt printer on this computer</strong></summary>
+      <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+        <label className="check"><input type="checkbox" checked={prefs.holdSlip} onChange={(e) => set({ holdSlip: e.target.checked })} />
+          Print a hold shelf slip when a returned copy is set aside for a reservation</label>
+        <label className="check"><input type="checkbox" checked={prefs.checkoutOnFinish} onChange={(e) => set({ checkoutOnFinish: e.target.checked })} />
+          Print the borrowing slip when I press Next patron</label>
+        <label className="check"><input type="checkbox" checked={prefs.returnEach} onChange={(e) => set({ returnEach: e.target.checked })} />
+          Print a return slip for every returned item</label>
+        <p className="muted small" style={{ margin: 0 }}>Slips are 80 mm wide. To print without the print dialog, start this browser with
+          <span className="mono"> --kiosk-printing</span> and make the receipt printer the default printer.</p>
+      </div>
+    </details>
   )
 }

@@ -1,5 +1,5 @@
 import { createContext, useContext, useSyncExternalStore, type ReactNode } from 'react'
-import { getSession, subscribe, type Session } from '../api/client'
+import { getDeviceKey, getSession, subscribe, type Session } from '../api/client'
 
 const AuthContext = createContext<Session | null>(null)
 
@@ -19,6 +19,11 @@ export function usePatronSession() {
 
 export function useKioskSession() {
   return useSyncExternalStore(subscribe, () => getSession('kiosk'))
+}
+
+/** True when this kiosk can talk to the server: it has a device key, or (older setup) a kiosk session. */
+export function useKioskConnected() {
+  return useSyncExternalStore(subscribe, () => !!getDeviceKey() || !!getSession('kiosk'))
 }
 
 export function hasRole(session: Session | null, ...roles: string[]) {

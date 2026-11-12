@@ -3,7 +3,7 @@ import { api } from '../../api/client'
 import type { Role, User } from '../../api/types'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Table, PasswordInput } from '../../components/ui'
-import { fmtDate } from '../../format'
+import { fmtDate, fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
 
@@ -14,7 +14,7 @@ const STAFF_ROLES: { id: Role; text: string }[] = [
 ]
 
 const DEVICE_TYPES: { id: Role; title: string; text: string }[] = [
-  { id: 'KIOSK', title: 'Attendance kiosk', text: 'Time-in / time-out kiosk. Signs in once on the kiosk screen.' },
+  { id: 'KIOSK', title: 'Kiosk', text: 'Attendance or self-checkout kiosk. Connects once with a device key.' },
   { id: 'GATE', title: 'Security gate', text: 'RFID gate or its bridge software. Connects with a device token.' },
 ]
 
@@ -74,6 +74,8 @@ export function UsersPage() {
           { header: 'Type', render: (u) => <span className="badge info">{u.role === 'GATE' ? 'Security gate' : 'Kiosk'}</span> },
           { header: 'Username', render: (u) => <span className="mono">{u.username}</span> },
           { header: 'Status', render: statusBadge },
+          { header: 'Last connected', render: (u) => (u.deviceLastSeenAt ? fmtDateTime(u.deviceLastSeenAt)
+            : u.role === 'KIOSK' && !u.hasDeviceKey ? <span className="muted">No key yet</span> : '—') },
           { header: 'Added', render: (u) => fmtDate(u.createdAt) },
         ]} />
       </div>
@@ -137,11 +139,38 @@ function UserModal({ value, onClose, onSaved }: { value: Partial<User>; onClose:
 
 function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClose: () => void; onSaved: () => void }) {
   const [f, setF] = useState(value)
-  const [password, setPassword] = useState('')
   const [token, setToken] = useState<string | null>(null)
+  const [deviceKey, setDeviceKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const toast = useToast()
   const isGate = f.role === 'GATE'
+
+  async function issueKey(id: number, replacing: boolean) {
+    if (replacing && !confirm('Replace this kiosk\'s key? The kiosk disconnects until you enter the new key or open its new setup link on it.')) return
+    try {
+      const r = await api<{ deviceKey: string; device: User }>(`/api/users/${id}/device-key`, { method: 'POST' })
+      setF(r.device)
+      setDeviceKey(r.deviceKey)
+    } catch (e) { setError(errorText(e)) }
+  }
+
+  async function revokeKey(id: number) {
+    if (!confirm('Revoke this kiosk\'s key? The kiosk disconnects and cannot reconnect until a new key is issued.')) return
+    try {
+      setF(await api<User>(`/api/users/${id}/device-key`, { method: 'DELETE' }))
+      setDeviceKey(null)
+      toast('Key revoked')
+    } catch (e) { setError(errorText(e)) }
+  }
+
+  async function copyText(text: string, what: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast(`${what} copied`)
+    } catch {
+      toast('Select it and copy it manually', 'warn')
+    }
+  }
 
   async function issueToken(id: number) {
     const r = await api<{ accessToken: string }>(`/api/users/${id}/device-token`, { method: 'POST' })
@@ -152,22 +181,23 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
     setError(null)
     try {
       if (f.id) {
-        await api(`/api/users/${f.id}`, { method: 'PUT', body: { fullName: f.fullName, role: f.role, enabled: f.enabled, password: password || null } })
+        await api(`/api/users/${f.id}`, { method: 'PUT', body: { fullName: f.fullName, role: f.role, enabled: f.enabled, password: null } })
         toast('Device saved')
         onSaved()
         return
       }
       const created = await api<User>('/api/users', {
-        body: { username: f.username, fullName: f.fullName, role: f.role, password: isGate ? randomSecret() : password },
+        // Devices connect with a token or key, never by typing a password: give them a random one.
+        body: { username: f.username, fullName: f.fullName, role: f.role, password: randomSecret() },
       })
+      setF(created)
       if (isGate) {
         // A gate has no screen to sign in on: hand out its token right away.
-        setF(created)
         await issueToken(created.id)
         toast('Gate added — copy its device token now')
       } else {
-        toast('Kiosk added')
-        onSaved()
+        await issueKey(created.id, false)
+        toast('Kiosk added — set it up with its key or setup link now')
       }
     } catch (e) { setError(errorText(e)) }
   }
@@ -182,7 +212,8 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
     }
   }
 
-  const closeAfterToken = token && !value.id ? onSaved : onClose
+  const justCreated = (token || deviceKey) && !value.id
+  const closeAfterToken = justCreated || deviceKey ? onSaved : onClose
 
   async function revokeTokens(id: number) {
     if (!confirm('Revoke every token issued to this device? The gate stops working until you issue a new token and enter it in the gate software.')) return
@@ -194,7 +225,7 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
 
   return (
     <Modal title={f.id ? `Device: ${f.fullName}` : 'Add device'} onClose={closeAfterToken}
-      footer={token && !value.id
+      footer={justCreated
         ? <button className="btn primary" onClick={onSaved}>Done</button>
         : <><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={save}>Save</button></>}>
       <div className="stack">
@@ -218,11 +249,6 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
           <Field label="Username" hint="Used by the device to connect">
             <input className="mono" value={f.username ?? ''} disabled={!!f.id} onChange={(e) => setF({ ...f, username: e.target.value })} autoComplete="off" />
           </Field>
-          {!isGate && (
-            <Field label={f.id ? 'New password (leave empty to keep)' : 'Password'} hint="Entered once on the kiosk's setup screen">
-              <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
-            </Field>
-          )}
           {f.id && <Field label="Status" as="div">
             <label className="check"><input type="checkbox" checked={!!f.enabled} onChange={(e) => setF({ ...f, enabled: e.target.checked })} /> Device enabled</label>
           </Field>}
@@ -244,11 +270,41 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
                 <span className="muted">Keep it secret, like a password. It is not shown again.</span></div>
             </>}
           </div>
-        ) : (
-          <div className="alert small">
-            Attendance kiosk: open <span className="mono">/kiosk/attendance</span> on the kiosk PC and sign in once with this username and
-            password; it then stays signed in. The OPAC search kiosk (<span className="mono">/opac?kiosk=1</span>) is public and needs no sign-in.
+        ) : f.id ? (
+          <div className="alert small stack" style={{ gap: 8 }}>
+            <span><strong>Device key.</strong> The kiosk connects with this key instead of a password and stays connected until the
+              key is replaced or revoked, or the device is disabled. {f.hasDeviceKey
+                ? <>Issued {fmtDateTime(f.deviceKeyIssuedAt)}{f.deviceLastSeenAt ? <> · last connected {fmtDateTime(f.deviceLastSeenAt)}</> : ' · not connected yet'}.</>
+                : 'No key issued yet.'}</span>
+            {deviceKey ? (
+              <>
+                <span>On the kiosk PC, open one of these setup links (it saves the key and starts the kiosk), or open the kiosk page and paste the key:</span>
+                {[['Attendance kiosk', '/kiosk/attendance'], ['Self-checkout kiosk', '/kiosk/selfcheck']].map(([label, path]) => {
+                  const link = `${window.location.origin}${path}?key=${encodeURIComponent(deviceKey)}`
+                  return (
+                    <div key={path} className="row" style={{ flexWrap: 'nowrap' }}>
+                      <input readOnly className="mono small" value={link} onFocus={(e) => e.target.select()} aria-label={`${label} setup link`} />
+                      <button className="btn small" onClick={() => copyText(link, `${label} link`)}>Copy {label.toLowerCase()} link</button>
+                    </div>
+                  )
+                })}
+                <div className="row" style={{ flexWrap: 'nowrap' }}>
+                  <input readOnly className="mono small" value={deviceKey} onFocus={(e) => e.target.select()} aria-label="Device key" />
+                  <button className="btn small primary" onClick={() => copyText(deviceKey, 'Key')}>Copy key</button>
+                </div>
+                <span className="muted">Treat it like a password. It is shown only now; if it is lost, replace it.</span>
+              </>
+            ) : (
+              <div className="row">
+                <button className="btn small" onClick={() => issueKey(f.id!, !!f.hasDeviceKey)}>
+                  <Icon name="key" />{f.hasDeviceKey ? 'Replace key' : 'Issue key'}</button>
+                {f.hasDeviceKey && <button className="btn small danger" onClick={() => revokeKey(f.id!)}>Revoke key</button>}
+              </div>
+            )}
+            <span className="muted">The public search kiosk (<span className="mono">/opac?kiosk=1</span>) needs no key.</span>
           </div>
+        ) : (
+          <div className="alert small">After saving, you get this kiosk's device key and setup links to open on the kiosk PC.</div>
         )}
       </div>
     </Modal>

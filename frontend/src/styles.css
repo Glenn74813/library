@@ -855,3 +855,6 @@ button.card.choice.selected { border-color: var(--primary); box-shadow: 0 0 0 2p
 }
 .password-input > .password-eye:hover { color: var(--primary); background: var(--primary-soft, rgba(0, 0, 0, 0.05)); }
 .password-input > .password-eye svg { width: 18px; height: 18px; }
+
+/* Invisible top-left hotspot on kiosks: hold 5 s to disconnect the kiosk (staff only). */
+.kiosk-reset-zone { position: fixed; top: 0; left: 0; width: 56px; height: 56px; z-index: 300; }

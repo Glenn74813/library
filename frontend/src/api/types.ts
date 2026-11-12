@@ -35,6 +35,10 @@ export interface User {
   createdAt: string
   /** Set while the account is locked after repeated failed sign-ins. */
   lockedUntil: string | null
+  /** Kiosks and gates: whether a device key is issued, when, and when the device last connected. */
+  hasDeviceKey?: boolean
+  deviceKeyIssuedAt?: string | null
+  deviceLastSeenAt?: string | null
 }
 
 export interface Category {
@@ -320,6 +324,8 @@ export interface CheckinResult {
   fineAmount: number
   holdForPatron: string | null
   message: string
+  /** Set when the copy was put aside for a reservation: details for the hold shelf slip. */
+  holdSlip: { holdId: number; title: string; barcode: string; callNumber: string | null; cardNumber: string; initials: string; pickupBy: string | null } | null
 }
 
 export interface KioskConfig {

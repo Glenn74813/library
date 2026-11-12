@@ -310,12 +310,18 @@ public class GateController {
     }
 
     /** Current announcement for public displays (OPAC kiosks); announcements are public by nature. */
-    public record PublicBroadcast(BroadcastService.CurrentBroadcast broadcast, VoiceSettings voice) {
+    /**
+     * {@code ageSeconds} is measured on the server, so a kiosk whose own clock is wrong still knows
+     * whether the announcement is new.
+     */
+    public record PublicBroadcast(BroadcastService.CurrentBroadcast broadcast, VoiceSettings voice, Long ageSeconds) {
     }
 
     @GetMapping("/api/opac/broadcast")
     public PublicBroadcast publicBroadcast() {
-        return new PublicBroadcast(broadcasts.current(), VoiceSettings.load(settings));
+        BroadcastService.CurrentBroadcast current = broadcasts.current();
+        Long age = current == null ? null : java.time.Duration.between(current.at(), java.time.Instant.now()).toSeconds();
+        return new PublicBroadcast(current, VoiceSettings.load(settings), age);
     }
 
     @GetMapping("/api/opac/broadcast-audio")

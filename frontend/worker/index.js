@@ -18,6 +18,10 @@ export default {
     headers.delete('Origin')
     headers.set('X-Forwarded-Host', url.host)
     headers.set('X-Forwarded-Proto', 'https')
+    // Live updates (WebSocket): hand the upgrade request straight through.
+    if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+      return fetch(target, { headers })
+    }
     return fetch(target, {
       method: request.method,
       headers,

@@ -54,6 +54,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
+        <!-- WebSocket (STOMP) push of announcements to kiosk screens -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
         <!-- MARC21 (ISO 2709 / MARCXML) reading and writing for catalog migration and interoperability -->
         <dependency>
             <groupId>org.marc4j</groupId>

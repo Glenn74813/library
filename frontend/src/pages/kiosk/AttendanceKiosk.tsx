@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { ApiError, api, login, logout } from '../../api/client'
+import { ApiError, api } from '../../api/client'
 import type { EntryMethod, KioskConfig, TapResult } from '../../api/types'
-import { useKioskSession } from '../../auth/AuthContext'
+import { useKioskConnected } from '../../auth/AuthContext'
+import { KioskResetZone, KioskSetup } from '../../components/KioskSetup'
 import { BroadcastOverlay } from '../../components/BroadcastOverlay'
 import { applyKey, OnScreenKeyboard } from '../../components/OnScreenKeyboard'
-import { ErrorAlert, Field, PasswordInput } from '../../components/ui'
-import { errorText } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
 import { Logo } from '../../components/Logo'
 import { useLibrary } from '../../api/library'
@@ -33,42 +32,11 @@ type Shown =
  * the server is unreachable are queued locally and synced automatically.
  */
 export function AttendanceKiosk() {
-  const session = useKioskSession()
-  if (!session) return <KioskSetup />
+  const connected = useKioskConnected()
+  if (!connected) return <KioskSetup title="Attendance kiosk setup" />
   return <KioskScreen />
 }
 
-/** One-time sign-in of a kiosk PC with its KIOSK device account (shared by the attendance and self-checkout kiosks). */
-export function KioskSetup({ title = 'Attendance kiosk setup' }: { title?: string }) {
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  async function submit(e: FormEvent) {
-    e.preventDefault()
-    try {
-      const user = await login(username, password, 'kiosk')
-      if (!user.roles.some((r) => ['KIOSK', 'ADMIN', 'LIBRARIAN'].includes(r))) {
-        await logout('kiosk')
-        setError('Use a KIOSK device account (create one under Users & devices).')
-      }
-    } catch (err) {
-      setError(errorText(err))
-    }
-  }
-  return (
-    <div className="center-page">
-      <form className="card auth-card stack" onSubmit={submit}>
-        <div className="logo"><Logo large /></div>
-        <h1>{title}</h1>
-        <p className="muted small" style={{ textAlign: 'center' }}>Sign in once with the kiosk device account. The kiosk stays signed in.</p>
-        <ErrorAlert error={error} />
-        <Field label="Kiosk username"><input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" required /></Field>
-        <Field label="Password"><PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
-        <button className="btn primary block">Start kiosk</button>
-      </form>
-    </div>
-  )
-}
 
 function KioskScreen() {
   const lib = useLibrary()
@@ -169,7 +137,8 @@ function KioskScreen() {
 
   return (
     <div className="att">
-      <BroadcastOverlay broadcast={config?.broadcast} voice={config?.voice} />
+      <BroadcastOverlay />
+      <KioskResetZone />
       <header>
         <div className="school">
           <Logo large />

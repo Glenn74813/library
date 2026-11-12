@@ -30,6 +30,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import ph.edu.zscmst.library.user.AppUserRepository;
 
 /**
  * Stateless JWT security. Tokens are signed with HMAC-SHA256 and carry a {@code roles} claim that
@@ -42,7 +43,7 @@ public class SecurityConfig {
     private static final String[] STAFF = {"ADMIN", "LIBRARIAN", "STAFF"};
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, AppUserRepository users) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> { })
@@ -52,6 +53,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login", "/api/auth/patron-login", "/api/auth/refresh",
                                 "/api/auth/logout", "/api/auth/pin-reset/**").permitAll()
                         .requestMatchers("/api/opac/**").permitAll()
+                        // WebSocket handshake for live announcements (public, read-only topic).
+                        .requestMatchers("/api/ws/**", "/api/ws").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/info", "/error").permitAll()
                         .requestMatchers("/api/auth/**").authenticated()
                         .requestMatchers("/api/kiosk/**").hasAnyRole("KIOSK", "ADMIN", "LIBRARIAN")
@@ -61,6 +64,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/**").hasAnyRole(STAFF)
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(o -> o.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
+        http.addFilterBefore(new DeviceKeyFilter(users),
+                org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class);
         http.addFilterAfter(new PasswordChangeFilter(),
                 org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class);
         return http.build();

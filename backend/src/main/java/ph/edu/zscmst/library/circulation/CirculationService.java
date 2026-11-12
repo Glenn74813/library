@@ -32,6 +32,7 @@ import ph.edu.zscmst.library.circulation.CirculationDtos.CheckinResult;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckoutResult;
 import ph.edu.zscmst.library.circulation.CirculationDtos.FineDto;
 import ph.edu.zscmst.library.circulation.CirculationDtos.HoldDto;
+import ph.edu.zscmst.library.circulation.CirculationDtos.HoldSlip;
 import ph.edu.zscmst.library.circulation.CirculationDtos.LoanDto;
 import ph.edu.zscmst.library.circulation.CirculationDtos.PatronSummary;
 import ph.edu.zscmst.library.circulation.CirculationDtos.ReceiptDto;
@@ -187,12 +188,13 @@ public class CirculationService {
                 String holdFor = routeReturnedItem(item);
                 audit.record("ITEM_FOUND", item.getBarcode() + " was " + was);
                 return new CheckinResult(null, BigDecimal.ZERO, holdFor,
-                        "Item was marked " + was + " and is now back in circulation");
+                        "Item was marked " + was + " and is now back in circulation", holdSlip(item));
             }
             if (item.getStatus() == ItemStatus.ON_HOLD) {
                 String who = holds.findByItemIdAndStatus(item.getId(), HoldStatus.READY)
                         .map(h -> h.getPatron().getFullName()).orElse("a patron");
-                return new CheckinResult(null, BigDecimal.ZERO, who, "Item belongs on the hold shelf for " + who);
+                return new CheckinResult(null, BigDecimal.ZERO, who, "Item belongs on the hold shelf for " + who,
+                        holdSlip(item));
             }
             throw ApiException.badRequest("Item is not checked out");
         }
@@ -208,7 +210,18 @@ public class CirculationService {
         String where = item.getShelfLocation();
         String message = holdFor != null ? "Place on hold shelf for " + holdFor
                 : where != null ? "Return to " + where : "Return to shelf";
-        return new CheckinResult(toDto(loan), fine, holdFor, message);
+        return new CheckinResult(toDto(loan), fine, holdFor, message, holdSlip(item));
+    }
+
+    /** Slip details when this copy is waiting on the hold shelf, else null. */
+    private HoldSlip holdSlip(Item item) {
+        return holds.findByItemIdAndStatus(item.getId(), HoldStatus.READY).map(h -> {
+            Patron p = h.getPatron();
+            String initials = (p.getFirstName().isBlank() ? "" : p.getFirstName().charAt(0) + ". ")
+                    + (p.getLastName().isBlank() ? "" : p.getLastName().charAt(0) + ".");
+            return new HoldSlip(h.getId(), item.getRecord().getTitle(), item.getBarcode(), item.getRecord().getCallNumber(),
+                    p.getCardNumber(), initials.trim(), h.getExpiresAt());
+        }).orElse(null);
     }
 
     @Transactional

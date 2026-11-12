@@ -28,6 +28,9 @@ public class AppUser {
     private Instant createdAt = Instant.now();
     private int tokenVersion;
     private boolean mustChangePassword;
+    private String deviceKeyHash;
+    private Instant deviceKeyIssuedAt;
+    private Instant deviceLastSeenAt;
 
     protected AppUser() {
     }
@@ -78,4 +81,17 @@ public class AppUser {
 
     /** People (not kiosk or gate devices) choose their own password after an administrator sets one. */
     public boolean isPerson() { return role != Role.KIOSK && role != Role.GATE; }
+
+    public String getDeviceKeyHash() { return deviceKeyHash; }
+    public Instant getDeviceKeyIssuedAt() { return deviceKeyIssuedAt; }
+    public Instant getDeviceLastSeenAt() { return deviceLastSeenAt; }
+    public void setDeviceLastSeenAt(Instant at) { this.deviceLastSeenAt = at; }
+
+    /** Replaces (or, with null, removes) this device's key; the old key stops working at once. */
+    public void setDeviceKey(String hash) {
+        this.deviceKeyHash = hash;
+        this.deviceKeyIssuedAt = hash == null ? null : Instant.now();
+    }
+
+    public boolean isDevice() { return role == Role.KIOSK || role == Role.GATE; }
 }

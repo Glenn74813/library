@@ -72,7 +72,19 @@ public final class CirculationDtos {
     public record CheckinRequest(@NotBlank String item) {
     }
 
-    public record CheckinResult(LoanDto loan, BigDecimal fineAmount, String holdForPatron, String message) {
+    public record CheckinResult(LoanDto loan, BigDecimal fineAmount, String holdForPatron, String message,
+                                HoldSlip holdSlip) {
+        public CheckinResult(LoanDto loan, BigDecimal fineAmount, String holdForPatron, String message) {
+            this(loan, fineAmount, holdForPatron, message, null);
+        }
+    }
+
+    /**
+     * What goes on the slip placed inside a book set aside for a reservation. Only the card number and
+     * initials identify the patron, since the slip sticks out of the book on an open shelf.
+     */
+    public record HoldSlip(Long holdId, String title, String barcode, String callNumber, String cardNumber,
+                           String initials, Instant pickupBy) {
     }
 
     public record LostRequest(@NotNull @DecimalMin("0") BigDecimal charge) {

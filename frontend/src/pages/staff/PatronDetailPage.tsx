@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, download, openPdf, qs, releaseHold } from '../../api/client'
-import type { BibRecord, Fine, Hold, Loan, Page, PatronSummary, Receipt } from '../../api/types'
+import type { BibRecord, Fine, Hold, Loan, Page, Patron, PatronSummary, Receipt } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { PatronFormModal } from '../../components/PatronForm'
 import { BookModal } from '../../components/BookModal'
@@ -13,6 +13,8 @@ import { fmtDate, fmtDateTime, fmtMoney } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
+import { useLibrary } from '../../api/library'
+import { ClearanceSlip, PatronSlip, printSlip } from '../../print/slips'
 
 type Tab = 'loans' | 'history' | 'holds' | 'fines' | 'attendance'
 
@@ -27,6 +29,10 @@ export function PatronDetailPage() {
   const [holdOpen, setHoldOpen] = useState(false)
   const [photoOpen, setPhotoOpen] = useState(false)
   const [erasing, setErasing] = useState(false)
+  const [clearanceOpen, setClearanceOpen] = useState(false)
+  const lib = useLibrary()
+  const [params, setParams] = useSearchParams()
+  const justRegistered = params.get('new') === '1'
   const isAdmin = hasRole(useSession(), 'ADMIN')
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [selected, setSelected] = useState<number[]>([])
@@ -135,8 +141,17 @@ export function PatronDetailPage() {
         <div className="row">
           <button className="btn" onClick={() => navigate('/staff/patrons')}><Icon name="chevron-left" />Back</button>
           <button className="btn" onClick={() => setPinOpen(true)}>{p.hasPin ? 'Reset PIN' : 'Set portal PIN'}</button>
-          <button className="btn" onClick={() => openPdf(`/api/labels/patron-cards${qs({ cards: p.cardNumber })}`).catch((e) => toast(errorText(e), 'error'))}>
-            <Icon name="credit-card" />ID card</button>
+          <select className="btn" style={{ width: 'auto' }} value="" aria-label="Print" onChange={(e) => {
+            const v = e.target.value
+            if (v === 'card') openPdf(`/api/labels/patron-cards${qs({ cards: p.cardNumber })}`).catch((err) => toast(errorText(err), 'error'))
+            if (v === 'welcome') void printSlip(<PatronSlip lib={lib} patron={p} />)
+            if (v === 'clearance') setClearanceOpen(true)
+          }}>
+            <option value="" disabled>Print…</option>
+            <option value="welcome">Card slip (receipt printer)</option>
+            <option value="clearance">Library clearance…</option>
+            <option value="card">ID card (PDF)</option>
+          </select>
           <button className="btn" onClick={() => setHoldOpen(true)}>Reserve / book</button>
           <select className="btn" style={{ width: 'auto' }} value="" aria-label="Data privacy" onChange={(e) => {
             if (e.target.value === 'export') void download(`/api/patrons/${p.id}/data-export`, 'patron-data.json')
@@ -149,6 +164,15 @@ export function PatronDetailPage() {
           <button className="btn primary" onClick={() => setEditing(true)}>Edit</button>
         </div>
       </div>
+      {justRegistered && <div className="alert success row" style={{ marginBottom: 16, justifyContent: 'space-between' }}>
+        <span><strong>Patron registered.</strong> Give them a card slip with their card number and the My Library address
+          {p.hasPin ? '' : ', and set a PIN so they can sign in'}.</span>
+        <span className="row-actions">
+          <button className="btn small" onClick={() => void printSlip(<PatronSlip lib={lib} patron={p} />)}><Icon name="printer" />Print card slip</button>
+          {!p.hasPin && <button className="btn small" onClick={() => setPinOpen(true)}>Set PIN</button>}
+          <button className="btn small" onClick={() => setParams({}, { replace: true })}>Done</button>
+        </span>
+      </div>}
       {p.anonymizedAt && <div className="alert" style={{ marginBottom: 16 }}>This patron was anonymized on {fmtDate(p.anonymizedAt)} under the Data Privacy Act. Their loan and fine history is kept for statistics only.</div>}
 
       {s.blocks.length > 0 && <div className="alert warn" style={{ marginBottom: 16 }}><ul style={{ margin: 0 }}>{s.blocks.map((b) => <li key={b}>{b}</li>)}</ul></div>}
@@ -236,7 +260,8 @@ export function PatronDetailPage() {
       </div>
 
       {editing && <PatronFormModal patron={p} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); refreshAll() }} />}
-      {pinOpen && <PinModal patronId={p.id} onClose={() => setPinOpen(false)} onSaved={() => { setPinOpen(false); refreshAll() }} />}
+      {pinOpen && <PinModal patron={p} onClose={() => setPinOpen(false)} onSaved={() => { setPinOpen(false); refreshAll() }} />}
+      {clearanceOpen && <ClearanceModal patron={p} onClose={() => setClearanceOpen(false)} />}
       {holdOpen && <HoldModal patronId={p.id} onClose={() => setHoldOpen(false)} onSaved={() => { setHoldOpen(false); refreshAll(); setTab('holds') }} />}
       {photoOpen && <PatronPhotoModal patron={p} onClose={() => setPhotoOpen(false)} onSaved={() => { setPhotoOpen(false); refreshAll() }} />}
       {receipt && <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />}
@@ -245,12 +270,15 @@ export function PatronDetailPage() {
   )
 }
 
-function PinModal({ patronId, onClose, onSaved }: { patronId: number; onClose: () => void; onSaved: () => void }) {
+function PinModal({ patron, onClose, onSaved }: { patron: Patron; onClose: () => void; onSaved: () => void }) {
+  const lib = useLibrary()
   const [pin, setPin] = useState('')
+  const [printIt, setPrintIt] = useState(true)
   const [error, setError] = useState<string | null>(null)
   async function save() {
     try {
-      await api(`/api/patrons/${patronId}/pin`, { body: { pin } })
+      await api(`/api/patrons/${patron.id}/pin`, { body: { pin } })
+      if (printIt) void printSlip(<PatronSlip lib={lib} patron={patron} pin={pin} />)
       onSaved()
     } catch (e) {
       setError(errorText(e))
@@ -264,6 +292,50 @@ function PinModal({ patronId, onClose, onSaved }: { patronId: number; onClose: (
         <p className="muted small">The patron signs in to My Library with their card number and this PIN.</p>
         <Field label="New PIN (4–8 digits)"><input inputMode="numeric" pattern="\d*" maxLength={8} value={pin}
           onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} autoFocus /></Field>
+        <label className="check"><input type="checkbox" checked={printIt} onChange={(e) => setPrintIt(e.target.checked)} />
+          Print a PIN slip for the patron (receipt printer)</label>
+      </div>
+    </Modal>
+  )
+}
+
+interface Clearance { reference: string; patronName: string; cardNumber: string; category: string; course: string | null
+  purpose: string | null; issuedAt: string; issuedBy: string; stillClear: boolean }
+
+/** Library clearance: only when nothing is on loan and no fines are unpaid; printed with a reference number. */
+function ClearanceModal({ patron, onClose }: { patron: Patron; onClose: () => void }) {
+  const lib = useLibrary()
+  const toast = useToast()
+  const { data: check, error } = useAsync(() => api<{ cleared: boolean; reasons: string[] }>(`/api/patrons/${patron.id}/clearance-check`), [patron.id])
+  const [purpose, setPurpose] = useState('')
+  const [issued, setIssued] = useState<Clearance | null>(null)
+  const [busy, setBusy] = useState(false)
+  async function issue() {
+    setBusy(true)
+    try {
+      const c = await api<Clearance>(`/api/patrons/${patron.id}/clearance`, { body: { purpose } })
+      setIssued(c)
+      void printSlip(<ClearanceSlip lib={lib} c={c} />)
+    } catch (e) { toast(errorText(e), 'error') } finally { setBusy(false) }
+  }
+  return (
+    <Modal title="Library clearance" onClose={onClose} footer={issued
+      ? <><button className="btn" onClick={() => void printSlip(<ClearanceSlip lib={lib} c={issued} />)}><Icon name="printer" />Reprint</button>
+          <button className="btn primary" onClick={onClose}>Done</button></>
+      : <><button className="btn" onClick={onClose}>Cancel</button>
+          {check?.cleared && <button className="btn primary" disabled={busy} onClick={issue}><Icon name="printer" />Issue and print</button>}</>}>
+      <div className="stack">
+        <ErrorAlert error={error} />
+        {!check ? <p className="muted">Checking…</p> : issued ? (
+          <div className="alert success">Clearance <strong className="mono">{issued.reference}</strong> issued to {issued.patronName}.
+            Anyone can verify it on the Patrons page with this number.</div>
+        ) : check.cleared ? <>
+          <div className="alert success"><strong>{patron.fullName}</strong> has nothing on loan and no unpaid fines.</div>
+          <Field label="Purpose (optional)" hint="e.g. Graduation, Transfer, End of contract"><input value={purpose} maxLength={120}
+            onChange={(e) => setPurpose(e.target.value)} /></Field>
+        </> : (
+          <div className="alert error"><strong>Not cleared yet:</strong><ul>{check.reasons.map((r) => <li key={r}>{r}</li>)}</ul></div>
+        )}
       </div>
     </Modal>
   )

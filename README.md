@@ -149,7 +149,10 @@ SIP2 (port 6001) and the kiosks on the library network keep talking to the PC di
   disabling a user revokes their refresh tokens.
 - **Roles**: `ADMIN`, `LIBRARIAN` (overrides, waivers, settings), `STAFF`, `KIOSK`, `GATE`, `PATRON`.
 - BCrypt password/PIN hashing, audit trail (`/staff/audit`), CORS restricted by `CORS_ALLOWED_ORIGINS`.
-- Kiosk PCs sign in once with a KIOSK account and refresh their own session.
+- Kiosk PCs connect with a **device key** (Users & devices → kiosk → Issue key, or the setup link shown there),
+  sent as `X-Device-Key` and stored only as a SHA-256 hash; replace or revoke it to disconnect a kiosk.
+- Kiosk screens receive announcements live over STOMP/WebSocket at `/api/ws` (topic `/topic/announcements`,
+  read-only), with a polling fallback.
   Gate middleware uses a long-lived device token (Users & devices → Issue device token); **Revoke all tokens**
   or disabling the device stops its tokens immediately.
 

@@ -28,6 +28,8 @@ docker compose up -d --build    # db, api, web, backup
 | GATE | RFID security gate middleware (device token) |
 
 - **Add user** for people, **Add device** for kiosks and gates.
+- **Kiosks connect with a device key**, shown once when the kiosk is added, together with setup links to open on
+  the kiosk PC. **Replace key** if it may have leaked; **Revoke key** disconnects the kiosk. See kiosk-lockdown.md.
 - A password you set for a person (new account or reset) is **temporary**: they must choose their own
   at the next sign-in. Device passwords stay as set.
 - **Sign-in protection**: lock an account after N failed attempts for M minutes; **Unlock** from the list.
@@ -80,6 +82,9 @@ can't be booked, and visitors still timed in at closing are timed out automatica
 before the due date to remind, message templates, **Send test**, and the delivery log with failures.
 
 ## 7. Security gate and announcements
+Announcements reach every kiosk screen instantly over a live connection (WebSocket at `/api/ws`), with automatic
+reconnect; if a network blocks it, kiosks fall back to checking every 3 seconds.
+
 **Security gate**: alarm on/off and **alarm schedule** (always, opening hours only, or custom hours),
 emergency mode, announcement presets with text, uploaded or recorded audio, and the voice used for
 text-to-speech on kiosks.

@@ -4,6 +4,7 @@ import { Modal } from './ui'
 import { Icon } from './Icon'
 import { Logo } from './Logo'
 import { useLibrary } from '../api/library'
+import { OfficialReceiptSlip, printSlip } from '../print/slips'
 
 /** Printable payment receipt sized for an 80 mm thermal printer. */
 export function ReceiptModal({ receipt, onClose }: { receipt: Receipt; onClose: () => void }) {
@@ -11,7 +12,7 @@ export function ReceiptModal({ receipt, onClose }: { receipt: Receipt; onClose: 
   return (
     <Modal title="Official receipt" onClose={onClose}
       footer={<><button className="btn" onClick={onClose}>Close</button>
-        <button className="btn primary" onClick={() => window.print()}><Icon name="printer" />Print</button></>}>
+        <button className="btn primary" onClick={() => void printSlip(<OfficialReceiptSlip lib={lib} receipt={receipt} />)}><Icon name="printer" />Print</button></>}>
       <div className="print-receipt stack" style={{ gap: 6 }}>
         <div style={{ textAlign: 'center' }}>
           <Logo />

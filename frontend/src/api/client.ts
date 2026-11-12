@@ -67,6 +67,28 @@ export function setSession(slot: Slot, s: Session | null) {
   listeners.forEach((l) => l())
 }
 
+// ------------------------------------------------------------------ kiosk device key
+
+const DEVICE_KEY = 'smartlib.deviceKey'
+let deviceKey: string | null = (() => { try { return localStorage.getItem(DEVICE_KEY) } catch { return null } })()
+
+/**
+ * The kiosk's device key (issued under Users & devices). Kiosk requests send it as X-Device-Key
+ * instead of a signed-in session; it never expires until an administrator replaces or revokes it.
+ */
+export const getDeviceKey = () => deviceKey
+
+export function setDeviceKey(key: string | null) {
+  deviceKey = key?.trim() || null
+  try {
+    if (deviceKey) localStorage.setItem(DEVICE_KEY, deviceKey)
+    else localStorage.removeItem(DEVICE_KEY)
+  } catch {
+    /* storage unavailable: the kiosk will ask again after a reload */
+  }
+  listeners.forEach((l) => l())
+}
+
 export function subscribe(listener: () => void) {
   listeners.add(listener)
   return () => listeners.delete(listener)
@@ -129,8 +151,11 @@ async function send(path: string, opts: RequestOptions, retry: boolean): Promise
   const headers: Record<string, string> = {}
   const isForm = opts.body instanceof FormData
   if (opts.body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
-  const token = sessions[slot]?.accessToken
-  if (token && !opts.anonymous) headers['Authorization'] = `Bearer ${token}`
+  // A kiosk with a device key uses it instead of a session.
+  const useKey = slot === 'kiosk' && !!deviceKey && !opts.anonymous
+  const token = useKey ? undefined : sessions[slot]?.accessToken
+  if (useKey) headers['X-Device-Key'] = deviceKey!
+  else if (token && !opts.anonymous) headers['Authorization'] = `Bearer ${token}`
 
   const res = await fetch(`${BASE}${path}`, {
     method: opts.method ?? (opts.body !== undefined ? 'POST' : 'GET'),
@@ -141,6 +166,8 @@ async function send(path: string, opts: RequestOptions, retry: boolean): Promise
   if (res.status === 401 && retry && token && !opts.anonymous && (await refresh(slot))) {
     return send(path, opts, false)
   }
+  // A replaced or revoked key never starts working again: forget it so the kiosk shows its setup screen.
+  if (res.status === 401 && useKey) setDeviceKey(null)
   if (!res.ok) {
     let message = res.statusText || `Request failed (${res.status})`
     try {

@@ -95,4 +95,30 @@ class SecurityTest extends IntegrationTest {
             users.deleteById(id);
         }
     }
+
+    @Test
+    void kioskConnectsWithADeviceKeyUntilItIsRevoked() throws Exception {
+        String admin = login("admin", "Admin-Test-123");
+        String name = "kiosk-" + UUID.randomUUID().toString().substring(0, 8);
+        HttpResponse<String> created = call("POST", "/api/users", admin,
+                "{\"username\":\"" + name + "\",\"password\":\"Kiosk-Pass-123\",\"fullName\":\"Kiosk\",\"role\":\"KIOSK\"}");
+        long id = json.readTree(created.body()).get("id").asLong();
+        try {
+            HttpResponse<String> issued = call("POST", "/api/users/" + id + "/device-key", admin, null);
+            String key = json.readTree(issued.body()).get("deviceKey").asString();
+            assertEquals(200, withKey("/api/kiosk/config", key).statusCode());
+            assertEquals(403, withKey("/api/patrons", key).statusCode(), "a kiosk key must not reach staff data");
+            assertEquals(401, withKey("/api/kiosk/config", "kd_not-a-real-key").statusCode());
+
+            assertEquals(200, call("DELETE", "/api/users/" + id + "/device-key", admin, null).statusCode());
+            assertEquals(401, withKey("/api/kiosk/config", key).statusCode(), "a revoked key stops working");
+        } finally {
+            users.deleteById(id);
+        }
+    }
+
+    HttpResponse<String> withKey(String path, String key) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header("X-Device-Key", key).GET().build(), HttpResponse.BodyHandlers.ofString());
+    }
 }
