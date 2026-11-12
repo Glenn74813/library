@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { api, download, logout, qs } from '../../api/client'
+import { api, download, logout, openPdf, qs } from '../../api/client'
+import { useLibrary } from '../../api/library'
 import type { BibRecord, Ebook, Fine, Hold, OpacDetail, Page, Patron, PatronSummary, RenewalRequest } from '../../api/types'
 import { BookModal } from '../../components/BookModal'
 import { PatronPhotoModal } from '../../components/PatronPhotoModal'
@@ -98,7 +99,7 @@ export function PatronPortal() {
           <Tabs value={tab} onChange={setTab} tabs={[
             { id: 'loans', label: 'My loans' }, { id: 'holds', label: 'Reservations' }, { id: 'ebooks', label: 'E-books' },
             { id: 'fines', label: 'Fines' },
-            { id: 'search', label: 'Search & reserve' }, { id: 'account', label: 'Account' }]} />
+            { id: 'search', label: 'Search & reserve' }, { id: 'account', label: 'My library ID' }]} />
 
           {tab === 'loans' && <div className="stack">
             <div className="card">
@@ -235,19 +236,41 @@ function SearchTab({ onReserved, onBook }: { onReserved: () => void; onBook: (r:
   )
 }
 
-/** The patron's own photo for the printed library card: upload a file or take one with the phone/PC camera. */
-function CardPhoto({ patron, onChanged }: { patron: Patron; onChanged: () => void }) {
+/**
+ * The patron's own library ID: shown on screen, printable at home as a marked patron copy (the server only
+ * ever returns the signed-in patron's own ID), and the photo used on it.
+ */
+function MyLibraryId({ patron, onChanged }: { patron: Patron; onChanged: () => void }) {
   const toast = useToast()
+  const lib = useLibrary()
   const [open, setOpen] = useState(false)
+  const expired = !!patron.expiryDate && patron.expiryDate < new Date().toISOString().slice(0, 10)
   return (
     <div className="card stack" style={{ maxWidth: 420 }}>
-      <h2>Library ID photo</h2>
-      <div className="row" style={{ flexWrap: 'nowrap', alignItems: 'center' }}>
-        {patron.photoUrl ? <img src={patron.photoUrl} alt="Your ID photo" className="avatar" style={{ width: 72, height: 72, cursor: 'default' }} />
-          : <div className="avatar" style={{ width: 72, height: 72, display: 'grid', placeItems: 'center' }}><Icon name="user" size={32} /></div>}
-        <p className="muted small" style={{ margin: 0 }}>Used on your printed library ID. Face the camera, plain background, no sunglasses or hat.
-          A JPEG or PNG works best.</p>
+      <h2>My library ID</h2>
+      <div className="id-preview" aria-label="Your library ID">
+        <div className="id-head"><strong>{lib.name}</strong><span>LIBRARY ID</span></div>
+        <div className="id-body">
+          {patron.photoUrl ? <img src={patron.photoUrl} alt="Your ID photo" />
+            : <div className="id-photo-empty"><Icon name="user" size={32} /></div>}
+          <div className="stack" style={{ gap: 4, minWidth: 0 }}>
+            <strong className="id-name">{patron.lastName.toUpperCase()}, {patron.firstName}</strong>
+            <div><span className="muted small">ID NO.</span><div className="mono"><strong>{patron.cardNumber}</strong></div></div>
+            <div><span className="muted small">TYPE</span><div>{patron.categoryName}{patron.courseCode && ` · ${patron.courseCode}`}</div></div>
+            {patron.expiryDate && <div><span className="muted small">VALID UNTIL</span><div>{fmtDate(patron.expiryDate)}</div></div>}
+          </div>
+        </div>
       </div>
+      {(expired || patron.blocked) && <div className="alert warn small">
+        {expired ? 'Your library ID has expired. ' : ''}{patron.blocked ? 'Your account is on hold. ' : ''}Please see the circulation desk.</div>}
+      <button type="button" className="btn primary" onClick={() => openPdf('/api/me/library-id', 'patron')
+        .catch((e) => toast(errorText(e), 'error'))}><Icon name="printer" />View / print my library ID</button>
+      <p className="muted small" style={{ margin: 0 }}>The printout is marked <strong>patron copy</strong>. Your official library ID is issued
+        at the circulation desk. Keep your PIN to yourself: it, not the ID, protects your account.</p>
+      <hr style={{ width: '100%', border: 0, borderTop: '1px solid var(--border)' }} />
+      <h3 style={{ margin: 0 }}>Photo</h3>
+      <p className="muted small" style={{ margin: 0 }}>Used on your library ID. Face the camera, plain background, no sunglasses or hat.
+        A JPEG or PNG works best.</p>
       <button type="button" className="btn" onClick={() => setOpen(true)}><Icon name="camera" />{patron.photoUrl ? 'Change photo' : 'Add a photo'}</button>
       {open && <PatronPhotoModal patron={patron} endpoint="/api/me/photo" title="Your library ID photo"
         onClose={() => setOpen(false)} onSaved={() => { setOpen(false); toast('Photo saved for your library ID'); onChanged() }} />}
@@ -269,7 +292,7 @@ function AccountTab({ patron, onChanged }: { patron: Patron; onChanged: () => vo
   }
   return (
     <div className="grid cols-2" style={{ alignItems: 'start' }}>
-    <CardPhoto patron={patron} onChanged={onChanged} />
+    <MyLibraryId patron={patron} onChanged={onChanged} />
     <form className="card stack" style={{ maxWidth: 420 }} onSubmit={submit}>
       <h2>Change PIN</h2>
       <Field label="Current PIN"><PasswordInput inputMode="numeric" value={current} onChange={(e) => setCurrent(e.target.value)} required /></Field>

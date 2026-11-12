@@ -233,10 +233,10 @@ export async function download(path: string, fallbackName: string, slot: Slot = 
 }
 
 /** Opens a PDF (labels, cards) in a new tab for printing. The tab opens first so pop-up blockers allow it. */
-export async function openPdf(path: string) {
+export async function openPdf(path: string, slot: Slot = 'user') {
   const tab = window.open('', '_blank')
   try {
-    const res = await send(path, { slot: 'user' }, true)
+    const res = await send(path, { slot }, true)
     const url = URL.createObjectURL(await res.blob())
     if (tab) tab.location.href = url
     else window.location.href = url

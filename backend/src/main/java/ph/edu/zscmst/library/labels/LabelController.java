@@ -17,8 +17,11 @@ import java.util.stream.Collectors;
 
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -33,6 +36,7 @@ import org.openpdf.text.Rectangle;
 import org.openpdf.text.pdf.Barcode128;
 import org.openpdf.text.pdf.ColumnText;
 import org.openpdf.text.pdf.PdfContentByte;
+import org.openpdf.text.pdf.PdfGState;
 import org.openpdf.text.pdf.PdfWriter;
 
 import ph.edu.zscmst.library.catalog.Item;
@@ -169,11 +173,28 @@ public class LabelController {
         if (!unknown.isEmpty()) throw ApiException.badRequest("Unknown ID number(s): " + String.join(", ", unknown));
         if (list.isEmpty()) throw ApiException.badRequest("No patrons match; enter ID numbers or choose a filter");
         if (list.size() > MAX_LABELS) throw ApiException.badRequest("Too many IDs at once (max " + MAX_LABELS + ")");
-        byte[] pdf = sheet ? render(Sheet.CR80, list, skip, (cb, w, p, x, y) -> patronCard(cb, w, p, x, y, true))
-                : render(Sheet.CR80_CARD, list, 0, (cb, w, p, x, y) -> patronCard(cb, w, p, x, y, false));
+        byte[] pdf = sheet ? render(Sheet.CR80, list, skip, (cb, w, p, x, y) -> patronCard(cb, w, p, x, y, true, false))
+                : render(Sheet.CR80_CARD, list, 0, (cb, w, p, x, y) -> patronCard(cb, w, p, x, y, false, false));
         audit.record("ID_CARDS_PRINTED", list.size() + " library ID(s)");
         list.forEach(p -> printLog.record(Kind.ID_CARD, p.getId(), p.getCardNumber(), "PDF generated", false));
         return file(pdf, "library-ids.pdf");
+    }
+
+    /**
+     * The signed-in patron's own library ID, to view or print at home. Only ever their own (the patron comes
+     * from the sign-in token, not the request), on A4 with cut lines, and marked as a patron copy so it can't
+     * pass for an ID issued by the library. Each one is recorded in the patron's print history.
+     */
+    @GetMapping("/api/me/library-id")
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> myLibraryId(@AuthenticationPrincipal Jwt jwt) {
+        Number id = jwt.getClaim("patronId");
+        if (id == null) throw new ApiException(HttpStatus.FORBIDDEN, "Not a patron token");
+        Patron p = patrons.findById(id.longValue()).filter(x -> x.getAnonymizedAt() == null)
+                .orElseThrow(() -> ApiException.notFound("Patron"));
+        byte[] pdf = render(Sheet.CR80, List.of(p), 0, (cb, w, pt, x, y) -> patronCard(cb, w, pt, x, y, true, true));
+        printLog.record(Kind.ID_CARD, p.getId(), p.getCardNumber() + " (patron copy)", "Printed by the patron from My Library", false);
+        return file(pdf, "my-library-id.pdf");
     }
 
     private <T> byte[] render(Sheet sheet, List<T> values, int skip, Painter<T> painter) {
@@ -271,8 +292,12 @@ public class LabelController {
         }
     }
 
-    /** {@code cutLine}: outline the card for cutting (sheets); a card printer prints edge to edge instead. */
-    private void patronCard(PdfContentByte cb, PdfWriter w, Patron p, float x, float y, boolean cutLine) throws IOException {
+    /**
+     * {@code cutLine}: outline the card for cutting (sheets); a card printer prints edge to edge instead.
+     * {@code patronCopy}: printed by the patron at home, so it is marked as a copy and not an official ID.
+     */
+    private void patronCard(PdfContentByte cb, PdfWriter w, Patron p, float x, float y, boolean cutLine,
+                            boolean patronCopy) throws IOException {
         float cw = Sheet.CR80.w() * MM;
         float ch = Sheet.CR80.h() * MM;
         SystemSettings.LibraryProfile lib = system.profile();
@@ -360,7 +385,21 @@ public class LabelController {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
-        text(cb, lib.address(), font(FontFactory.HELVETICA, 5, Color.GRAY), x + cw / 2, y + 1.5f * MM, Element.ALIGN_CENTER);
+        if (!patronCopy) {
+            text(cb, lib.address(), font(FontFactory.HELVETICA, 5, Color.GRAY), x + cw / 2, y + 1.5f * MM, Element.ALIGN_CENTER);
+            return;
+        }
+        // A faint diagonal mark across the card and a red line at the bottom.
+        cb.saveState();
+        PdfGState faint = new PdfGState();
+        faint.setFillOpacity(0.18f);
+        cb.setGState(faint);
+        ColumnText.showTextAligned(cb, Element.ALIGN_CENTER,
+                PdfFonts.phrase("PATRON COPY", font(FontFactory.HELVETICA_BOLD, 22, NAVY)), x + cw / 2, y + ch / 2 - 10, 20);
+        cb.restoreState();
+        text(cb, "Patron copy printed " + clock.today().format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
+                + " · not an official library ID", font(FontFactory.HELVETICA_BOLD, 5, new Color(180, 30, 30)),
+                x + cw / 2, y + 1.5f * MM, Element.ALIGN_CENTER);
     }
 
     private static ResponseEntity<byte[]> file(byte[] pdf, String name) {

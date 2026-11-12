@@ -858,3 +858,11 @@ button.card.choice.selected { border-color: var(--primary); box-shadow: 0 0 0 2p
 
 /* Invisible top-left hotspot on kiosks: hold 5 s to disconnect the kiosk (staff only). */
 .kiosk-reset-zone { position: fixed; top: 0; left: 0; width: 56px; height: 56px; z-index: 300; }
+
+/* The patron's library ID as shown in My Library (the printed one is a PDF). */
+.id-preview { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); aspect-ratio: 85.6 / 54; display: flex; flex-direction: column; max-width: 380px; }
+.id-preview .id-head { background: #0e0e78; color: #fff; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; border-bottom: 3px solid #e8b620; font-size: 0.85rem; }
+.id-preview .id-head span { color: #e8b620; font-weight: 700; font-size: 0.7rem; letter-spacing: 0.05em; }
+.id-preview .id-body { display: flex; gap: 12px; padding: 10px 12px; flex: 1; align-items: flex-start; font-size: 0.85rem; }
+.id-preview .id-body img, .id-preview .id-photo-empty { width: 30%; aspect-ratio: 5 / 6; object-fit: cover; border-radius: 6px; flex: none; background: var(--surface-2); display: grid; place-items: center; color: var(--muted); }
+.id-preview .id-name { font-size: 1rem; overflow-wrap: anywhere; }
