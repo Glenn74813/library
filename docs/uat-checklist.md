@@ -151,7 +151,7 @@ Tester(s): ______________________  Date: ____________  Version / build: ________
 | M15 | Self-checkout: item refused (limit, hold for someone else, room use) | Clear message to go to the desk | | |
 | M16 | Patron "Forgot PIN" with e-mail on record | Code e-mailed; new PIN works; code can't be reused | | |
 | M17 | Admin resets a staff password | Staff must choose a new password before anything else | | |
-| M18 | Print barcode labels, spine labels and 10 ID cards on real sheets | Print lines up with the labels / card stock | | |
+| M18 | Print barcode labels and spine labels on real sheets; print ID cards on the card printer (CR80) and on an A4 sheet | Print lines up with the labels; cards print edge to edge at 85.6 × 54 mm | | |
 | M19 | Reports → E-book usage after patrons open e-books | Openings, readers and titles match | | |
 | M20 | Patron asks to renew in My Library | Shows "Renewal requested"; appears under Renewal requests and in the bell | | |
 | M21 | Staff reject a renewal without a reason, then with one | Refused without; patron gets the reason and keeps the due date | | |

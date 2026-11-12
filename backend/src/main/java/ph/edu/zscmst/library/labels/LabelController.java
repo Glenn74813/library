@@ -29,7 +29,7 @@ import org.openpdf.text.Element;
 import org.openpdf.text.Font;
 import org.openpdf.text.FontFactory;
 import org.openpdf.text.Image;
-import org.openpdf.text.PageSize;
+import org.openpdf.text.Rectangle;
 import org.openpdf.text.pdf.Barcode128;
 import org.openpdf.text.pdf.ColumnText;
 import org.openpdf.text.pdf.PdfContentByte;
@@ -49,8 +49,9 @@ import ph.edu.zscmst.library.printlog.PrintLogService;
 import ph.edu.zscmst.library.printlog.PrintLogService.Kind;
 
 /**
- * Printable PDFs on A4 label sheets: item barcode labels (Avery L7160, 21 per sheet), spine
- * labels (Avery L7651, 65 per sheet) and patron ID cards (CR80 bank-card size, 10 per sheet).
+ * Printable PDFs: item barcode labels (Avery L7160, 21 per A4 sheet), spine labels (Avery L7651, 65 per
+ * A4 sheet) and patron ID cards in the standard CR80 size (85.6 x 54 mm), either one card per page for a
+ * PVC ID card printer or 10 per A4 sheet to cut out.
  */
 @RestController
 public class LabelController {
@@ -60,11 +61,18 @@ public class LabelController {
     private static final Color GOLD = new Color(232, 182, 32);
     private static final int MAX_LABELS = 2000;
 
-    /** A label sheet: columns x rows of w x h mm, first label at (left, top) mm, then every pitch mm. */
-    record Sheet(int cols, int rows, float w, float h, float left, float top, float pitchX, float pitchY) {
-        static final Sheet L7160 = new Sheet(3, 7, 63.5f, 38.1f, 7.2f, 15.1f, 66.0f, 38.1f);
-        static final Sheet L7651 = new Sheet(5, 13, 38.1f, 21.2f, 4.7f, 10.7f, 40.6f, 21.2f);
-        static final Sheet CR80 = new Sheet(2, 5, 85.6f, 54f, 15f, 10f, 92f, 57f);
+    /**
+     * A page of labels: columns x rows of w x h mm, first label at (left, top) mm, then every pitch mm,
+     * on a page of pageW x pageH mm.
+     */
+    record Sheet(int cols, int rows, float w, float h, float left, float top, float pitchX, float pitchY,
+                 float pageW, float pageH) {
+        static final Sheet L7160 = new Sheet(3, 7, 63.5f, 38.1f, 7.2f, 15.1f, 66.0f, 38.1f, 210, 297);
+        static final Sheet L7651 = new Sheet(5, 13, 38.1f, 21.2f, 4.7f, 10.7f, 40.6f, 21.2f, 210, 297);
+        /** ID cards to cut out of A4 paper or card stock, 10 per page. */
+        static final Sheet CR80 = new Sheet(2, 5, 85.6f, 54f, 15f, 10f, 92f, 57f, 210, 297);
+        /** ID cards for a PVC card printer: each page is exactly one CR80 card (85.6 x 54 mm, ISO/IEC 7810 ID-1). */
+        static final Sheet CR80_CARD = new Sheet(1, 1, 85.6f, 54f, 0, 0, 0, 0, 85.6f, 54f);
 
         int perPage() {
             return cols * rows;
@@ -74,7 +82,7 @@ public class LabelController {
         float[] origin(int i) {
             int n = i % perPage();
             float x = (left + (n % cols) * pitchX) * MM;
-            float yTop = PageSize.A4.getHeight() - (top + (n / cols) * pitchY) * MM;
+            float yTop = pageH * MM - (top + (n / cols) * pitchY) * MM;
             return new float[] {x, yTop - h * MM};
         }
     }
@@ -142,7 +150,10 @@ public class LabelController {
                                               @RequestParam(required = false) Long categoryId,
                                               @RequestParam(required = false) Long courseId,
                                               @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate registeredSince,
-                                              @RequestParam(defaultValue = "0") int skip) {
+                                              @RequestParam(defaultValue = "0") int skip,
+                                              @RequestParam(defaultValue = "card") String layout) {
+        // "card": one CR80 card per page for an ID card printer; "sheet": 10 per A4 page with cut lines.
+        boolean sheet = "sheet".equalsIgnoreCase(layout);
         List<Patron> list = new ArrayList<>();
         List<String> unknown = new ArrayList<>();
         List<String> codes = Arrays.stream(cards.split("[,\\s]+")).map(String::trim).filter(s -> !s.isEmpty()).distinct().toList();
@@ -158,7 +169,8 @@ public class LabelController {
         if (!unknown.isEmpty()) throw ApiException.badRequest("Unknown card number(s): " + String.join(", ", unknown));
         if (list.isEmpty()) throw ApiException.badRequest("No patrons match; enter card numbers or choose a filter");
         if (list.size() > MAX_LABELS) throw ApiException.badRequest("Too many cards at once (max " + MAX_LABELS + ")");
-        byte[] pdf = render(Sheet.CR80, list, skip, this::patronCard);
+        byte[] pdf = sheet ? render(Sheet.CR80, list, skip, (cb, w, p, x, y) -> patronCard(cb, w, p, x, y, true))
+                : render(Sheet.CR80_CARD, list, 0, (cb, w, p, x, y) -> patronCard(cb, w, p, x, y, false));
         audit.record("ID_CARDS_PRINTED", list.size() + " patron card(s)");
         list.forEach(p -> printLog.record(Kind.ID_CARD, p.getId(), p.getCardNumber(), "PDF generated", false));
         return file(pdf, "patron-id-cards.pdf");
@@ -166,7 +178,7 @@ public class LabelController {
 
     private <T> byte[] render(Sheet sheet, List<T> values, int skip, Painter<T> painter) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        Document doc = new Document(PageSize.A4, 0, 0, 0, 0);
+        Document doc = new Document(new Rectangle(sheet.pageW() * MM, sheet.pageH() * MM), 0, 0, 0, 0);
         PdfWriter writer = PdfWriter.getInstance(doc, out);
         doc.open();
         PdfContentByte cb = writer.getDirectContent();
@@ -259,16 +271,19 @@ public class LabelController {
         }
     }
 
-    private void patronCard(PdfContentByte cb, PdfWriter w, Patron p, float x, float y) throws IOException {
+    /** {@code cutLine}: outline the card for cutting (sheets); a card printer prints edge to edge instead. */
+    private void patronCard(PdfContentByte cb, PdfWriter w, Patron p, float x, float y, boolean cutLine) throws IOException {
         float cw = Sheet.CR80.w() * MM;
         float ch = Sheet.CR80.h() * MM;
         SystemSettings.LibraryProfile lib = system.profile();
         // Card outline (cut line) and navy header with a gold rule.
         cb.saveState();
-        cb.setColorStroke(new Color(180, 180, 190));
-        cb.setLineWidth(0.4f);
-        cb.roundRectangle(x, y, cw, ch, 3 * MM);
-        cb.stroke();
+        if (cutLine) {
+            cb.setColorStroke(new Color(180, 180, 190));
+            cb.setLineWidth(0.4f);
+            cb.roundRectangle(x, y, cw, ch, 3 * MM);
+            cb.stroke();
+        }
         cb.setColorFill(NAVY);
         cb.rectangle(x + 0.3f, y + ch - 13 * MM, cw - 0.6f, 13 * MM - 0.3f);
         cb.fill();

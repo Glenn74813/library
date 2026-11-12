@@ -60,17 +60,18 @@ function PatronCards() {
   const [courseId, setCourseId] = useState('')
   const [since, setSince] = useState('')
   const [skip, setSkip] = useState(0)
+  const [layout, setLayout] = useState<'card' | 'sheet'>('card')
   async function print() {
     try {
       await openPdf(`/api/labels/patron-cards${qs({ cards: cards.trim() || undefined, categoryId: categoryId || undefined,
-        courseId: courseId || undefined, registeredSince: since || undefined, skip })}`)
+        courseId: courseId || undefined, registeredSince: since || undefined, layout, skip: layout === 'sheet' ? skip : undefined })}`)
     } catch (e) { toast(errorText(e), 'error') }
   }
   return (
     <div className="card stack">
       <h2 style={{ margin: 0 }}><Icon name="credit-card" /> Patron ID cards</h2>
-      <p className="muted small" style={{ margin: 0 }}>Bank-card size (85.6 × 54 mm), 10 per A4 sheet, with photo, card number and barcode.
-        Print on card stock or sticker paper and laminate. Patrons without a photo get an empty frame.</p>
+      <p className="muted small" style={{ margin: 0 }}>Standard CR80 ID card size (85.6 × 54 mm, like a bank card), with photo,
+        card number and barcode. Patrons without a photo get an empty frame.</p>
       <div className="form-grid">
         <Field label="Card numbers" className="span-all" hint="One per line or separated by commas; leave empty to use the filters">
           <textarea rows={4} value={cards} onChange={(e) => setCards(e.target.value)} className="mono" /></Field>
@@ -83,7 +84,14 @@ function PatronCards() {
             <option value="">All</option>{courses?.map((c) => <option key={c.id} value={c.id}>{c.code}</option>)}
           </select></Field>
         <Field label="Registered since"><input type="date" value={since} onChange={(e) => setSince(e.target.value)} /></Field>
-        <Field label="Skip cards" hint="Already used spots on the sheet"><input type="number" min={0} max={9} value={skip} onChange={(e) => setSkip(Number(e.target.value))} /></Field>
+        <Field label="Print on" className="span-all" hint={layout === 'card'
+          ? 'Each page is one card, for a PVC ID card printer. Choose the CR80 card size in the printer dialog.'
+          : 'For card stock or sticker paper: cut along the outlines, then laminate.'}>
+          <select value={layout} onChange={(e) => setLayout(e.target.value as 'card' | 'sheet')}>
+            <option value="card">ID card printer: one CR80 card per page</option>
+            <option value="sheet">A4 paper: 10 cards per sheet to cut out</option>
+          </select></Field>
+        {layout === 'sheet' && <Field label="Skip cards" hint="Already used spots on the sheet"><input type="number" min={0} max={9} value={skip} onChange={(e) => setSkip(Number(e.target.value))} /></Field>}
       </div>
       <div className="row end"><button className="btn primary" onClick={print}><Icon name="printer" />Print ID cards</button></div>
     </div>
