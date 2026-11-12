@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -175,7 +176,7 @@ public class CatalogService {
         r.setMaterialType(req.materialType());
         r.setLanguage(trim(req.language()));
         r.setSummary(trim(req.summary()));
-        r.setCustomFields(CatalogDtos.customJson(validCustomValues(req.customFields())));
+        r.setCustomFields(CatalogDtos.customJson(validCustomValues(req.customFields(), r.getCustomFields())));
     }
 
     @Transactional(readOnly = true)
@@ -249,11 +250,18 @@ public class CatalogService {
         }
     }
 
-    /** Keeps only defined fields and checks each value against its type. */
-    private Map<String, String> validCustomValues(Map<String, String> values) {
-        if (values == null || values.isEmpty()) return Map.of();
+    /**
+     * Keeps only defined fields and checks each value against its type. Values of fields that were removed
+     * are carried over from {@code storedJson} untouched: the form can't show them, but they reappear if the
+     * field is re-created.
+     */
+    private Map<String, String> validCustomValues(Map<String, String> values, String storedJson) {
+        List<CustomField> defined = customFields.findAll();
+        Set<String> definedKeys = defined.stream().map(CustomField::getKey).collect(Collectors.toSet());
         Map<String, String> out = new LinkedHashMap<>();
-        for (CustomField f : customFields.findAll()) {
+        CatalogDtos.customValues(storedJson).forEach((k, v) -> { if (!definedKeys.contains(k)) out.put(k, v); });
+        if (values == null || values.isEmpty()) return out;
+        for (CustomField f : defined) {
             String v = trim(values.get(f.getKey()));
             if (v == null) continue;
             switch (f.getType()) {

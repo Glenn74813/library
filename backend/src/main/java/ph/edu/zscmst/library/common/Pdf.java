@@ -10,10 +10,8 @@ import java.util.List;
 import org.openpdf.text.Document;
 import org.openpdf.text.Element;
 import org.openpdf.text.Font;
-import org.openpdf.text.FontFactory;
 import org.openpdf.text.PageSize;
 import org.openpdf.text.Paragraph;
-import org.openpdf.text.Phrase;
 import org.openpdf.text.pdf.PdfPCell;
 import org.openpdf.text.pdf.PdfPTable;
 import org.openpdf.text.pdf.PdfWriter;
@@ -81,27 +79,27 @@ public final class Pdf {
         Document doc = new Document(PageSize.A4.rotate(), 28, 28, 28, 28);
         PdfWriter.getInstance(doc, out);
         doc.open();
-        Font h1 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, Font.NORMAL, NAVY);
-        Font small = FontFactory.getFont(FontFactory.HELVETICA, 8, Font.NORMAL, Color.DARK_GRAY);
-        Font th = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 8, Font.NORMAL, Color.WHITE);
-        Font td = FontFactory.getFont(FontFactory.HELVETICA, 8, Font.NORMAL, Color.BLACK);
-        doc.add(new Paragraph(libraryName.get(), small));
-        doc.add(new Paragraph(title, h1));
-        doc.add(new Paragraph((subtitle == null ? "" : subtitle + "  ·  ") + "Generated "
-                + LocalDateTime.now(zone).format(DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a")) + "  ·  " + rows.size() + " row(s)", small));
+        Font h1 = PdfFonts.sans(true, 14, NAVY);
+        Font small = PdfFonts.sans(false, 8, Color.DARK_GRAY);
+        Font th = PdfFonts.sans(true, 8, Color.WHITE);
+        Font td = PdfFonts.sans(false, 8, Color.BLACK);
+        doc.add(new Paragraph(PdfFonts.phrase(libraryName.get(), small)));
+        doc.add(new Paragraph(PdfFonts.phrase(title, h1)));
+        doc.add(new Paragraph(PdfFonts.phrase((subtitle == null ? "" : subtitle + "  ·  ") + "Generated "
+                + LocalDateTime.now(zone).format(DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a")) + "  ·  " + rows.size() + " row(s)", small)));
         doc.add(new Paragraph(" ", small));
         PdfPTable table = new PdfPTable(widths(th, td, header, rows, doc.getPageSize().getWidth() - 56));
         table.setWidthPercentage(100);
         table.setHeaderRows(1);
         for (String h : header) {
-            PdfPCell c = new PdfPCell(new Phrase(h, th));
+            PdfPCell c = cell(h, th);
             c.setBackgroundColor(NAVY);
             c.setPadding(4);
             table.addCell(c);
         }
         for (int i = 0; i < rows.size(); i++) {
             for (Object v : rows.get(i)) {
-                PdfPCell c = new PdfPCell(new Phrase(v == null ? "" : v.toString(), td));
+                PdfPCell c = cell(v == null ? "" : v.toString(), td);
                 c.setPadding(3);
                 if (i % 2 == 1) c.setBackgroundColor(STRIPE);
                 if (v instanceof Number) c.setHorizontalAlignment(Element.ALIGN_RIGHT);
@@ -109,7 +107,7 @@ public final class Pdf {
             }
         }
         if (rows.isEmpty()) {
-            PdfPCell c = new PdfPCell(new Phrase("No data", td));
+            PdfPCell c = cell("No data", td);
             c.setColspan(header.size());
             table.addCell(c);
         }
@@ -119,6 +117,13 @@ public final class Pdf {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(MediaType.APPLICATION_PDF)
                 .body(out.toByteArray());
+    }
+
+    /** A table cell; left-to-right with bidi on, so Arabic or Hebrew text is joined and ordered correctly. */
+    private static PdfPCell cell(String text, Font font) {
+        PdfPCell c = new PdfPCell(PdfFonts.phrase(text, font));
+        c.setRunDirection(PdfWriter.RUN_DIRECTION_LTR);
+        return c;
     }
 
     /** CSV (Excel) or PDF of the same table, chosen by {@code format}. */

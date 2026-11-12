@@ -30,7 +30,6 @@ import org.openpdf.text.Font;
 import org.openpdf.text.FontFactory;
 import org.openpdf.text.Image;
 import org.openpdf.text.PageSize;
-import org.openpdf.text.Phrase;
 import org.openpdf.text.pdf.Barcode128;
 import org.openpdf.text.pdf.ColumnText;
 import org.openpdf.text.pdf.PdfContentByte;
@@ -40,6 +39,7 @@ import ph.edu.zscmst.library.catalog.Item;
 import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
+import ph.edu.zscmst.library.common.PdfFonts;
 import ph.edu.zscmst.library.common.LibraryClock;
 import ph.edu.zscmst.library.common.SystemSettings;
 import ph.edu.zscmst.library.digital.FileStorage;
@@ -187,18 +187,23 @@ public class LabelController {
 
     // ------------------------------------------------------------------ painters
 
+    /** Helvetica names map to the Unicode sans font, so names and titles in any script print. */
     private static Font font(String name, float size, Color color) {
+        if (FontFactory.HELVETICA.equals(name)) return PdfFonts.sans(false, size, color);
+        if (FontFactory.HELVETICA_BOLD.equals(name)) return PdfFonts.sans(true, size, color);
         return FontFactory.getFont(name, size, Font.NORMAL, color);
     }
 
     private static void text(PdfContentByte cb, String s, Font f, float x, float y, int align) {
-        ColumnText.showTextAligned(cb, align, new Phrase(s == null ? "" : s, f), x, y, 0);
+        // Left-to-right with bidi on, so Arabic or Hebrew is joined and ordered correctly.
+        ColumnText.showTextAligned(cb, align, PdfFonts.phrase(s, f), x, y, 0, PdfWriter.RUN_DIRECTION_LTR, 0);
     }
 
     /** Wrapped text inside a box (top-left x, top y). */
     private static void box(PdfContentByte cb, String s, Font f, float x, float yTop, float w, float h, int align) {
         ColumnText ct = new ColumnText(cb);
-        ct.setSimpleColumn(new Phrase(s == null ? "" : s, f), x, yTop - h, x + w, yTop, f.getSize() * 1.15f, align);
+        ct.setRunDirection(PdfWriter.RUN_DIRECTION_LTR);
+        ct.setSimpleColumn(PdfFonts.phrase(s, f), x, yTop - h, x + w, yTop, f.getSize() * 1.15f, align);
         ct.go();
     }
 
