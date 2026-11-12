@@ -14,7 +14,7 @@ import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
 import { useLibrary } from '../../api/library'
-import { ClearanceSlip, confirmReprint, PatronSlip, printRecorded, type PrintEntry } from '../../print/slips'
+import { ClearanceSlip, confirmReprint, PatronSlip, printRecorded, printReleaseSlip, type PrintEntry } from '../../print/slips'
 
 type Tab = 'loans' | 'history' | 'holds' | 'fines' | 'attendance' | 'printed'
 
@@ -75,6 +75,7 @@ export function PatronDetailPage() {
       const r = await releaseHold(h)
       toast(`Released "${h.title}" to ${h.patronName} — due ${fmtDate(r.loan.dueAt)}${r.notice ? ` (${r.notice})` : ''}`)
       refreshAll()
+      printReleaseSlip(lib, r.loan).catch((e) => toast(`Released, but the slip did not print: ${errorText(e)}`, 'warn'))
       setTab('loans')
     } catch (e) {
       toast(errorText(e), 'error')

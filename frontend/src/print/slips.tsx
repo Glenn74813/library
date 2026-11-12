@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import qrcode from 'qrcode-generator'
 import { api, qs } from '../api/client'
 import type { LibraryProfile } from '../api/library'
-import type { Receipt } from '../api/types'
+import type { Loan, PatronSummary, Receipt } from '../api/types'
 import { fmtDate, fmtDateTime, fmtMoney } from '../format'
 
 /*
@@ -117,7 +117,7 @@ export interface PrintPrefs {
 }
 
 const PREFS_KEY = 'smartlib.print'
-const DEFAULT_PREFS: PrintPrefs = { checkoutOnFinish: false, returnEach: false, holdSlip: true }
+const DEFAULT_PREFS: PrintPrefs = { checkoutOnFinish: false, returnEach: true, holdSlip: true }
 
 export function getPrintPrefs(): PrintPrefs {
   try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') } } catch { return DEFAULT_PREFS }
@@ -202,6 +202,13 @@ export function CheckoutSlip({ lib, patron, borrowed, otherLoans }: {
       <div className="c small" style={{ marginTop: 6 }}>Please return items on or before the due date.</div>
     </Slip>
   )
+}
+
+/** Borrowing slip for a copy released from the hold shelf, listing the patron's other loans too. */
+export async function printReleaseSlip(lib: LibraryProfile, loan: Loan) {
+  const s = await api<PatronSummary>(`/api/circulation/patrons/${loan.patronId}/summary`)
+  return printRecorded({ kind: 'CHECKOUT_SLIP', patronId: loan.patronId, details: `Hold released: ${loan.barcode}` },
+    <CheckoutSlip lib={lib} patron={s.patron} borrowed={[loan]} otherLoans={s.loans.filter((l) => l.id !== loan.id)} />)
 }
 
 export interface ReturnedItem { title: string; barcode: string; patronName?: string; cardNumber?: string; returnedAt: string; fine: number }

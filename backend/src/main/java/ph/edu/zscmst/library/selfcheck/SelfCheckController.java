@@ -61,7 +61,7 @@ public class SelfCheckController {
     public record Renewed(boolean pending, String message, PatronView patron) {
     }
 
-    public record Returned(String title, Instant dueAt, BigDecimal fine, String message) {
+    public record Returned(String title, String barcode, Instant dueAt, Instant returnedAt, BigDecimal fine, String message) {
     }
 
     private final CirculationService circulation;
@@ -119,8 +119,9 @@ public class SelfCheckController {
         CheckinResult r = circulation.checkin(req.item());
         // Patrons put the item on the return cart; staff route it to the hold shelf or the shelves.
         String message = r.loan() == null ? r.message() : "Thank you! Please place the item on the return cart.";
-        return new Returned(r.loan() == null ? null : r.loan().title(), r.loan() == null ? null : r.loan().dueAt(),
-                r.fineAmount(), message);
+        LoanDto l = r.loan();
+        return new Returned(l == null ? null : l.title(), l == null ? null : l.barcode(), l == null ? null : l.dueAt(),
+                l == null ? null : l.returnedAt(), r.fineAmount(), message);
     }
 
     private PatronView view(Patron p) {

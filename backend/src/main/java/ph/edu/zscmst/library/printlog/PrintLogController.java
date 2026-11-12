@@ -51,10 +51,12 @@ public class PrintLogController {
         return log.record(req.kind(), patronId(req), req.reference(), req.details());
     }
 
-    /** Self-checkout kiosks may only log the borrowing slips they print. */
+    /** Self-checkout kiosks may only log the borrowing and return slips they print. */
     @PostMapping("/api/kiosk/print-log")
     public Entry recordFromKiosk(@Valid @RequestBody PrintRequest req) {
-        if (req.kind() != Kind.CHECKOUT_SLIP) throw ApiException.badRequest("Kiosks only print borrowing slips");
+        if (req.kind() != Kind.CHECKOUT_SLIP && req.kind() != Kind.RETURN_SLIP) {
+            throw ApiException.badRequest("Kiosks only print borrowing and return slips");
+        }
         return log.record(req.kind(), patronId(req), req.reference(), req.details());
     }
 

@@ -10,12 +10,12 @@ import { errorText } from '../../components/Toast'
 import { fmtDate, fmtMoney } from '../../format'
 import { useInactivity } from '../../hooks/useInactivity'
 import { KioskResetZone, KioskSetup } from '../../components/KioskSetup'
-import { CheckoutSlip, printRecorded, type SlipLoan } from '../../print/slips'
+import { CheckoutSlip, printRecorded, ReturnSlip, type ReturnedItem, type SlipLoan } from '../../print/slips'
 
 interface Config { requirePin: boolean; allowReturns: boolean; idleSeconds: number }
 interface PatronView { firstName: string; fullName: string; cardNumber: string; loans: Loan[]; maxLoans: number; unpaidTotal: number; blocks: string[] }
 interface Checkout { title: string; barcode: string; dueAt: string; notice: string | null; patron: PatronView }
-interface Returned { title: string | null; dueAt: string | null; fine: number; message: string }
+interface Returned { title: string | null; barcode: string | null; dueAt: string | null; returnedAt: string | null; fine: number; message: string }
 interface Line { id: number; ok: boolean; title: string; detail: string }
 /** An item scan, with the patron session it was made in. */
 interface ScanJob { code: string; step: Step; card: string; pin: string; session: number }
@@ -43,6 +43,8 @@ function SelfCheckScreen() {
   const [patron, setPatron] = useState<PatronView | null>(null)
   const [lines, setLines] = useState<Line[]>([])
   const [slipLoans, setSlipLoans] = useState<SlipLoan[]>([])
+  /** Items returned this session, for the return receipt (no patron details: anyone can return a book). */
+  const [slipReturns, setSlipReturns] = useState<ReturnedItem[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
@@ -59,7 +61,7 @@ function SelfCheckScreen() {
 
   const reset = useCallback(() => {
     session.current++; pending.current = []; savedPin.current = ''
-    setStep('card'); setCard(''); setPin(''); setPatron(null); setLines([]); setSlipLoans([]); setError(null); setScan('')
+    setStep('card'); setCard(''); setPin(''); setPatron(null); setLines([]); setSlipLoans([]); setSlipReturns([]); setError(null); setScan('')
   }, [])
   useInactivity((step === 'done' ? 20 : config.idleSeconds) * 1000, reset)
 
@@ -129,6 +131,10 @@ function SelfCheckScreen() {
       } else {
         const r = await api<Returned>('/api/kiosk/selfcheck/return', { ...opts, body: { item: job.code } })
         if (job.session !== session.current) return
+        if (r.title && r.barcode) {
+          const back: ReturnedItem = { title: r.title, barcode: r.barcode, returnedAt: r.returnedAt ?? new Date().toISOString(), fine: r.fine }
+          setSlipReturns((s) => [...s, back])
+        }
         add(true, r.title ?? job.code, r.message + (r.fine > 0 ? ` Overdue fine ${fmtMoney(r.fine)}; please pay at the desk.` : ''))
       }
     } catch (err) {
@@ -251,6 +257,10 @@ function SelfCheckScreen() {
                 <CheckoutSlip lib={lib} patron={patron} borrowed={slipLoans}
                   otherLoans={patron.loans.filter((l) => !slipLoans.some((s) => s.barcode === l.barcode))} />, true)}>
                 <Icon name="printer" />Print slip</button>}
+              {slipReturns.length > 0 && <button className="btn big" onClick={() => void printRecorded(
+                { kind: 'RETURN_SLIP', details: `Self-return: ${slipReturns.map((i) => i.barcode).join(', ')}` },
+                <ReturnSlip lib={lib} items={slipReturns} />, true)}>
+                <Icon name="printer" />Print return receipt</button>}
               <button className="btn primary big" onClick={reset}>Done</button>
             </div>
           </div>
