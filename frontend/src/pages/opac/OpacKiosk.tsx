@@ -11,19 +11,19 @@ import { useInactivity } from '../../hooks/useInactivity'
 import { Icon } from '../../components/Icon'
 import { Logo } from '../../components/Logo'
 import { useLibraryConfig } from '../../api/library'
-import { usePatronSession } from '../../auth/AuthContext'
+import { KioskReserveModal } from './KioskReserveModal'
 
 /**
  * Online Public Access Catalog. Live link to the LMS catalog with real-time availability.
  * /opac is the touch-kiosk view: large controls, on-screen keyboard, auto-reset after inactivity.
- * Students get the ordinary web view (with Privacy and My account): when signed in to My Library, or
- * through the catalog links on the My Library pages (?view=student). ?kiosk=1 always forces the kiosk view.
+ * Students get the ordinary web view (with Privacy and My account) through the catalog links on the My Library
+ * pages (?view=student). Being signed in doesn't change it, so a student who forgets to sign out on a library
+ * PC can't turn that kiosk into the web view. ?kiosk=1 always forces the kiosk view.
  */
 export function OpacKiosk() {
   const config = useLibraryConfig()
   const [params] = useSearchParams()
-  const patron = usePatronSession()
-  const student = params.get('kiosk') !== '1' && (params.get('view') === 'student' || !!patron)
+  const student = params.get('kiosk') !== '1' && params.get('view') === 'student'
   const kiosk = !student
   const [input, setInput] = useState('')
   const [query, setQuery] = useState({ q: '', field: 'any', type: '' })
@@ -108,7 +108,12 @@ export function OpacKiosk() {
 
 function OpacDetailModal({ id, kiosk, onClose }: { id: number; kiosk: boolean; onClose: () => void }) {
   const { data } = useAsync(() => api<OpacDetail>(`/api/opac/records/${id}`, { anonymous: true }), [id])
+  const [reserving, setReserving] = useState(false)
   const r = data?.record
+  const lendable = data?.items.filter((i) => !i.roomUseOnly && ['AVAILABLE', 'ON_LOAN', 'ON_HOLD'].includes(i.status)) ?? []
+  if (reserving && r) {
+    return <KioskReserveModal recordId={r.id} title={r.title} available={lendable.some((i) => i.status === 'AVAILABLE')} onClose={onClose} />
+  }
   return (
     <Modal title={r?.title ?? 'Loading…'} onClose={onClose}
       footer={<>
@@ -116,7 +121,9 @@ function OpacDetailModal({ id, kiosk, onClose }: { id: number; kiosk: boolean; o
         {!kiosk && r?.ebook?.kind === 'COMMERCIAL' && <a className="btn" href={r.ebook.externalUrl!} target="_blank" rel="noopener noreferrer">
           <Icon name="external-link" />Open on {r.ebook.provider ?? 'provider'}</a>}
 
-        <button className="btn" onClick={onClose}>Close</button></>}>
+        <button className="btn" onClick={onClose}>Close</button>
+        {kiosk && lendable.length > 0 && <button className="btn primary" onClick={() => setReserving(true)}>
+          <Icon name="bookmark" />{lendable.some((i) => i.status === 'AVAILABLE') ? 'Borrow or reserve' : 'Reserve or book'}</button>}</>}>
       {r && (
         <div className="stack">
           {r.subtitle && <p className="muted" style={{ margin: 0 }}>{r.subtitle}</p>}
@@ -145,7 +152,9 @@ function OpacDetailModal({ id, kiosk, onClose }: { id: number; kiosk: boolean; o
               </div>
             ) },
           ]} />
-          {kiosk && <p className="muted small">To reserve{r.ebook ? ' or read this e-book' : ''}, sign in to My Library on your phone or ask at the circulation desk.</p>}
+          {kiosk && lendable.length > 0 && <p className="muted small">To borrow or reserve, tap <strong>{lendable.some((i) => i.status === 'AVAILABLE')
+            ? 'Borrow or reserve' : 'Reserve or book'}</strong> and scan your library card.{r.ebook ? ' To read the e-book, sign in to My Library on your phone.' : ''}</p>}
+          {kiosk && lendable.length === 0 && r.ebook && <p className="muted small">To read this e-book, sign in to My Library on your phone.</p>}
           {!kiosk && r.ebook?.kind === 'SCHOOL_OWNED' && <p className="muted small" style={{ margin: 0 }}>School-owned e-book: free to read for signed-in patrons.</p>}
         </div>
       )}

@@ -73,7 +73,7 @@ export function SystemSettingsPage() {
               <Field label="Self-checkout" as="div" className="span-all" hint="Kiosk at /kiosk/selfcheck; the same loan rules as the desk, without overrides">
                 <div className="stack" style={{ gap: 4 }}>
                   <label className="check"><input type="checkbox" checked={f.kiosks.selfCheckRequirePin}
-                    onChange={(e) => setF({ ...f, kiosks: { ...f.kiosks, selfCheckRequirePin: e.target.checked } })} /> Ask for the patron's PIN</label>
+                    onChange={(e) => setF({ ...f, kiosks: { ...f.kiosks, selfCheckRequirePin: e.target.checked } })} /> Ask for the patron's PIN (self-checkout, and borrowing or reserving at the catalog kiosk)</label>
                   <label className="check"><input type="checkbox" checked={f.kiosks.selfCheckAllowReturns}
                     onChange={(e) => setF({ ...f, kiosks: { ...f.kiosks, selfCheckAllowReturns: e.target.checked } })} /> Allow returns at the kiosk</label>
                 </div>

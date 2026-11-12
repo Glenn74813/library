@@ -178,7 +178,14 @@ from which programs, and the most-read titles.
 ## 2. Patrons
 
 ### 2.1 Searching the catalog (OPAC)
-Use a library kiosk (`/opac`, with an on-screen keyboard), or the **Catalog** link in My Library, which opens the normal web view on your own device. Search by title, author, subject or ISBN. Each copy shows
+Use a library kiosk (`/opac`, with an on-screen keyboard), or the **Catalog** link in My Library, which opens the normal web view on your own device. Search by title, author, subject or ISBN.
+
+At a catalog kiosk you can also borrow or reserve: open a title, tap **Borrow or reserve** (or **Reserve or book** when
+all copies are out), then scan your library card or type your card number (and your PIN, if the library asks for it).
+- **Borrow now** — a copy on the shelf is set aside under your name at the circulation desk; collect it there.
+- **Reserve** — when all copies are out, you join the line and are notified when one is waiting for you.
+- **Book it for a later date** — pick the day you want to collect it.
+Nothing stays signed in on the kiosk. Whether a PIN is needed is set under **System settings → Kiosks**. Each copy shows
 whether it is **Available** or **On loan** and where it is shelved. School-owned e-books open in the reader.
 
 ### 2.2 My Library (`/my`)

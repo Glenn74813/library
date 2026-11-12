@@ -71,7 +71,7 @@ every push and pull request.
 | URL | Who | Purpose |
 |-----|-----|---------|
 | `/staff` | Admin / Librarian / Staff | Dashboard, circulation desk, catalog, patrons, holds, fines, attendance, gate, stocktake, reports, users, audit |
-| `/opac` | Public | Catalog search with live availability, in kiosk view (on-screen keyboard, auto-reset). Students signed in to My Library, or following its catalog links (`/opac?view=student`), get the normal web view |
+| `/opac` | Public | Catalog search with live availability, in kiosk view (on-screen keyboard, auto-reset). Students following the catalog links in My Library (`/opac?view=student`) get the normal web view |
 | `/kiosk/attendance` | KIOSK device | Time-in/out by RFID, barcode or virtual keyboard; stand-by info board/video; offline queue |
 | `/kiosk/selfcheck` | KIOSK device | Self-checkout: card + PIN, borrow and renew by RFID pad or scanner, returns, printable slip |
 | `/my/forgot-pin` | Patrons | Reset a forgotten PIN with a code e-mailed to the address on record |

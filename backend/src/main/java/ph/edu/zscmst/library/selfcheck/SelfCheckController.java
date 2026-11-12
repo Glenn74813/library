@@ -9,8 +9,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,9 +26,6 @@ import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.common.SettingsService;
 import ph.edu.zscmst.library.common.SystemSettings;
 import ph.edu.zscmst.library.patron.Patron;
-import ph.edu.zscmst.library.patron.PatronRepository;
-import ph.edu.zscmst.library.security.LoginThrottle;
-import ph.edu.zscmst.library.security.LoginThrottle.Account;
 
 /**
  * Self-checkout kiosk (KIOSK accounts): patrons identify with their card (barcode or RFID) and PIN,
@@ -69,22 +64,18 @@ public class SelfCheckController {
     public record Returned(String title, Instant dueAt, BigDecimal fine, String message) {
     }
 
-    private final PatronRepository patrons;
-    private final PasswordEncoder passwords;
     private final CirculationService circulation;
     private final SettingsService settings;
     private final SystemSettings system;
     private final AuditService audit;
     private final RenewalService renewals;
-    private final LoginThrottle throttle;
+    private final KioskPatrons kioskPatrons;
 
-    public SelfCheckController(PatronRepository patrons, PasswordEncoder passwords, CirculationService circulation,
+    public SelfCheckController(CirculationService circulation,
                                SettingsService settings, SystemSettings system, AuditService audit,
-                               RenewalService renewals, LoginThrottle throttle) {
+                               RenewalService renewals, KioskPatrons kioskPatrons) {
         this.renewals = renewals;
-        this.throttle = throttle;
-        this.patrons = patrons;
-        this.passwords = passwords;
+        this.kioskPatrons = kioskPatrons;
         this.circulation = circulation;
         this.settings = settings;
         this.system = system;
@@ -98,7 +89,7 @@ public class SelfCheckController {
     }
 
     private boolean requirePin() {
-        return !"false".equals(settings.get("selfcheck.requirePin", "true"));
+        return kioskPatrons.requirePin();
     }
 
     @PostMapping("/api/kiosk/selfcheck/identify")
@@ -138,39 +129,7 @@ public class SelfCheckController {
                 s.unpaidTotal(), s.blocks());
     }
 
-    /** Runs outside a transaction so a wrong PIN is counted even though the request then fails. */
     private Patron verify(Identify req) {
-        Patron p = patrons.findByIdentifier(req.card().trim()).filter(x -> x.getAnonymizedAt() == null)
-                .orElseThrow(() -> ApiException.notFound("Library card"));
-        Instant now = Instant.now();
-        if (p.isPinLocked(now)) {
-            throw new ApiException(HttpStatus.LOCKED, "Too many wrong PINs. Please ask at the circulation desk.");
-        }
-        if (requirePin()) {
-            if (p.getPinHash() == null) {
-                throw ApiException.badRequest("You don't have a PIN yet. Please ask at the circulation desk.");
-            }
-            LoginThrottle.Claim claim = throttle.claim(Account.PATRON, p.getId(),
-                    integer("security.maxAttempts", 5), integer("security.lockMinutes", 15), now);
-            if (claim.locked() != null) {
-                throw new ApiException(HttpStatus.LOCKED, "Too many wrong PINs. Please ask at the circulation desk.");
-            }
-            if (req.pin() == null || !passwords.matches(req.pin(), p.getPinHash())) {
-                audit.record(p.getCardNumber(), "SELFCHECK_PIN_FAILED", "Self-checkout kiosk");
-                // 403, not 401: the kiosk would treat 401 as an expired session and resend the request.
-                throw new ApiException(HttpStatus.FORBIDDEN, "Wrong PIN");
-            }
-            throttle.succeeded(Account.PATRON, p.getId());
-        }
-        if (p.isBlocked()) throw ApiException.conflict("Your account is blocked. Please see the circulation desk.");
-        return p;
-    }
-
-    private int integer(String key, int fallback) {
-        try {
-            return Math.max(1, Integer.parseInt(settings.get(key, String.valueOf(fallback)).trim()));
-        } catch (NumberFormatException e) {
-            return fallback;
-        }
+        return kioskPatrons.verify(req.card(), req.pin(), "Self-checkout kiosk");
     }
 }
