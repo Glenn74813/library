@@ -279,15 +279,40 @@ public class LabelController {
         text(cb, item.getBarcode(), code, x + lw / 2, y + pad, Element.ALIGN_CENTER);
     }
 
+    /**
+     * Spine label: the copy's shelf address from Sections &amp; Aisles in a dark band on top (aisle and shelf,
+     * with the section under it), then the call number, so a book can be put back without a catalog search.
+     * A copy with no section gets the call number alone.
+     */
     private void spineLabel(PdfContentByte cb, PdfWriter w, Item item, float x, float y) {
         float lw = Sheet.L7651.w() * MM;
         float lh = Sheet.L7651.h() * MM;
         String call = item.getRecord().getCallNumber();
         String[] lines = (call == null || call.isBlank() ? item.getBarcode() : call).trim().split("\\s+");
-        Font f = font(FontFactory.HELVETICA_BOLD, lines.length > 3 ? 8 : 10, Color.BLACK);
-        float lead = f.getSize() * 1.1f;
-        float start = y + lh / 2 + (lines.length - 1) * lead / 2 - f.getSize() / 3;
-        for (int i = 0; i < lines.length && i < 5; i++) {
+        int n = Math.min(lines.length, 5);
+        float top = y + lh;
+        if (item.getLocation() != null) {
+            float band = 6.2f * MM;
+            cb.saveState();
+            cb.setColorFill(NAVY);
+            cb.rectangle(x + 1.2f * MM, top - 1.2f * MM - band, lw - 2.4f * MM, band);
+            cb.fill();
+            cb.restoreState();
+            String place = item.getAisle() == null ? "SECTION ONLY"
+                    : "AISLE " + item.getAisle() + (item.getShelf() == null ? "" : "  ·  SHELF " + item.getShelf());
+            text(cb, place, font(FontFactory.HELVETICA_BOLD, 7, Color.WHITE), x + lw / 2, top - 1.2f * MM - band + 2.1f * MM,
+                    Element.ALIGN_CENTER);
+            text(cb, clip(item.getLocation(), 32), font(FontFactory.HELVETICA, 5.2f, Color.DARK_GRAY), x + lw / 2,
+                    top - 1.2f * MM - band - 2.3f * MM, Element.ALIGN_CENTER);
+            top = top - 1.2f * MM - band - 3.4f * MM;
+        }
+        // Call number in the space left, one part per line.
+        float room = top - (y + 1.2f * MM);
+        float size = Math.min(item.getLocation() == null ? 10 : 8.5f, room / (n * 1.12f));
+        Font f = font(FontFactory.HELVETICA_BOLD, size, Color.BLACK);
+        float lead = size * 1.12f;
+        float start = (top + y + 1.2f * MM) / 2 + (n - 1) * lead / 2 - size / 3;
+        for (int i = 0; i < n; i++) {
             text(cb, lines[i], f, x + lw / 2, start - i * lead, Element.ALIGN_CENTER);
         }
     }

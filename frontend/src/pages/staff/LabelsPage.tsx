@@ -38,7 +38,7 @@ function ItemLabels() {
         <Field label="Label type" className="span-all">
           <select value={kind} onChange={(e) => setKind(e.target.value as 'barcode' | 'spine')}>
             <option value="barcode">Barcode labels — Avery L7160 / J8160 (21 per A4 sheet)</option>
-            <option value="spine">Spine labels (call number) — Avery L7651 (65 per A4 sheet)</option>
+            <option value="spine">Spine labels (shelf address + call number) — Avery L7651 (65 per A4 sheet)</option>
           </select>
         </Field>
         <Field label="Barcodes" className="span-all" hint="Scan or type, one per line or separated by commas">

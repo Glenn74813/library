@@ -169,7 +169,7 @@ export function RecordPage() {
               }}>
                 <option value="" disabled>Print labels…</option>
                 <option value="barcode">Barcode labels (all copies)</option>
-                <option value="spine">Spine labels (all copies)</option>
+                <option value="spine">Spine labels with shelf address (all copies)</option>
               </select>}
               <button className="btn primary" onClick={() => setEditingItem({ status: 'AVAILABLE', location: 'General Circulation' })}><Icon name="plus" />Add copy</button>
             </div>

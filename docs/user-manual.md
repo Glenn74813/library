@@ -114,8 +114,10 @@ can be added from the patron's page.
 
 ### 1.7a Labels and library IDs
 **Collection → Labels & library IDs**
-- **Item labels**: barcode labels (Avery L7160, 21 per sheet) or spine labels with the call number
-  (Avery L7651, 65 per sheet). Scan the barcodes, or pick "copies added since" for a batch of new books.
+- **Item labels**: barcode labels (Avery L7160, 21 per sheet) or spine labels (Avery L7651, 65 per sheet)
+  showing the copy's shelf address from Sections & Aisles (aisle and shelf in a dark band, section under it)
+  above the call number, so books can be shelved without a catalog search.
+  Scan the barcodes, or pick "copies added since" for a batch of new books.
   *Skip labels* reuses a partly used sheet. A record's copy list also has **Print labels…**.
 - **Library IDs**: bank-card size, 10 per A4 sheet, with photo, ID number and barcode. Print
   by ID numbers, category, program or registration date; or **Library ID** on a patron's page.
