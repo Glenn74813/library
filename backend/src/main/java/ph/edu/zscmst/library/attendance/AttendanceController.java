@@ -125,7 +125,7 @@ public class AttendanceController {
                 stamp(l.timeIn()), l.timeOut() == null ? "" : stamp(l.timeOut()),
                 l.method())).toList();
         return Pdf.export(format, "attendance-" + from + "-to-" + to, "Attendance Log", from + " to " + to,
-                List.of("Card Number", "Name", "Course", "Category", "Time In", "Time Out", "Method"), rows);
+                List.of("ID Number", "Name", "Course", "Category", "Time In", "Time Out", "Method"), rows);
     }
 
     private String stamp(java.time.Instant i) {

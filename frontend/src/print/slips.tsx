@@ -185,7 +185,7 @@ export function CheckoutSlip({ lib, patron, borrowed, otherLoans }: {
       <hr />
     </>}>
       <Row label="Patron" value={patron.fullName} />
-      <Row label="Card no." value={<span className="mono">{patron.cardNumber}</span>} />
+      <Row label="ID no." value={<span className="mono">{patron.cardNumber}</span>} />
       <hr />
       {borrowed.map((l, n) => (
         <div key={l.id ?? n} className="item">
@@ -221,7 +221,7 @@ export function ReturnSlip({ lib, items }: { lib: LibraryProfile; items: Returne
     <Slip lib={lib} title="Return receipt">
       {who && <>
         <Row label="Patron" value={who.patronName} />
-        <Row label="Card no." value={<span className="mono">{who.cardNumber}</span>} />
+        <Row label="ID no." value={<span className="mono">{who.cardNumber}</span>} />
         <hr />
       </>}
       {items.map((i, n) => (
@@ -258,20 +258,20 @@ export function HoldShelfSlip({ lib, hold }: { lib: LibraryProfile; hold: HoldSl
   )
 }
 
-/** For a new patron, or after a PIN is set: card number, PIN (optional) and how to reach My Library. */
-export function PatronSlip({ lib, patron, pin }: { lib: LibraryProfile; patron: SlipPatron & { categoryName?: string; expiryDate?: string | null }; pin?: string }) {
+/** Printed when staff set a patron's PIN: ID number, the PIN and how to reach My Library. The library ID is the only card. */
+export function PatronSlip({ lib, patron, pin }: { lib: LibraryProfile; patron: SlipPatron & { categoryName?: string; expiryDate?: string | null }; pin: string }) {
   return (
-    <Slip lib={lib} title={pin ? 'My Library PIN' : 'Library card'} footer={<>
-      <div className="c small">Sign in to My Library with your card number and PIN:</div>
+    <Slip lib={lib} title="My Library PIN" footer={<>
+      <div className="c small">Sign in to My Library with your ID number and PIN:</div>
       <Qr value={myLibraryUrl()} />
       <div className="c small">{myLibraryUrl()}</div>
       <hr />
     </>}>
       <Row label="Name" value={patron.fullName} />
-      <Row label="Card no." value={<span className="mono big">{patron.cardNumber}</span>} />
+      <Row label="ID no." value={<span className="mono big">{patron.cardNumber}</span>} />
       {patron.categoryName && <Row label="Type" value={patron.categoryName} />}
       {patron.expiryDate && <Row label="Valid until" value={fmtDate(patron.expiryDate)} />}
-      {pin && <div className="box c">PIN: <span className="big mono">{pin}</span><div className="small">Change it after your first sign-in. Keep this slip private.</div></div>}
+      <div className="box c">PIN: <span className="big mono">{pin}</span><div className="small">Change it after your first sign-in. Keep this slip private.</div></div>
     </Slip>
   )
 }
@@ -292,7 +292,7 @@ export function ClearanceSlip({ lib, c }: { lib: LibraryProfile; c: ClearanceDat
       <div className="c big mono">{c.reference}</div>
       <hr />
       <Row label="Name" value={c.patronName} />
-      <Row label="Card no." value={<span className="mono">{c.cardNumber}</span>} />
+      <Row label="ID no." value={<span className="mono">{c.cardNumber}</span>} />
       <Row label="Type" value={[c.category, c.course].filter(Boolean).join(' · ')} />
       {c.purpose && <Row label="Purpose" value={c.purpose} />}
       <div className="box">This certifies that the person above has <b>no borrowed library materials</b> and
@@ -349,7 +349,7 @@ export function OfficialReceiptSlip({ lib, receipt }: { lib: LibraryProfile; rec
       <Row label="Receipt no." value={<b className="mono">{receipt.receiptNumber}</b>} />
       <Row label="Date" value={fmtDateTime(receipt.paidAt)} />
       <Row label="Patron" value={receipt.patronName} />
-      <Row label="Card no." value={<span className="mono">{receipt.cardNumber}</span>} />
+      <Row label="ID no." value={<span className="mono">{receipt.cardNumber}</span>} />
       <Row label="Received by" value={receipt.cashier} />
       <hr />
       {receipt.fines.map((f) => <Row key={f.id} label={f.reason} value={fmtMoney(f.amount)} />)}

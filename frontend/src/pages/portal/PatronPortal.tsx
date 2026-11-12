@@ -241,16 +241,16 @@ function CardPhoto({ patron, onChanged }: { patron: Patron; onChanged: () => voi
   const [open, setOpen] = useState(false)
   return (
     <div className="card stack" style={{ maxWidth: 420 }}>
-      <h2>Library card photo</h2>
+      <h2>Library ID photo</h2>
       <div className="row" style={{ flexWrap: 'nowrap', alignItems: 'center' }}>
-        {patron.photoUrl ? <img src={patron.photoUrl} alt="Your card photo" className="avatar" style={{ width: 72, height: 72, cursor: 'default' }} />
+        {patron.photoUrl ? <img src={patron.photoUrl} alt="Your ID photo" className="avatar" style={{ width: 72, height: 72, cursor: 'default' }} />
           : <div className="avatar" style={{ width: 72, height: 72, display: 'grid', placeItems: 'center' }}><Icon name="user" size={32} /></div>}
-        <p className="muted small" style={{ margin: 0 }}>Used on your printed library card. Face the camera, plain background, no sunglasses or hat.
+        <p className="muted small" style={{ margin: 0 }}>Used on your printed library ID. Face the camera, plain background, no sunglasses or hat.
           A JPEG or PNG works best.</p>
       </div>
       <button type="button" className="btn" onClick={() => setOpen(true)}><Icon name="camera" />{patron.photoUrl ? 'Change photo' : 'Add a photo'}</button>
-      {open && <PatronPhotoModal patron={patron} endpoint="/api/me/photo" title="Your library card photo"
-        onClose={() => setOpen(false)} onSaved={() => { setOpen(false); toast('Photo saved for your library card'); onChanged() }} />}
+      {open && <PatronPhotoModal patron={patron} endpoint="/api/me/photo" title="Your library ID photo"
+        onClose={() => setOpen(false)} onSaved={() => { setOpen(false); toast('Photo saved for your library ID'); onChanged() }} />}
     </div>
   )
 }

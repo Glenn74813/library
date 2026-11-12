@@ -10,7 +10,7 @@ import { useAsync } from '../../hooks/useAsync'
 export function LabelsPage() {
   return (
     <>
-      <div className="page-head"><h1>Labels & ID cards</h1></div>
+      <div className="page-head"><h1>Labels & library IDs</h1></div>
       <p className="muted" style={{ marginTop: -8 }}>PDFs open in a new tab; print at <strong>100% / Actual size</strong> (not “Fit to page”) so they line up with the label sheet.</p>
       <div className="grid cols-2" style={{ alignItems: 'start' }}>
         <ItemLabels />
@@ -69,11 +69,11 @@ function PatronCards() {
   }
   return (
     <div className="card stack">
-      <h2 style={{ margin: 0 }}><Icon name="credit-card" /> Patron ID cards</h2>
+      <h2 style={{ margin: 0 }}><Icon name="credit-card" /> Library IDs</h2>
       <p className="muted small" style={{ margin: 0 }}>Standard CR80 ID card size (85.6 × 54 mm, like a bank card), with photo,
-        card number and barcode. Patrons without a photo get an empty frame.</p>
+        ID number and barcode. Patrons without a photo get an empty frame.</p>
       <div className="form-grid">
-        <Field label="Card numbers" className="span-all" hint="One per line or separated by commas; leave empty to use the filters">
+        <Field label="ID numbers" className="span-all" hint="One per line or separated by commas; leave empty to use the filters">
           <textarea rows={4} value={cards} onChange={(e) => setCards(e.target.value)} className="mono" /></Field>
         <Field label="Category">
           <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
@@ -89,11 +89,11 @@ function PatronCards() {
           : 'For card stock or sticker paper: cut along the outlines, then laminate.'}>
           <select value={layout} onChange={(e) => setLayout(e.target.value as 'card' | 'sheet')}>
             <option value="card">ID card printer: one CR80 card per page</option>
-            <option value="sheet">A4 paper: 10 cards per sheet to cut out</option>
+            <option value="sheet">A4 paper: 10 IDs per sheet to cut out</option>
           </select></Field>
-        {layout === 'sheet' && <Field label="Skip cards" hint="Already used spots on the sheet"><input type="number" min={0} max={9} value={skip} onChange={(e) => setSkip(Number(e.target.value))} /></Field>}
+        {layout === 'sheet' && <Field label="Skip IDs" hint="Already used spots on the sheet"><input type="number" min={0} max={9} value={skip} onChange={(e) => setSkip(Number(e.target.value))} /></Field>}
       </div>
-      <div className="row end"><button className="btn primary" onClick={print}><Icon name="printer" />Print ID cards</button></div>
+      <div className="row end"><button className="btn primary" onClick={print}><Icon name="printer" />Print library IDs</button></div>
     </div>
   )
 }

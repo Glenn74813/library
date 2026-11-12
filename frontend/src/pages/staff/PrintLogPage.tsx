@@ -9,8 +9,8 @@ import { useDebounced } from '../../hooks/useDebounced'
 import type { PrintEntry, PrintKind } from '../../print/slips'
 
 const KINDS: [PrintKind, string][] = [
-  ['RECEIPT', 'Official receipts'], ['CLEARANCE', 'Library clearances'], ['ID_CARD', 'Library ID cards'],
-  ['CARD_SLIP', 'Card slips'], ['PIN_SLIP', 'Card slips with PIN'], ['CHECKOUT_SLIP', 'Borrowing slips'],
+  ['RECEIPT', 'Official receipts'], ['CLEARANCE', 'Library clearances'], ['ID_CARD', 'Library IDs'],
+  ['CARD_SLIP', 'Card slips (no longer printed)'], ['PIN_SLIP', 'PIN slips'], ['CHECKOUT_SLIP', 'Borrowing slips'],
   ['RETURN_SLIP', 'Return slips'], ['HOLD_SLIP', 'Hold shelf slips'], ['CASH_REPORT', 'End-of-day reports'],
 ]
 
@@ -34,7 +34,7 @@ export function PrintLogPage() {
       <ErrorAlert error={error} />
       <div className="card">
         <div className="form-grid" style={{ marginBottom: 8 }}>
-          <Field label="Search"><input value={q} onChange={change(setQ)} placeholder="Patron, card, receipt or reference no., staff…" /></Field>
+          <Field label="Search"><input value={q} onChange={change(setQ)} placeholder="Patron, ID number, receipt or reference no., staff…" /></Field>
           <Field label="Document">
             <select value={kind} onChange={change(setKind)}>
               <option value="">All documents</option>

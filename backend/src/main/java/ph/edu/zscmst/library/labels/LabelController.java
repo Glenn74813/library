@@ -166,14 +166,14 @@ public class LabelController {
             list.addAll(patrons.forCards(categoryId, courseId,
                     registeredSince == null ? Instant.EPOCH : clock.startOfDay(registeredSince)));
         }
-        if (!unknown.isEmpty()) throw ApiException.badRequest("Unknown card number(s): " + String.join(", ", unknown));
-        if (list.isEmpty()) throw ApiException.badRequest("No patrons match; enter card numbers or choose a filter");
-        if (list.size() > MAX_LABELS) throw ApiException.badRequest("Too many cards at once (max " + MAX_LABELS + ")");
+        if (!unknown.isEmpty()) throw ApiException.badRequest("Unknown ID number(s): " + String.join(", ", unknown));
+        if (list.isEmpty()) throw ApiException.badRequest("No patrons match; enter ID numbers or choose a filter");
+        if (list.size() > MAX_LABELS) throw ApiException.badRequest("Too many IDs at once (max " + MAX_LABELS + ")");
         byte[] pdf = sheet ? render(Sheet.CR80, list, skip, (cb, w, p, x, y) -> patronCard(cb, w, p, x, y, true))
                 : render(Sheet.CR80_CARD, list, 0, (cb, w, p, x, y) -> patronCard(cb, w, p, x, y, false));
-        audit.record("ID_CARDS_PRINTED", list.size() + " patron card(s)");
+        audit.record("ID_CARDS_PRINTED", list.size() + " library ID(s)");
         list.forEach(p -> printLog.record(Kind.ID_CARD, p.getId(), p.getCardNumber(), "PDF generated", false));
-        return file(pdf, "patron-id-cards.pdf");
+        return file(pdf, "library-ids.pdf");
     }
 
     private <T> byte[] render(Sheet sheet, List<T> values, int skip, Painter<T> painter) {
@@ -305,7 +305,7 @@ public class LabelController {
         Font headSmall = font(FontFactory.HELVETICA, 5.5f, Color.WHITE);
         box(cb, lib.name(), head, x + 13.5f * MM, y + ch - 2 * MM, cw - 15.5f * MM, 10, Element.ALIGN_LEFT);
         box(cb, clip(lib.institution(), 70), headSmall, x + 13.5f * MM, y + ch - 6.2f * MM, cw - 15.5f * MM, 14, Element.ALIGN_LEFT);
-        text(cb, "LIBRARY CARD", font(FontFactory.HELVETICA_BOLD, 5.5f, GOLD), x + cw - 2 * MM, y + ch - 12 * MM, Element.ALIGN_RIGHT);
+        text(cb, "LIBRARY ID", font(FontFactory.HELVETICA_BOLD, 5.5f, GOLD), x + cw - 2 * MM, y + ch - 12 * MM, Element.ALIGN_RIGHT);
 
         // Photo (or an empty frame to paste one).
         float px = x + 3 * MM;
@@ -344,7 +344,7 @@ public class LabelController {
         Font value = font(FontFactory.HELVETICA_BOLD, 7, Color.BLACK);
         box(cb, p.getLastName().toUpperCase() + ", " + p.getFirstName(), name, tx, y + ch - 15.5f * MM, tw, 22, Element.ALIGN_LEFT);
         float row = y + ch - 24.5f * MM;
-        text(cb, "CARD NO.", label, tx, row, Element.ALIGN_LEFT);
+        text(cb, "ID NO.", label, tx, row, Element.ALIGN_LEFT);
         text(cb, p.getCardNumber(), value, tx, row - 8, Element.ALIGN_LEFT);
         String group = p.getCategory().getName() + (p.getCourse() == null ? "" : " · " + p.getCourse().getCode());
         text(cb, "TYPE", label, tx, row - 18, Element.ALIGN_LEFT);

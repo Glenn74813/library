@@ -98,14 +98,35 @@ function SelfCheckScreen() {
     if (!code) return
     if (step === 'card') {
       if (busy) return // still checking the card just scanned
-      setCard(code)
-      if (config.requirePin) { setStep('pin'); setError(null) } else void identify(code, '')
+      void startWith(code)
       return
     }
     if (step !== 'borrow' && step !== 'return') return
     setError(null)
     pending.current.push({ code, step, card, pin: savedPin.current, session: session.current })
     void drain()
+  }
+
+  /** First scan on the start screen: a book is returned straight away (no PIN needed); anything else is a card. */
+  async function startWith(code: string) {
+    const s = session.current
+    let isItem = false
+    if (config.allowReturns) {
+      setBusy(true)
+      try {
+        isItem = (await api<{ item: boolean }>('/api/kiosk/selfcheck/scan', { ...opts, body: { code } })).item
+      } catch { /* can't tell: treat it as a card */ } finally { setBusy(false) }
+      if (s !== session.current) return
+    }
+    setError(null)
+    if (isItem) {
+      setStep('return')
+      pending.current.push({ code, step: 'return', card: '', pin: '', session: s })
+      void drain()
+      return
+    }
+    setCard(code)
+    if (config.requirePin) setStep('pin'); else void identify(code, '')
   }
 
   async function drain() {
@@ -172,8 +193,8 @@ function SelfCheckScreen() {
 
       <form onSubmit={onScan} className={step === 'card' || step === 'borrow' || step === 'return' ? 'scan-form' : 'scan-form hidden'}>
         <input ref={scanRef} value={scan} onChange={(e) => setScan(e.target.value)} autoComplete="off" inputMode="none"
-          aria-label={step === 'card' ? 'Library card' : 'Item barcode or RFID tag'}
-          placeholder={step === 'card' ? 'Tap or scan your library card' : 'Place or scan the item'} />
+          aria-label={step === 'card' ? 'Library ID' : 'Item barcode or RFID tag'}
+          placeholder={step === 'card' ? 'Tap or scan your library ID' : 'Place or scan the item'} />
       </form>
 
       <main>
@@ -182,8 +203,8 @@ function SelfCheckScreen() {
         {step === 'card' && (
           <div className="center stack">
             <div className="big-icon"><Icon name="credit-card" size="1em" /></div>
-            <h1>Tap or scan your library card</h1>
-            <p className="muted">to borrow or renew books</p>
+            <h1>Tap or scan your library ID</h1>
+            <p className="muted">to borrow or renew books{config.allowReturns && ' — or scan a book to return it'}</p>
             {config.allowReturns && <button className="btn big" onClick={() => { setStep('return'); setError(null) }}>
               <Icon name="corner-down-left" />Return items</button>}
           </div>

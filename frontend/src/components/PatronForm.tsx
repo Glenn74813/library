@@ -45,8 +45,8 @@ export function PatronFormModal({ patron, onClose, onSaved }: {
       <div className="stack">
         <ErrorAlert error={error} />
         <div className="form-grid">
-          <Field label="Library card / ID number *"><input className="mono" value={f.cardNumber} onChange={(e) => set('cardNumber', e.target.value)} autoFocus /></Field>
-          <Field label="RFID card UID" hint="Tap the ID on the reader"><input className="mono" value={f.rfidUid} onChange={(e) => set('rfidUid', e.target.value)} /></Field>
+          <Field label="Library ID number *"><input className="mono" value={f.cardNumber} onChange={(e) => set('cardNumber', e.target.value)} autoFocus /></Field>
+          <Field label="RFID tag UID" hint="Tap the library ID on the reader"><input className="mono" value={f.rfidUid} onChange={(e) => set('rfidUid', e.target.value)} /></Field>
           <Field label="First name *"><input value={f.firstName} onChange={(e) => set('firstName', e.target.value)} /></Field>
           <Field label="Last name *"><input value={f.lastName} onChange={(e) => set('lastName', e.target.value)} /></Field>
           <Field label="Category *">
@@ -63,7 +63,7 @@ export function PatronFormModal({ patron, onClose, onSaved }: {
           </Field>
           <Field label="Email"><input type="email" value={f.email} onChange={(e) => set('email', e.target.value)} /></Field>
           <Field label="Mobile number"><input type="tel" value={f.phone} onChange={(e) => set('phone', e.target.value)} /></Field>
-          <Field label="Card expiry date"><input type="date" value={f.expiryDate} onChange={(e) => set('expiryDate', e.target.value)} /></Field>
+          <Field label="Library ID expiry date"><input type="date" value={f.expiryDate} onChange={(e) => set('expiryDate', e.target.value)} /></Field>
 
           <label className="check span-all"><input type="checkbox" checked={f.blocked} onChange={(e) => set('blocked', e.target.checked)} /> Block borrowing</label>
           {f.blocked && <Field label="Block reason" className="span-all"><input value={f.blockReason} onChange={(e) => set('blockReason', e.target.value)} /></Field>}

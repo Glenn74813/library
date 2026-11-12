@@ -81,7 +81,7 @@ public class PinResetController {
     @PostMapping("/api/auth/pin-reset/request")
     @Transactional
     public Map<String, String> request(@Valid @RequestBody ForgotRequest req) {
-        Map<String, String> answer = Map.of("message", "If the card number and e-mail match our records, a 6-digit code "
+        Map<String, String> answer = Map.of("message", "If the ID number and e-mail match our records, a 6-digit code "
                 + "was sent to that e-mail. It is valid for 15 minutes.");
         Patron p = patrons.findByCardNumberIgnoreCase(req.card().trim()).orElse(null);
         if (p == null || p.getEmail() == null || !p.getEmail().trim().equalsIgnoreCase(req.email().trim())

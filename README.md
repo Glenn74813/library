@@ -174,8 +174,8 @@ A title is either **school-owned** or **commercial**, never both:
 
 ## Hardware integration
 
-- **Printing**: Labels & ID cards (Collection menu) makes A4 PDFs for Avery L7160 barcode labels
-  (21/sheet) and L7651 spine labels (65/sheet), plus CR80 patron ID cards (85.6 × 54 mm): one card per
+- **Printing**: Labels & library IDs (Collection menu) makes A4 PDFs for Avery L7160 barcode labels
+  (21/sheet) and L7651 spine labels (65/sheet), plus CR80 library IDs (85.6 × 54 mm): one card per
   page for a PVC ID card printer, or 10 per A4 sheet to cut out. Receipts and the
   self-checkout slip are sized for 80 mm thermal printers; start the kiosk browser with
   `--kiosk-printing` to print them without the print dialog.

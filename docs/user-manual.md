@@ -9,7 +9,7 @@ administrator, for example `https://library.zscmst.edu.ph`.
 | Who | Where | Signs in with |
 |-----|-------|---------------|
 | Staff | `/staff` | Username and password |
-| Patrons (students, faculty, staff) | `/my` | Library card / ID number and a PIN from the circulation desk |
+| Patrons (students, faculty, staff) | `/my` | Library ID number and a PIN from the circulation desk |
 | Anyone | `/opac` (kiosk view) or `/my/catalog` (on your own device) | Nothing; searching the catalog is public |
 
 ---
@@ -30,7 +30,7 @@ gate alarms, tamper events and offline gates.
 ### 1.3 Checking items out
 **Circulation → Check out / in → Check out / renew**
 
-1. Scan the patron's card (barcode or RFID), or type the card number, and press Enter.
+1. Scan the patron's library ID (barcode or RFID), or type the ID number, and press Enter.
    Their photo, loans, fines and any **Attention** warnings appear.
 2. Scan each item. The due date is shown in *This session* on the right.
 3. If the system refuses (loan limit, unpaid fines, expired card, room-use-only), a librarian can tick
@@ -68,18 +68,18 @@ The 80 mm receipt printer prints these slips (only the slip prints, sized to its
 | Borrowing slip (items, due dates, QR to My Library) | Circulation desk → **Slip** next to the patron, or automatically on **Next patron** |
 | Return receipt (items returned, time, any fine) | Check in → **Print return slip**, or one per return automatically |
 | Hold shelf slip (card no. and initials, pickup-by date) | Prints by itself when a returned copy is set aside for a reservation; put it in the book |
-| Card slip / PIN slip | New patron banner, patron page → **Print… → Card slip**, and when a PIN is set |
+| PIN slip | When staff set or reset a patron's PIN (the library ID is the only card; print it from **Print… → Library ID**) |
 | Library clearance (reference no. + QR) | Patron page → **Print… → Library clearance…** (only with nothing on loan and no unpaid fines). Check one with **Patrons → Verify clearance** |
 | Official receipt | When fines are paid, or **Receipt** on the Fines page |
 | End-of-day collection report | **Fines & payments → End-of-day report** |
 
 Which slips print automatically is set per desk under **Receipt printer on this computer** on the circulation desk.
 
-**Print log.** Every slip, official receipt, clearance and ID card that is printed is recorded with who printed it and when.
+**Print log.** Every slip, official receipt, clearance and library ID that is printed is recorded with who printed it and when.
 - Each patron's page has a **Printed** tab (also **Print… → Print history**) listing everything printed for them.
 - **Security & reports → Print log** lists all prints, filterable by document, date and **Reprints only**.
-- Printing an ID card or card slip that was printed before asks first, showing when and by whom. A clearance shows the clearances already issued.
-- A second or later copy of a receipt, clearance or card slip prints **REPRINT · COPY n** at the top, and the log shows the copy number.
+- Printing a library ID that was printed before asks first, showing when and by whom. A clearance shows the clearances already issued.
+- A second or later copy of a receipt or clearance prints **REPRINT · COPY n** at the top, and the log shows the copy number.
 - PIN slips are logged without the PIN.
 Start the desk browser with `--kiosk-printing` (receipt printer as default) to skip the print dialog.
 
@@ -112,13 +112,13 @@ bookings; a red note means it can't be renewed any more (e.g. someone reserved t
 (reprint any time), or **Waive** with a reason (librarian). Manual charges (damaged item, lost card)
 can be added from the patron's page.
 
-### 1.7a Labels and ID cards
-**Collection → Labels & ID cards**
+### 1.7a Labels and library IDs
+**Collection → Labels & library IDs**
 - **Item labels**: barcode labels (Avery L7160, 21 per sheet) or spine labels with the call number
   (Avery L7651, 65 per sheet). Scan the barcodes, or pick "copies added since" for a batch of new books.
   *Skip labels* reuses a partly used sheet. A record's copy list also has **Print labels…**.
-- **Patron ID cards**: bank-card size, 10 per A4 sheet, with photo, card number and barcode. Print
-  by card numbers, category, program or registration date; or **ID card** on a patron's page.
+- **Library IDs**: bank-card size, 10 per A4 sheet, with photo, ID number and barcode. Print
+  by ID numbers, category, program or registration date; or **Library ID** on a patron's page.
 - Print at **100% / Actual size**, not "Fit to page".
 
 ### 1.8 Catalog
@@ -135,7 +135,7 @@ can be added from the patron's page.
   **Export** the catalog as Excel (CSV), PDF, MARC21 or MARCXML.
 
 ### 1.9 Patrons
-**People → Patrons → New patron**: card number (scan the ID's barcode or tap the RFID card into the
+**People → Patrons → New patron**: ID number (scan the ID's barcode or tap the RFID card into the
 field), name, category, course, contact details, expiry. On the patron's page:
 
 - **Photo**: upload or take one with the webcam.
@@ -181,7 +181,7 @@ from which programs, and the most-read titles.
 Use a library kiosk (`/opac`, with an on-screen keyboard), or the **Catalog** link in My Library, which opens the normal web view on your own device. Search by title, author, subject or ISBN.
 
 At a catalog kiosk you can also borrow or reserve: open a title, tap **Borrow or reserve** (or **Reserve or book** when
-all copies are out), then scan your library card or type your card number (and your PIN, if the library asks for it).
+all copies are out), then scan your library ID or type your ID number (and your PIN, if the library asks for it).
 - **Borrow now** — a copy on the shelf is set aside under your name at the circulation desk; collect it there.
 - **Reserve** — when all copies are out, you join the line and are notified when one is waiting for you.
 - **Book it for a later date** — pick the day you want to collect it.
@@ -189,12 +189,12 @@ Nothing stays signed in on the kiosk. Whether a PIN is needed is set under **Sys
 whether it is **Available** or **On loan** and where it is shelved. School-owned e-books open in the reader.
 
 ### 2.2 My Library (`/my`)
-Sign in with your card number and PIN (get the PIN at the desk). You can:
+Sign in with your ID number and PIN (get the PIN at the desk). You can:
 
 - see your loans and due dates, and ask to **renew** (unless overdue or at the renewal limit). The
   library approves or rejects the request; you are told by e-mail/SMS and under *Renewal requests*.
   Keep the item until then;
-- add or change your **library card photo**: upload a picture or take one with your phone or PC camera
+- add or change your **library ID photo**: upload a picture or take one with your phone or PC camera
   (Account tab);
 - **reserve** a title, or **book** it for a pickup date from the availability calendar;
 - see fines and receipts;
@@ -204,7 +204,7 @@ Sign in with your card number and PIN (get the PIN at the desk). You can:
 - **Download my data**: a copy of everything the library keeps about you.
 
 ### 2.3 Attendance kiosk
-Tap your ID card on the reader when you enter (and leave, if the library uses time-out). No card?
+Tap your library ID on the reader when you enter (and leave, if the library uses time-out). No card?
 Press **No card? Enter ID**.
 
 ---

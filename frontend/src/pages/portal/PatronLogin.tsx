@@ -39,7 +39,7 @@ export function PatronLogin() {
         <h1>My Library</h1>
         <div className="school">{lib.institution || lib.name}</div>
         <ErrorAlert error={error} />
-        <Field label="Library card / ID number"><input value={card} onChange={(e) => setCard(e.target.value)} autoComplete="username" required autoFocus /></Field>
+        <Field label="Library ID number"><input value={card} onChange={(e) => setCard(e.target.value)} autoComplete="username" required autoFocus /></Field>
         <Field label="PIN" hint="New patrons get a PIN at the circulation desk">
           <PasswordInput inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="current-password" required />
         </Field>

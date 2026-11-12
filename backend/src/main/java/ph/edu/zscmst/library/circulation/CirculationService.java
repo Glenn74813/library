@@ -114,7 +114,7 @@ public class CirculationService {
         }
         Instant now = offlineAt == null ? Instant.now() : offlineAt;
         LocalDate today = clock.toDate(now);
-        limit(p.isExpired(today), "Library card expired on " + p.getExpiryDate(), override, warnings);
+        limit(p.isExpired(today), "Library ID expired on " + p.getExpiryDate(), override, warnings);
         long active = loans.countByPatronIdAndReturnedAtIsNull(p.getId());
         limit(active >= cat.getMaxLoans(), "Loan limit reached (" + cat.getMaxLoans() + " items for "
                 + cat.getName() + ")", override, warnings);
@@ -415,7 +415,7 @@ public class CirculationService {
         List<String> blocks = new ArrayList<>();
         PatronCategory cat = p.getCategory();
         if (p.isBlocked()) blocks.add("Blocked" + (p.getBlockReason() == null ? "" : ": " + p.getBlockReason()));
-        if (p.isExpired(clock.today())) blocks.add("Card expired on " + p.getExpiryDate());
+        if (p.isExpired(clock.today())) blocks.add("Library ID expired on " + p.getExpiryDate());
         if (active.size() >= cat.getMaxLoans()) blocks.add("Loan limit reached");
         if (unpaidTotal.compareTo(cat.getMaxUnpaidFines()) > 0) blocks.add("Unpaid fines over limit");
         if (active.stream().anyMatch(LoanDto::overdue)) blocks.add("Has overdue items");

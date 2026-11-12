@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckinResult;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckoutResult;
 import ph.edu.zscmst.library.circulation.CirculationDtos.LoanDto;
@@ -26,6 +27,7 @@ import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.common.SettingsService;
 import ph.edu.zscmst.library.common.SystemSettings;
 import ph.edu.zscmst.library.patron.Patron;
+import ph.edu.zscmst.library.patron.PatronRepository;
 
 /**
  * Self-checkout kiosk (KIOSK accounts): patrons identify with their card (barcode or RFID) and PIN,
@@ -61,6 +63,13 @@ public class SelfCheckController {
     public record Renewed(boolean pending, String message, PatronView patron) {
     }
 
+    public record ScanRequest(@NotBlank @Size(max = 64) String code) {
+    }
+
+    /** What a code scanned on the start screen is: a library item (returned without a PIN) or a card. */
+    public record ScanKind(boolean item) {
+    }
+
     public record Returned(String title, String barcode, Instant dueAt, Instant returnedAt, BigDecimal fine, String message) {
     }
 
@@ -70,10 +79,15 @@ public class SelfCheckController {
     private final AuditService audit;
     private final RenewalService renewals;
     private final KioskPatrons kioskPatrons;
+    private final ItemRepository items;
+    private final PatronRepository patrons;
 
     public SelfCheckController(CirculationService circulation,
                                SettingsService settings, SystemSettings system, AuditService audit,
-                               RenewalService renewals, KioskPatrons kioskPatrons) {
+                               RenewalService renewals, KioskPatrons kioskPatrons, ItemRepository items,
+                               PatronRepository patrons) {
+        this.items = items;
+        this.patrons = patrons;
         this.renewals = renewals;
         this.kioskPatrons = kioskPatrons;
         this.circulation = circulation;
@@ -90,6 +104,17 @@ public class SelfCheckController {
 
     private boolean requirePin() {
         return kioskPatrons.requirePin();
+    }
+
+    /**
+     * Patrons often scan a book on the start screen to return it. A code that is a library item (and not
+     * also a card) is reported as one, so the kiosk returns it instead of asking for a PIN.
+     */
+    @PostMapping("/api/kiosk/selfcheck/scan")
+    public ScanKind scan(@Valid @RequestBody ScanRequest req) {
+        String code = req.code().trim();
+        return new ScanKind(config().allowReturns() && patrons.findByIdentifier(code).isEmpty()
+                && items.findByIdentifier(code).isPresent());
     }
 
     @PostMapping("/api/kiosk/selfcheck/identify")

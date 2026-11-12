@@ -73,7 +73,7 @@ function LogsTab({ from, to }: { from: string; to: string }) {
   const { data, error } = useAsync(() => api<Page<AttendanceLog>>(`/api/attendance/logs${qs({ from, to, q: dq, page })}`), [from, to, dq, page])
   return (
     <div className="card">
-      <input type="search" placeholder="Filter by patron name or card number…" value={q} style={{ marginBottom: 12 }}
+      <input type="search" placeholder="Filter by patron name or ID number…" value={q} style={{ marginBottom: 12 }}
         onChange={(e) => { setQ(e.target.value); setPage(0) }} />
       <ErrorAlert error={error} />
       <Table rows={data?.content} rowKey={(l) => l.id} empty="No visits in this period" columns={[

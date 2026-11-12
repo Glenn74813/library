@@ -90,7 +90,7 @@ public class AttendanceService {
     public TapResult tap(TapRequest req) {
         if (req.code() == null || req.code().isBlank()) throw ApiException.badRequest("No ID was read");
         Patron p = patrons.findByIdentifier(req.code().trim())
-                .orElseThrow(() -> ApiException.notFound("Library card"));
+                .orElseThrow(() -> ApiException.notFound("Library ID"));
         Instant now = req.timestamp() != null && req.timestamp().isBefore(Instant.now()) ? req.timestamp() : Instant.now();
         EntryMethod method = req.method() == null ? EntryMethod.MANUAL : req.method();
         KioskConfig cfg = config();
@@ -100,7 +100,7 @@ public class AttendanceService {
 
         List<String> warnings = new java.util.ArrayList<>();
         if (p.isBlocked()) warnings.add("Account is blocked - please see the librarian");
-        if (p.isExpired(day)) warnings.add("Library card expired on " + p.getExpiryDate());
+        if (p.isExpired(day)) warnings.add("Library ID expired on " + p.getExpiryDate());
 
         if (last.isPresent()) {
             AttendanceLog l = last.get();

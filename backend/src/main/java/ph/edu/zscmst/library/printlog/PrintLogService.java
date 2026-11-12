@@ -17,7 +17,7 @@ public class PrintLogService {
 
     /** What was printed. Documents with a reference (receipt, clearance, ID card) are numbered copy 1, 2, … */
     public enum Kind {
-        ID_CARD("Library ID card"), CARD_SLIP("Card slip"), PIN_SLIP("Card slip with PIN"), CLEARANCE("Library clearance"),
+        ID_CARD("Library ID"), CARD_SLIP("Card slip"), PIN_SLIP("PIN slip"), CLEARANCE("Library clearance"),
         CHECKOUT_SLIP("Borrowing slip"), RETURN_SLIP("Return slip"), HOLD_SLIP("Hold shelf slip"),
         RECEIPT("Official receipt"), CASH_REPORT("End-of-day report");
 

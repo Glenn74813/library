@@ -26,7 +26,7 @@ const LIMITS: { key: keyof PrivacySettings; label: string; unit: string; max: nu
   { key: 'retainAttendanceYears', label: 'Library visits (attendance)', unit: 'years', max: 50,
     hint: 'Visits older than this are anonymized; visitor counts are kept' },
   { key: 'anonymizeExpiredYears', label: 'Expired patrons (graduated, resigned)', unit: 'years after expiry', max: 50,
-    hint: 'Patrons with nothing on loan and no unpaid fines are anonymized this long after their card expires' },
+    hint: 'Patrons with nothing on loan and no unpaid fines are anonymized this long after their library ID expires' },
   { key: 'retainGateDays', label: 'Security gate log', unit: 'days', max: 3650, hint: 'Gate events older than this are deleted' },
   { key: 'retainNoticeDays', label: 'Sent notices', unit: 'days', max: 3650, hint: 'Copies of sent email/SMS notices older than this are deleted' },
   { key: 'retainAuditYears', label: 'Audit trail', unit: 'years', max: 50, hint: 'Staff action log entries older than this are deleted' },

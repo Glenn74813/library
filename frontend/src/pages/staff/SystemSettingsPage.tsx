@@ -68,7 +68,7 @@ export function SystemSettingsPage() {
             <div className="form-grid">
               <Field label="OPAC kiosk reset (seconds)" hint="Search kiosks clear the screen after this much inactivity">
                 <input type="number" min={15} max={3600} value={f.kiosks.opacResetSeconds} onChange={section('kiosks', 'opacResetSeconds')} /></Field>
-              <Field label="Ignore repeat taps (seconds)" hint="Attendance kiosk ignores the same card tapped again within this time; 0 = never">
+              <Field label="Ignore repeat taps (seconds)" hint="Attendance kiosk ignores the same library ID tapped again within this time; 0 = never">
                 <input type="number" min={0} max={3600} value={f.kiosks.duplicateTapSeconds} onChange={section('kiosks', 'duplicateTapSeconds')} /></Field>
               <Field label="Self-checkout" as="div" className="span-all" hint="Kiosk at /kiosk/selfcheck; the same loan rules as the desk, without overrides">
                 <div className="stack" style={{ gap: 4 }}>

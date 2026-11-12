@@ -29,7 +29,7 @@ export function AuditPage() {
       <ErrorAlert error={error} />
       <div className="card">
         <div className="form-grid" style={{ marginBottom: 8 }}>
-          <Field label="Search details"><input value={q} onChange={change(setQ)} placeholder="Barcode, card number, title…" /></Field>
+          <Field label="Search details"><input value={q} onChange={change(setQ)} placeholder="Barcode, ID number, title…" /></Field>
           <Field label="User"><input value={actor} onChange={change(setActor)} placeholder="Username or sip2:station" /></Field>
           <Field label="Action">
             <select value={action} onChange={change(setAction)}>

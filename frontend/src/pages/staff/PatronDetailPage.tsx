@@ -46,14 +46,8 @@ export function PatronDetailPage() {
   const { data: prints, reload: reloadPrints } = useAsync(() => api<PrintEntry[]>(`/api/patrons/${id}/prints`), [id])
   const refreshAll = () => { void reload(); void reloadFines(); void reloadPrints(); setSelected([]) }
 
-  async function printCardSlip() {
-    if (!s || !(await confirmReprint('CARD_SLIP', s.patron.cardNumber, 'This patron\'s card slip'))) return
-    await printRecorded({ kind: 'CARD_SLIP', patronId: s.patron.id, reference: s.patron.cardNumber }, <PatronSlip lib={lib} patron={s.patron} />)
-    void reloadPrints()
-  }
-
   async function printIdCard() {
-    if (!s || !(await confirmReprint('ID_CARD', s.patron.cardNumber, 'This patron\'s library ID card'))) return
+    if (!s || !(await confirmReprint('ID_CARD', s.patron.cardNumber, 'This patron\'s library ID'))) return
     // The server records the ID card when it generates the PDF.
     await openPdf(`/api/labels/patron-cards${qs({ cards: s.patron.cardNumber })}`).catch((err) => toast(errorText(err), 'error'))
     void reloadPrints()
@@ -159,14 +153,12 @@ export function PatronDetailPage() {
           <select className="btn" style={{ width: 'auto' }} value="" aria-label="Print" onChange={(e) => {
             const v = e.target.value
             if (v === 'card') void printIdCard()
-            if (v === 'welcome') void printCardSlip()
             if (v === 'history') setTab('printed')
             if (v === 'clearance') setClearanceOpen(true)
           }}>
             <option value="" disabled>Print…</option>
-            <option value="welcome">Card slip (receipt printer)</option>
             <option value="clearance">Library clearance…</option>
-            <option value="card">ID card (PDF)</option>
+            <option value="card">Library ID (PDF)</option>
             <option value="history">Print history ({prints?.length ?? 0})</option>
           </select>
           <button className="btn" onClick={() => setHoldOpen(true)}>Reserve / book</button>
@@ -182,10 +174,10 @@ export function PatronDetailPage() {
         </div>
       </div>
       {justRegistered && <div className="alert success row" style={{ marginBottom: 16, justifyContent: 'space-between' }}>
-        <span><strong>Patron registered.</strong> Give them a card slip with their card number and the My Library address
+        <span><strong>Patron registered.</strong> Print their library ID
           {p.hasPin ? '' : ', and set a PIN so they can sign in'}.</span>
         <span className="row-actions">
-          <button className="btn small" onClick={() => void printCardSlip()}><Icon name="printer" />Print card slip</button>
+          <button className="btn small" onClick={() => void printIdCard()}><Icon name="printer" />Print library ID</button>
           {!p.hasPin && <button className="btn small" onClick={() => setPinOpen(true)}>Set PIN</button>}
           <button className="btn small" onClick={() => setParams({}, { replace: true })}>Done</button>
         </span>
@@ -311,7 +303,7 @@ function PinModal({ patron, onClose, onSaved }: { patron: Patron; onClose: () =>
       footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={save}>Save PIN</button></>}>
       <div className="stack">
         <ErrorAlert error={error} />
-        <p className="muted small">The patron signs in to My Library with their card number and this PIN.</p>
+        <p className="muted small">The patron signs in to My Library with their ID number and this PIN.</p>
         <Field label="New PIN (4–8 digits)"><input inputMode="numeric" pattern="\d*" maxLength={8} value={pin}
           onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} autoFocus /></Field>
         <label className="check"><input type="checkbox" checked={printIt} onChange={(e) => setPrintIt(e.target.checked)} />
@@ -467,7 +459,7 @@ function AnonymizeModal({ patronId, name, onClose, onDone }: { patronId: number;
       <button className="btn danger solid" disabled={busy || confirm.trim().toUpperCase() !== 'ANONYMIZE'} onClick={submit}>Anonymize</button>
     </>}>
       <div className="stack">
-        <p style={{ margin: 0 }}>This permanently removes <strong>{name}</strong>'s name, card number, RFID card, email, phone, photo and PIN,
+        <p style={{ margin: 0 }}>This permanently removes <strong>{name}</strong>'s name, ID number, RFID tag, email, phone, photo and PIN,
           cancels open reservations and deletes their notices. Their past loans and fines stay as anonymous statistics.
           It can't be undone. Download their data first if they asked for a copy.</p>
         <p className="muted small" style={{ margin: 0 }}>Items still on loan must be checked in and unpaid fines settled or waived first.</p>

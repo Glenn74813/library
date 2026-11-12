@@ -50,12 +50,12 @@ export function PatronsPage() {
         </div>
       </div>
       <div className="card">
-        <input type="search" placeholder="Search by name, card number or email…" value={q} style={{ marginBottom: 12 }}
+        <input type="search" placeholder="Search by name, ID number or email…" value={q} style={{ marginBottom: 12 }}
           onChange={(e) => { setQ(e.target.value); setPage(0) }} aria-label="Search patrons" />
         <ErrorAlert error={error} />
         <Table rows={data?.content} rowKey={(p) => p.id} onRowClick={(p) => navigate(`/staff/patrons/${p.id}`)} empty="No patrons found" columns={[
           { header: 'Name', render: (p) => <strong>{p.lastName}, {p.firstName}</strong> },
-          { header: 'Card no.', render: (p) => <span className="mono">{p.cardNumber}</span> },
+          { header: 'ID no.', render: (p) => <span className="mono">{p.cardNumber}</span> },
           { header: 'Category', render: (p) => p.categoryName },
           { header: 'Course', render: (p) => p.courseCode ?? '—' },
           { header: 'Expiry', render: (p) => p.expiryDate ? <span className={p.expiryDate < today ? 'badge bad' : ''}>{fmtDate(p.expiryDate)}</span> : '—' },

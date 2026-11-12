@@ -152,8 +152,8 @@ public class TaskController {
         }
         long expiredCards = loans.countPatronsWithExpiredCardAndLoans(today);
         if (expiredCards > 0) {
-            tasks.add(new Task("patrons-expired", Severity.WARNING, expiredCards + " patron(s) with expired cards still borrowing",
-                    "Renew their cards or collect the items.", expiredCards, "/staff/patrons"));
+            tasks.add(new Task("patrons-expired", Severity.WARNING, expiredCards + " patron(s) with expired library IDs still borrowing",
+                    "Renew their library IDs or collect the items.", expiredCards, "/staff/patrons"));
         }
         BigDecimal unpaid = fines.totalUnpaid();
         if (unpaid.signum() > 0) {

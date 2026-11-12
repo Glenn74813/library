@@ -66,7 +66,7 @@ public class PatronPhotoController {
     public PatronDto uploadOwn(@AuthenticationPrincipal Jwt jwt, @RequestPart("file") MultipartFile file) throws IOException {
         Patron p = own(jwt);
         replacePhoto(p, file);
-        audit.record(p.getCardNumber(), "PATRON_PHOTO_SELF", "photo for the library card");
+        audit.record(p.getCardNumber(), "PATRON_PHOTO_SELF", "photo for the library ID");
         return PatronDto.of(p);
     }
 

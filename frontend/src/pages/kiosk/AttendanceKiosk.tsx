@@ -127,7 +127,7 @@ function KioskScreen() {
       show({ kind: 'ok', result })
     } catch (e) {
       if (e instanceof ApiError && !isOffline(e)) {
-        show({ kind: 'error', message: e.status === 404 ? 'Card not recognized. Please see the librarian.' : e.message })
+        show({ kind: 'error', message: e.status === 404 ? 'ID not recognized. Please see the librarian.' : e.message })
       } else {
         const q = [...readQueue(), { id: newId(), code: c, method, timestamp: new Date().toISOString() }]
         writeQueue(q)
@@ -203,7 +203,7 @@ function KioskScreen() {
           {!online && <span className="offline-pill">OFFLINE — taps saved{queued ? ` (${queued})` : ''}</span>}
           {online && queued > 0 && <span className="offline-pill">Syncing {queued}…</span>}
         </div>
-        {!standby && !manual && <button className="btn ghost" onClick={() => setManual(true)}><Icon name="type" />No card? Enter ID</button>}
+        {!standby && !manual && <button className="btn ghost" onClick={() => setManual(true)}><Icon name="type" />No ID with you? Enter your ID number</button>}
       </footer>
     </div>
   )

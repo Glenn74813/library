@@ -43,7 +43,7 @@ public class KioskPatrons {
     /** Runs outside a transaction so a wrong PIN is counted even though the request then fails. */
     public Patron verify(String card, String pin, String where) {
         Patron p = patrons.findByIdentifier(card.trim()).filter(x -> x.getAnonymizedAt() == null)
-                .orElseThrow(() -> ApiException.notFound("Library card"));
+                .orElseThrow(() -> ApiException.notFound("Library ID"));
         Instant now = Instant.now();
         if (p.isPinLocked(now)) {
             throw new ApiException(HttpStatus.LOCKED, "Too many wrong PINs. Please ask at the circulation desk.");

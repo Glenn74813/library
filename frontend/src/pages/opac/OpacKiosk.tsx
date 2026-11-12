@@ -151,7 +151,7 @@ function OpacDetailModal({ id, kiosk, onClose }: { id: number; kiosk: boolean; o
             ) },
           ]} />
           {kiosk && lendable.length > 0 && <p className="muted small">To borrow or reserve, tap <strong>{lendable.some((i) => i.status === 'AVAILABLE')
-            ? 'Borrow or reserve' : 'Reserve or book'}</strong> and scan your library card.{r.ebook ? ' To read the e-book, sign in to My Library on your phone.' : ''}</p>}
+            ? 'Borrow or reserve' : 'Reserve or book'}</strong> and scan your library ID.{r.ebook ? ' To read the e-book, sign in to My Library on your phone.' : ''}</p>}
           {kiosk && lendable.length === 0 && r.ebook && <p className="muted small">To read this e-book, sign in to My Library on your phone.</p>}
           {!kiosk && r.ebook?.kind === 'SCHOOL_OWNED' && <p className="muted small" style={{ margin: 0 }}>School-owned e-book: free to read for signed-in patrons.</p>}
         </div>

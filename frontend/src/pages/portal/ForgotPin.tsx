@@ -49,9 +49,9 @@ export function ForgotPin() {
         <div className="school">{lib.name}</div>
         <ErrorAlert error={error} />
         {step === 'request' ? <>
-          <p className="muted small" style={{ margin: 0 }}>Enter your card number and the e-mail address the library has for you.
+          <p className="muted small" style={{ margin: 0 }}>Enter your ID number and the e-mail address the library has for you.
             We'll send a code to set a new PIN.</p>
-          <Field label="Library card / ID number"><input value={card} onChange={(e) => setCard(e.target.value)} required autoFocus /></Field>
+          <Field label="Library ID number"><input value={card} onChange={(e) => setCard(e.target.value)} required autoFocus /></Field>
           <Field label="E-mail address"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
           <button className="btn primary block" disabled={busy}>{busy ? 'Sending…' : 'Send code'}</button>
         </> : <>

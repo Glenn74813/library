@@ -117,7 +117,7 @@ public class AuthController {
                 audit.record(patron.getCardNumber(), "LOGIN_LOCKED", "Patron PIN locked after repeated failures");
                 throw locked(claim.locksOnFailure(), now);
             }
-            throw new BadCredentialsException("Invalid card number or PIN");
+            throw new BadCredentialsException("Invalid ID number or PIN");
         }
         throttle.succeeded(Account.PATRON, patron.getId());
         return AuthResponse.of(tokens.issue(patron));

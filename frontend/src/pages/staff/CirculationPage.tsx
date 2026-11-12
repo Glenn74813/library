@@ -263,10 +263,10 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
     <div className="card stack">
       <form className="stack" onSubmit={loadPatron} ref={patronForm}>
         <label className="field">
-          <span>1. Scan patron card (barcode / RFID) or type card number</span>
+          <span>1. Scan the patron's library ID (barcode / RFID) or type the ID number</span>
           <div className="input-group">
             <input className="scan-input" value={patronCode} onChange={(e) => setPatronCode(e.target.value)} autoFocus
-              placeholder="Patron card" autoComplete="off" />
+              placeholder="Library ID" autoComplete="off" />
             <CameraScanButton onScan={(t) => { setPatronCode(t); setTimeout(() => patronForm.current?.requestSubmit(), 0) }} />
             <button className="btn">Load</button>
           </div>
@@ -276,7 +276,7 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
       {offlinePatron && !summary && (
         <>
           <div className="alert warn small">
-            <strong>Offline:</strong> card <span className="mono">{offlinePatron}</span> can't be verified right now. Loans are saved on this
+            <strong>Offline:</strong> ID <span className="mono">{offlinePatron}</span> can't be verified right now. Loans are saved on this
             computer and checked against the loan rules when they upload; any rule they break is flagged for review.
           </div>
           <form className="stack" onSubmit={checkout} ref={itemForm}>

@@ -99,7 +99,7 @@ public class PatronService {
     private void checkCodesFree(Patron p) {
         for (String code : new String[] {p.getCardNumber(), p.getRfidUid()}) {
             if (code != null && patrons.idsUsingCode(code).stream().anyMatch(id -> !id.equals(p.getId()))) {
-                throw ApiException.conflict("Another patron already uses the code " + code + " (as card number or RFID)");
+                throw ApiException.conflict("Another patron already uses the code " + code + " (as ID number or RFID)");
             }
         }
     }

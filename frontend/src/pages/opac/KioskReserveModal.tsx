@@ -14,7 +14,7 @@ const fmt = new Intl.DateTimeFormat('en-PH', { weekday: 'short', month: 'short',
 
 /**
  * Catalog kiosk: borrow (a copy is set aside at the desk), join the line, or book a date, after scanning
- * the library card or typing the card number (and PIN, when the library requires one). Nothing stays
+ * the library ID or typing the ID number (and PIN, when the library requires one). Nothing stays
  * signed in: each request sends the card again, and closing the window forgets it.
  */
 export function KioskReserveModal({ recordId, title, available, onClose }: {
@@ -41,7 +41,7 @@ export function KioskReserveModal({ recordId, title, available, onClose }: {
 
   const identify = (e?: FormEvent) => {
     e?.preventDefault()
-    if (!card.trim()) return setError('Scan your library card or type your card number.')
+    if (!card.trim()) return setError('Scan your library ID or type your ID number.')
     if (config?.requirePin && !pin) { setFocus('pin'); return setError('Enter your PIN.') }
     void run(async () => {
       const r = await api<{ firstName: string }>('/api/opac/reserve/identify', { anonymous: true, body: patron })
@@ -75,8 +75,8 @@ export function KioskReserveModal({ recordId, title, available, onClose }: {
         <ErrorAlert error={error} />
 
         {step === 'card' && <form className="stack" onSubmit={identify}>
-          <p className="muted" style={{ margin: 0 }}>Scan your library card, or type your card number{config?.requirePin ? ' and PIN' : ''}.</p>
-          <Field label="Card number">
+          <p className="muted" style={{ margin: 0 }}>Scan your library ID, or type your ID number{config?.requirePin ? ' and PIN' : ''}.</p>
+          <Field label="ID number">
             <input value={card} onChange={(e) => setCard(e.target.value)} onFocus={() => setFocus('card')} autoFocus
               autoComplete="off" inputMode="none" />
           </Field>
@@ -110,7 +110,7 @@ export function KioskReserveModal({ recordId, title, available, onClose }: {
 
         {step === 'done' && done && <div className="alert success">
           <strong>{done.title}</strong><br />{done.message}
-          <div className="small" style={{ marginTop: 6 }}>Bring your library card. You can also see this in My Library.</div>
+          <div className="small" style={{ marginTop: 6 }}>Bring your library ID. You can also see this in My Library.</div>
         </div>}
       </div>
     </Modal>

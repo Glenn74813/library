@@ -30,7 +30,7 @@ const NAV: { section: string; icon: IconName; items: NavItem[] }[] = [
       { to: '/staff/catalog', label: 'Catalog' },
       { to: '/staff/inventory', label: 'Stocktake' },
       { to: '/staff/authorities', label: 'Authorities' },
-      { to: '/staff/labels', label: 'Labels & ID cards' },
+      { to: '/staff/labels', label: 'Labels & library IDs' },
     ],
   },
   {

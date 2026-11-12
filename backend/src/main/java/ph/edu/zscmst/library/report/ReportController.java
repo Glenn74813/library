@@ -120,21 +120,21 @@ public class ReportController {
         LocalDate f = from == null ? t.minusDays(29) : from;
         return switch (type) {
             case "loans" -> Pdf.export(format, "loans-" + f + "-to-" + t, "Loans", f + " to " + t,
-                    List.of("Checkout", "Due", "Returned", "Barcode", "Title", "Card Number", "Patron", "Renewals"),
+                    List.of("Checkout", "Due", "Returned", "Barcode", "Title", "ID Number", "Patron", "Renewals"),
                     loans.findByCheckoutAtBetweenOrderByCheckoutAtAsc(clock.startOfDay(f), lastInstantBefore(clock.startOfDay(t.plusDays(1))))
                             .stream().map(this::loanRow).toList());
             case "overdue" -> Pdf.export(format, "overdue-" + clock.today(), "Overdue Loans", "As of " + clock.today(),
-                    List.of("Checkout", "Due", "Returned", "Barcode", "Title", "Card Number", "Patron", "Renewals"),
+                    List.of("Checkout", "Due", "Returned", "Barcode", "Title", "ID Number", "Patron", "Renewals"),
                     loans.findByReturnedAtIsNullAndDueAtBefore(Instant.now()).stream().map(this::loanRow).toList());
             case "fines" -> Pdf.export(format, "fines-" + clock.today(), "Fines", null,
-                    List.of("Date", "Card Number", "Patron", "Amount", "Reason", "Status", "Receipt", "Settled By"),
+                    List.of("Date", "ID Number", "Patron", "Amount", "Reason", "Status", "Receipt", "Settled By"),
                     fines.findAll().stream().map(this::fineRow).toList());
             case "collection" -> Pdf.export(format, "collection-" + clock.today(), "Collection", null,
                     List.of("Barcode", "RFID EPC", "Title", "Authors", "ISBN", "Call Number", "Type", "Location",
                             "Aisle", "Shelf", "Status", "Acquired", "Price"),
                     items.findAll().stream().map(this::itemRow).toList());
             case "patrons" -> Pdf.export(format, "patrons-" + clock.today(), "Patrons", null,
-                    List.of("Card Number", "Last Name", "First Name", "Category", "Course", "Email", "Phone",
+                    List.of("ID Number", "Last Name", "First Name", "Category", "Course", "Email", "Phone",
                             "Expiry", "Blocked"),
                     patrons.findAll().stream().filter(p -> p.getAnonymizedAt() == null).map(this::patronRow).toList());
             default -> throw ApiException.notFound("Report type '" + type + "'");
