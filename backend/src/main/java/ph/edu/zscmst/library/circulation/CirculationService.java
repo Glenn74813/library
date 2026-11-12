@@ -109,6 +109,17 @@ public class CirculationService {
         PatronCategory cat = p.getCategory();
         List<String> warnings = new ArrayList<>();
 
+        // A copy that is out already is the real problem (often the same book scanned twice), whatever the
+        // patron's limits say, and no override can lend it a second time.
+        if (item.getStatus() == ItemStatus.ON_LOAN) {
+            Loan out = loans.findByItemIdAndReturnedAtIsNull(item.getId()).orElse(null);
+            if (out != null && out.getPatron().getId().equals(p.getId())) {
+                throw ApiException.conflict("Already checked out to " + p.getFullName() + " (due "
+                        + clock.toDate(out.getDueAt()).format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
+                        + "): this copy was scanned again");
+            }
+            throw ApiException.conflict("This copy is checked out to another patron. Check it in first.");
+        }
         if (p.isBlocked()) {
             throw ApiException.conflict("Patron is blocked" + (p.getBlockReason() == null ? "" : ": " + p.getBlockReason()));
         }
@@ -136,7 +147,7 @@ public class CirculationService {
                 hold.close(HoldStatus.FULFILLED, AuditService.currentActor(), now);
                 released = hold;
             }
-            case ON_LOAN -> throw ApiException.conflict("Item is already checked out");
+            case ON_LOAN -> throw ApiException.conflict("Item is already checked out"); // checked above
             default -> throw ApiException.conflict("Item cannot be borrowed (status: " + item.getStatus() + ")");
         }
 
