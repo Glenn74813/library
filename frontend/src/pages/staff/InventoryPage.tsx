@@ -1,10 +1,10 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { api } from '../../api/client'
-import type { LibrarySection, ScanResult, StocktakeReport, StocktakeSession } from '../../api/types'
+import type { AisleCount, LibrarySection, ScanResult, ShelfRow, StocktakeReport, StocktakeSession } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
 import { CameraScanButton } from '../../components/CameraScan'
-import { ErrorAlert, Field, Modal, Stat, StatusBadge, Table, ExportMenu } from '../../components/ui'
+import { ErrorAlert, Field, Modal, Stat, StatusBadge, Table, Tabs, ExportMenu } from '../../components/ui'
 import { fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
@@ -26,7 +26,7 @@ export function InventoryPage() {
       <div className="card">
         <Table rows={data} rowKey={(s) => s.id} onRowClick={setActive} empty="No stocktakes yet" columns={[
           { header: 'Name', render: (s) => <strong>{s.name}</strong> },
-          { header: 'Location', render: (s) => s.location ?? 'Whole collection' },
+          { header: 'Location', render: (s) => scopeLabel(s) },
           { header: 'Started', render: (s) => <>{fmtDateTime(s.startedAt)}<div className="muted small">{s.startedBy}</div></> },
           { header: 'Scanned', render: (s) => s.scanned },
           { header: 'Status', render: (s) => s.closedAt ? <span className="badge">Closed</span> : <span className="badge ok">Open</span> },
@@ -37,14 +37,20 @@ export function InventoryPage() {
   )
 }
 
+function scopeLabel(s: StocktakeSession) {
+  return s.location ? `${s.location}${s.aisle ? ` · Aisle ${s.aisle}` : ' · all aisles'}` : 'Whole collection'
+}
+
 function NewSession({ onClose, onCreated }: { onClose: () => void; onCreated: (s: StocktakeSession) => void }) {
   const [name, setName] = useState(`Stocktake ${new Date().toLocaleDateString()}`)
   const [location, setLocation] = useState('')
+  const [aisle, setAisle] = useState('')
   const { data: sections } = useAsync(() => api<LibrarySection[]>('/api/sections'), [])
+  const aisles = sections?.find((s) => s.name === location)?.aisles ?? []
   const [error, setError] = useState<string | null>(null)
   async function create() {
     try {
-      onCreated(await api<StocktakeSession>('/api/inventory/sessions', { body: { name, location } }))
+      onCreated(await api<StocktakeSession>('/api/inventory/sessions', { body: { name, location, aisle: aisle || null } }))
     } catch (e) {
       setError(errorText(e))
     }
@@ -54,11 +60,16 @@ function NewSession({ onClose, onCreated }: { onClose: () => void; onCreated: (s
       <div className="stack">
         <ErrorAlert error={error} />
         <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-        <Field label="Section / area" hint="Copies from another section are reported as misplaced. Sections are listed under Collection → Sections.">
-          <select value={location} onChange={(e) => setLocation(e.target.value)}>
+        <Field label="Section / area" hint="Copies from another section or aisle are reported as misplaced. An administrator sets up sections and aisles.">
+          <select value={location} onChange={(e) => { setLocation(e.target.value); setAisle('') }}>
             <option value="">Whole collection (no misplaced check)</option>
             {sections?.map((s) => <option key={s.id} value={s.name}>{s.name} ({s.copies})</option>)}
           </select></Field>
+        {location && <Field label="Aisle" hint="Count one aisle at a time; the shelf list and report then cover just that aisle">
+          <select value={aisle} onChange={(e) => setAisle(e.target.value)}>
+            <option value="">All aisles of {location}</option>
+            {aisles.map((a) => <option key={a.id} value={a.name}>Aisle {a.name} · {a.shelves} shelves ({a.copies})</option>)}
+          </select></Field>}
       </div>
     </Modal>
   )
@@ -69,6 +80,8 @@ function SessionView({ session, onBack }: { session: StocktakeSession; onBack: (
   const [scans, setScans] = useState<ScanResult[]>([])
   const [report, setReport] = useState<StocktakeReport | null>(null)
   const [closed, setClosed] = useState(!!session.closedAt)
+  const [view, setView] = useState<'scans' | 'shelf'>('shelf')
+  const { data: shelf, reload: reloadShelf } = useAsync(() => api<ShelfRow[]>(`/api/inventory/sessions/${session.id}/shelf-list`), [session.id])
   const ref = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const toast = useToast()
@@ -80,6 +93,7 @@ function SessionView({ session, onBack }: { session: StocktakeSession; onBack: (
     try {
       const r = await api<ScanResult>(`/api/inventory/sessions/${session.id}/scan`, { body: { code: code.trim() } })
       setScans((s) => [r, ...s].slice(0, 100))
+      void reloadShelf()
     } catch (err) {
       toast(errorText(err), 'error')
     }
@@ -113,7 +127,7 @@ function SessionView({ session, onBack }: { session: StocktakeSession; onBack: (
           {!closed && canClose && <button className="btn danger" onClick={close}>Close session</button>}
         </div>
       </div>
-      <p className="muted">{session.location ? `Location: ${session.location}` : 'Whole collection'}{closed && ' · closed'}</p>
+      <p className="muted">{scopeLabel(session)}{closed && ' · closed'}</p>
       {!closed && (
         <form className="card" onSubmit={scan} style={{ marginBottom: 16 }} ref={formRef}>
           <label className="field"><span>Scan each item on the shelf (barcode or RFID)</span>
@@ -135,7 +149,14 @@ function SessionView({ session, onBack }: { session: StocktakeSession; onBack: (
             <Stat label="Status mismatch" value={report.unexpectedStatus.length} tone={report.unexpectedStatus.length ? 'warn' : undefined} />
             <Stat label="Unknown codes" value={report.unknownCodes.length} />
           </div>
-          <div className="row"><ExportMenu path={`/api/inventory/sessions/${session.id}/report/export`} name="stocktake" label="Download report…" /></div>
+          <div className="row">
+            <ExportMenu path={`/api/inventory/sessions/${session.id}/report/export`} name="stocktake" label="Download report…" />
+            <button className="btn" onClick={() => setReport(null)}>Back to counting</button>
+          </div>
+          <div className="card">
+            <h2>Shelf list vs. scanned, by aisle</h2>
+            <AisleTable aisles={report.aisles} />
+          </div>
           {[['Missing', report.missing], ['Misplaced', report.misplaced], ['Found with unexpected status', report.unexpectedStatus]].map(([title, list]) => (
             <div className="card" key={title as string}>
               <h2>{title as string}</h2>
@@ -151,15 +172,60 @@ function SessionView({ session, onBack }: { session: StocktakeSession; onBack: (
         </div>
       ) : (
         <div className="card">
-          <h2>Recent scans</h2>
-          <Table rows={scans} rowKey={(s) => s.code + s.message} empty="Scan items to begin" columns={[
-            { header: 'Code', render: (s) => <span className="mono">{s.code}</span> },
-            { header: 'Result', render: (s) => <StatusBadge status={s.result} /> },
-            { header: 'Title', render: (s) => s.title ?? '—' },
-            { header: 'Note', render: (s) => s.message },
-          ]} />
+          <div className="page-head" style={{ marginBottom: 8 }}>
+            <Tabs value={view} onChange={setView} tabs={[
+              { id: 'shelf', label: `Shelf list (${shelf?.filter((r) => r.scanned).length ?? 0}/${shelf?.length ?? 0})` },
+              { id: 'scans', label: `Recent scans (${scans.length})` }]} />
+            <ExportMenu path={`/api/inventory/sessions/${session.id}/shelf-list/export`} name="shelf-list" label="Print shelf list…" />
+          </div>
+          {view === 'shelf' ? <>
+            <p className="muted small" style={{ marginTop: 0 }}>Every copy the catalog says should be on these shelves, in shelf order.
+              Scanned copies are ticked; the rest are what is missing so far.</p>
+            {shelf && <AisleTable aisles={countByAisle(shelf)} />}
+            <Table rows={shelf} rowKey={(r) => r.barcode} empty="The catalog has no copies on these shelves" columns={[
+              { header: '', render: (r) => r.scanned ? <span className="badge ok" aria-label="Scanned"><Icon name="check" /></span>
+                : <span className="badge" aria-label="Not scanned yet">—</span> },
+              { header: 'Aisle', render: (r) => r.aisle },
+              { header: 'Shelf', render: (r) => r.shelf ?? '—' },
+              { header: 'Call no.', render: (r) => <span className="mono small">{r.callNumber ?? '—'}</span> },
+              { header: 'Title', render: (r) => r.title },
+              { header: 'Barcode', render: (r) => <span className="mono">{r.barcode}</span> },
+            ]} />
+          </> : (
+            <Table rows={scans} rowKey={(s) => s.code + s.message} empty="Scan items to begin" columns={[
+              { header: 'Code', render: (s) => <span className="mono">{s.code}</span> },
+              { header: 'Result', render: (s) => <StatusBadge status={s.result} /> },
+              { header: 'Title', render: (s) => s.title ?? '—' },
+              { header: 'Note', render: (s) => s.message },
+            ]} />
+          )}
         </div>
       )}
     </>
+  )
+}
+
+function countByAisle(rows: ShelfRow[]): AisleCount[] {
+  const map = new Map<string, AisleCount>()
+  for (const r of rows) {
+    const c = map.get(r.aisle) ?? { aisle: r.aisle, expected: 0, found: 0, missing: 0 }
+    c.expected++
+    if (r.scanned) c.found++
+    else c.missing++
+    map.set(r.aisle, c)
+  }
+  return [...map.values()]
+}
+
+/** Expected (shelf list), found and missing copies per aisle. */
+function AisleTable({ aisles }: { aisles: AisleCount[] }) {
+  return (
+    <Table rows={aisles} rowKey={(a) => a.aisle} empty="No copies expected" columns={[
+      { header: 'Aisle', render: (a) => <strong>{a.aisle === 'No aisle' ? a.aisle : `Aisle ${a.aisle}`}</strong> },
+      { header: 'On the shelf list', render: (a) => a.expected },
+      { header: 'Found', render: (a) => a.found },
+      { header: 'Missing', render: (a) => a.missing ? <span className="badge bad">{a.missing}</span> : <span className="badge ok">0</span> },
+      { header: 'Done', render: (a) => `${a.expected ? Math.round((a.found / a.expected) * 100) : 100}%` },
+    ]} />
   )
 }

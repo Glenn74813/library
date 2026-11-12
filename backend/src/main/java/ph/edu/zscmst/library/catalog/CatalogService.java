@@ -238,9 +238,11 @@ public class CatalogService {
 
     private void applyItem(Item i, ItemRequest req, boolean isNew) {
         i.setRfidEpc(trim(req.rfidEpc()) == null ? null : req.rfidEpc().trim().toUpperCase());
-        i.setLocation(sections.require(req.location()));
-        i.setAisle(trim(req.aisle()));
-        i.setShelf(trim(req.shelf()));
+        // Section, aisle and shelf come from the layout under Administration → Sections & Aisles.
+        SectionService.Spot spot = sections.requireSpot(req.location(), req.aisle(), req.shelf());
+        i.setLocation(spot.section());
+        i.setAisle(spot.aisle());
+        i.setShelf(spot.shelf());
         i.setRoomUseOnly(req.roomUseOnly());
         i.setAcquiredDate(req.acquiredDate());
         i.setPrice(req.price());

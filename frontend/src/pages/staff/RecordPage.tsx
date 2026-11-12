@@ -263,6 +263,10 @@ function ItemModal({ recordId, item, canDelete, others, onClose, onSaved }: {
   const set = <K extends keyof Item>(k: K, v: Item[K] | null) => setF((x) => ({ ...x, [k]: v }))
   const circulating = f.status === 'ON_LOAN' || f.status === 'ON_HOLD'
   const { data: sections } = useAsync(() => api<LibrarySection[]>('/api/sections'), [])
+  const isAdmin = hasRole(useSession(), 'ADMIN')
+  // Aisle and shelf choices come from the section's layout (Administration → Sections & Aisles).
+  const section = sections?.find((s) => s.name === f.location)
+  const aisle = section?.aisles.find((a) => a.name.toLowerCase() === (f.aisle ?? '').toLowerCase())
 
   async function save() {
     setError(null)
@@ -307,8 +311,9 @@ function ItemModal({ recordId, item, canDelete, others, onClose, onSaved }: {
             <input className="mono" value={f.barcode ?? ''} onChange={(e) => set('barcode', e.target.value)} autoFocus />
             <CameraScanButton onScan={(t) => set('barcode', t)} /></div></Field>
           <Field label="RFID tag EPC" hint="Read with the tagging device"><input className="mono" value={f.rfidEpc ?? ''} onChange={(e) => set('rfidEpc', e.target.value)} /></Field>
-          <Field label="Section / area" as="div" hint={<>Sections are listed under <Link to="/staff/sections">Collection → Sections</Link></>}>
-            <select value={f.location ?? ''} onChange={(e) => set('location', e.target.value || null)}>
+          <Field label="Section / area" as="div" hint={isAdmin ? <>Set up under <Link to="/staff/sections">Sections &amp; Aisles</Link></>
+            : 'Sections and aisles are set up by an administrator'}>
+            <select value={f.location ?? ''} onChange={(e) => setF((x) => ({ ...x, location: e.target.value || null, aisle: null, shelf: null }))}>
               <option value="">Not set</option>
               {sections?.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
               {/* A section no longer on the list stays visible until it is changed. */}
@@ -323,8 +328,21 @@ function ItemModal({ recordId, item, canDelete, others, onClose, onSaved }: {
               <option value="false">Can be borrowed</option>
             </select>
           </Field>
-          <Field label="Aisle" hint="e.g. 1, 3A"><input value={f.aisle ?? ''} maxLength={20} onChange={(e) => set('aisle', e.target.value)} /></Field>
-          <Field label="Shelf" hint="e.g. 2, top"><input value={f.shelf ?? ''} maxLength={20} onChange={(e) => set('shelf', e.target.value)} /></Field>
+          <Field label="Aisle" hint={f.location && !section?.aisles.length ? 'This section has no aisles yet' : undefined}>
+            <select value={f.aisle ?? ''} disabled={!section} onChange={(e) => setF((x) => ({ ...x, aisle: e.target.value || null, shelf: null }))}>
+              <option value="">{section ? 'Not set' : 'Choose a section first'}</option>
+              {section?.aisles.map((a) => <option key={a.id} value={a.name}>Aisle {a.name}</option>)}
+              {f.aisle && section && !aisle && <option value={f.aisle}>{f.aisle} (not on the list)</option>}
+            </select>
+          </Field>
+          <Field label="Shelf" hint={aisle ? `Aisle ${aisle.name} has ${aisle.shelves} shelves` : undefined}>
+            <select value={f.shelf ?? ''} disabled={!aisle} onChange={(e) => set('shelf', e.target.value || null)}>
+              <option value="">{aisle ? 'Not set' : 'Choose an aisle first'}</option>
+              {aisle && Array.from({ length: aisle.shelves }, (_, n) => String(n + 1)).map((n) => <option key={n} value={n}>Shelf {n}</option>)}
+              {f.shelf && aisle && !(Number(f.shelf) >= 1 && Number(f.shelf) <= aisle.shelves && /^\d+$/.test(f.shelf))
+                && <option value={f.shelf}>{f.shelf} (not on the list)</option>}
+            </select>
+          </Field>
           {others.length > 0 && (
             <label className="check span-all"><input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} />
               Use this section, aisle and shelf for all {others.length + 1} copies of this title</label>

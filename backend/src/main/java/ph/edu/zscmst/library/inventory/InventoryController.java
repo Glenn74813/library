@@ -1,9 +1,15 @@
 package ph.edu.zscmst.library.inventory;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jakarta.validation.Valid;
@@ -37,11 +43,20 @@ import ph.edu.zscmst.library.common.Pdf;
 @RequestMapping("/api/inventory/sessions")
 public class InventoryController {
 
-    public record SessionRequest(@NotBlank @Size(max = 120) String name, @Size(max = 100) String location) {
+    public record SessionRequest(@NotBlank @Size(max = 120) String name, @Size(max = 100) String location,
+                                 @Size(max = 20) String aisle) {
     }
 
-    public record SessionDto(Long id, String name, String location, String startedBy, Instant startedAt,
+    public record SessionDto(Long id, String name, String location, String aisle, String startedBy, Instant startedAt,
                              Instant closedAt, long scanned) {
+    }
+
+    /** One copy that should be on the shelves being counted, and whether it has been scanned yet. */
+    public record ShelfRow(String aisle, String shelf, String callNumber, String title, String barcode, boolean scanned) {
+    }
+
+    /** Per-aisle comparison of the shelf list with what was scanned. */
+    public record AisleCount(String aisle, long expected, long found, long missing) {
     }
 
     public record ScanRequest(@NotBlank @Size(max = 64) String code) {
@@ -58,12 +73,16 @@ public class InventoryController {
         }
     }
 
-    public record Report(SessionDto session, long expected, long found, List<ReportItem> missing,
+    public record Report(SessionDto session, long expected, long found, List<AisleCount> aisles, List<ReportItem> missing,
                          List<ReportItem> misplaced, List<ReportItem> unexpectedStatus, List<String> unknownCodes) {
     }
 
-    /** Statuses of items that should be physically on the shelf. */
-    private static final Set<ItemStatus> ON_SHELF = EnumSet.of(ItemStatus.AVAILABLE, ItemStatus.ON_HOLD);
+    /**
+     * Statuses of copies that should be on the open shelves. Copies on hold wait on the hold shelf at the
+     * desk, so they are not expected in an aisle (scanned there, they are reported to be moved).
+     */
+    private static final Set<ItemStatus> ON_SHELF = EnumSet.of(ItemStatus.AVAILABLE);
+    private static final String NO_AISLE = "No aisle";
 
     private final StocktakeSessionRepository sessions;
     private final StocktakeScanRepository scans;
@@ -84,7 +103,7 @@ public class InventoryController {
     }
 
     private SessionDto toDto(StocktakeSession s) {
-        return new SessionDto(s.getId(), s.getName(), s.getLocation(), s.getStartedBy(), s.getStartedAt(),
+        return new SessionDto(s.getId(), s.getName(), s.getLocation(), s.getAisle(), s.getStartedBy(), s.getStartedAt(),
                 s.getClosedAt(), scans.countBySessionId(s.getId()));
     }
 
@@ -103,10 +122,38 @@ public class InventoryController {
     public SessionDto create(@Valid @RequestBody SessionRequest req) {
         // Blank = the whole collection; otherwise one of the library's sections, in the list's spelling.
         String location = sections.require(req.location());
-        StocktakeSession s = sessions.save(new StocktakeSession(req.name().trim(), location,
+        String aisle = sections.requireAisle(location, req.aisle());
+        StocktakeSession s = sessions.save(new StocktakeSession(req.name().trim(), location, aisle,
                 AuditService.currentActor()));
-        audit.record("STOCKTAKE_START", s.getName());
+        audit.record("STOCKTAKE_START", s.getName() + scope(s));
         return toDto(s);
+    }
+
+    /**
+     * The shelf list: every copy that should be on the shelves being counted, in shelf order (aisle, shelf,
+     * call number), each marked once scanned. Print it before counting, or follow it on screen.
+     */
+    @GetMapping("/{id}/shelf-list")
+    @Transactional(readOnly = true)
+    public List<ShelfRow> shelfList(@PathVariable Long id) {
+        StocktakeSession s = get(id);
+        Set<Long> scannedIds = scannedIds(id);
+        return expected(s).stream().sorted(SHELF_ORDER)
+                .map(i -> new ShelfRow(aisleOf(i), i.getShelf(), i.getRecord().getCallNumber(), i.getRecord().getTitle(),
+                        i.getBarcode(), scannedIds.contains(i.getId())))
+                .toList();
+    }
+
+    @GetMapping("/{id}/shelf-list/export")
+    public ResponseEntity<byte[]> shelfListExport(@PathVariable Long id, @RequestParam(defaultValue = "pdf") String format) {
+        StocktakeSession s = get(id);
+        List<List<?>> rows = shelfList(id).stream()
+                .map(r -> java.util.Arrays.asList(r.aisle(), r.shelf(), r.callNumber(), r.title(), r.barcode(), r.scanned() ? "Yes" : ""))
+                .collect(Collectors.toList());
+        return Pdf.export(format, "shelf-list-" + id, "Shelf list: " + s.getName(),
+                (s.getLocation() == null ? "Whole collection" : s.getLocation()) + (s.getAisle() == null ? "" : " · Aisle " + s.getAisle())
+                        + " · " + rows.size() + " copies expected",
+                List.of("Aisle", "Shelf", "Call Number", "Title", "Barcode", "Scanned"), rows);
     }
 
     @PostMapping("/{id}/scan")
@@ -131,9 +178,9 @@ public class InventoryController {
         if (!ON_SHELF.contains(item.getStatus())) {
             result = "CHECK";
             message = "Catalog status is " + item.getStatus();
-        } else if (s.getLocation() != null && !s.getLocation().equalsIgnoreCase(item.getLocation())) {
+        } else if (!belongsHere(s, item)) {
             result = "MISPLACED";
-            message = "Belongs to " + item.getLocation();
+            message = "Belongs to " + (item.getShelfLocation() == null ? "no section" : item.getShelfLocation());
         }
         return new ScanResult(code, result, item.getBarcode(), item.getRecord().getTitle(), item.getStatus(),
                 item.getLocation(), message);
@@ -144,28 +191,36 @@ public class InventoryController {
     public Report report(@PathVariable Long id) {
         StocktakeSession s = get(id);
         List<StocktakeScan> scanned = scans.findBySessionIdOrderByScannedAtAsc(id);
-        Set<Long> scannedIds = scanned.stream().filter(x -> x.getItem() != null)
-                .map(x -> x.getItem().getId()).collect(Collectors.toSet());
-        List<Item> expected = s.getLocation() == null ? items.findByStatusIn(ON_SHELF)
-                : items.findByLocationIgnoreCaseAndStatusIn(s.getLocation(), ON_SHELF);
+        Set<Long> scannedIds = scannedIds(id);
+        List<Item> expected = expected(s).stream().sorted(SHELF_ORDER).toList();
         List<ReportItem> missing = expected.stream().filter(i -> !scannedIds.contains(i.getId()))
                 .map(ReportItem::of).toList();
+        // Shelf list vs. what was scanned, aisle by aisle.
+        Map<String, long[]> byAisle = new LinkedHashMap<>();
+        for (Item i : expected) {
+            long[] c = byAisle.computeIfAbsent(aisleOf(i), k -> new long[2]);
+            c[0]++;
+            if (scannedIds.contains(i.getId())) c[1]++;
+        }
+        List<AisleCount> aisles = byAisle.entrySet().stream()
+                .map(e -> new AisleCount(e.getKey(), e.getValue()[0], e.getValue()[1], e.getValue()[0] - e.getValue()[1])).toList();
         List<ReportItem> misplaced = scanned.stream().map(StocktakeScan::getItem)
-                .filter(i -> i != null && s.getLocation() != null && ON_SHELF.contains(i.getStatus())
-                        && !s.getLocation().equalsIgnoreCase(i.getLocation()))
+                .filter(i -> i != null && ON_SHELF.contains(i.getStatus()) && !belongsHere(s, i))
                 .map(ReportItem::of).toList();
         List<ReportItem> unexpected = scanned.stream().map(StocktakeScan::getItem)
                 .filter(i -> i != null && !ON_SHELF.contains(i.getStatus()))
                 .map(ReportItem::of).toList();
         List<String> unknown = scanned.stream().filter(x -> x.getItem() == null).map(StocktakeScan::getCode).toList();
         long found = expected.stream().filter(i -> scannedIds.contains(i.getId())).count();
-        return new Report(toDto(s), expected.size(), found, missing, misplaced, unexpected, unknown);
+        return new Report(toDto(s), expected.size(), found, aisles, missing, misplaced, unexpected, unknown);
     }
 
     @GetMapping({"/{id}/report.csv", "/{id}/report/export"})
     public ResponseEntity<byte[]> reportCsv(@PathVariable Long id, @RequestParam(defaultValue = "csv") String format) {
         Report r = report(id);
         List<List<?>> rows = new java.util.ArrayList<>();
+        r.aisles().forEach(a -> rows.add(java.util.Arrays.asList(a.aisle().equals(NO_AISLE) ? NO_AISLE.toUpperCase(Locale.ROOT)
+                : "AISLE " + a.aisle(), "", a.found() + " of " + a.expected() + " found, " + a.missing() + " missing", "", "", "")));
         r.missing().forEach(i -> rows.add(row("MISSING", i)));
         r.misplaced().forEach(i -> rows.add(row("MISPLACED", i)));
         r.unexpectedStatus().forEach(i -> rows.add(row("FOUND_" + i.status(), i)));
@@ -202,10 +257,7 @@ public class InventoryController {
         }
         int markedMissing = 0;
         if (req != null && req.markMissing()) {
-            List<Item> expected = s.getLocation() == null
-                    ? items.findByStatusIn(EnumSet.of(ItemStatus.AVAILABLE))
-                    : items.findByLocationIgnoreCaseAndStatusIn(s.getLocation(), EnumSet.of(ItemStatus.AVAILABLE));
-            for (Item i : expected) {
+            for (Item i : expected(s)) {
                 if (!scannedIds.contains(i.getId())) {
                     i.setStatus(ItemStatus.MISSING);
                     markedMissing++;
@@ -218,5 +270,54 @@ public class InventoryController {
     }
 
     public record CloseRequest(boolean markMissing) {
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    /** Copies that should be on the shelves this session counts: its section and aisle, or everything. */
+    private List<Item> expected(StocktakeSession s) {
+        List<Item> list = s.getLocation() == null ? items.findByStatusIn(ON_SHELF)
+                : items.findByLocationIgnoreCaseAndStatusIn(s.getLocation(), ON_SHELF);
+        if (s.getAisle() == null) return list;
+        return list.stream().filter(i -> s.getAisle().equalsIgnoreCase(i.getAisle() == null ? "" : i.getAisle().trim())).toList();
+    }
+
+    /** Whether a scanned copy is recorded in the section (and aisle) being counted. */
+    private static boolean belongsHere(StocktakeSession s, Item i) {
+        if (s.getLocation() == null) return true;
+        if (!s.getLocation().equalsIgnoreCase(i.getLocation())) return false;
+        return s.getAisle() == null || s.getAisle().equalsIgnoreCase(i.getAisle() == null ? "" : i.getAisle().trim());
+    }
+
+    private Set<Long> scannedIds(Long sessionId) {
+        return scans.findBySessionIdOrderByScannedAtAsc(sessionId).stream().filter(x -> x.getItem() != null)
+                .map(x -> x.getItem().getId()).collect(Collectors.toSet());
+    }
+
+    private static String scope(StocktakeSession s) {
+        return s.getLocation() == null ? " (whole collection)" : " (" + s.getLocation() + (s.getAisle() == null ? "" : ", aisle " + s.getAisle()) + ")";
+    }
+
+    private static String aisleOf(Item i) {
+        return i.getAisle() == null || i.getAisle().isBlank() ? NO_AISLE : i.getAisle().trim();
+    }
+
+    private static final Pattern DIGITS = Pattern.compile("\\d+");
+
+    /** Sorts "2" before "10" and "3A" after "3"; "No aisle" last. */
+    private static final Comparator<String> NATURAL = Comparator.<String, Boolean>comparing(NO_AISLE::equals)
+            .thenComparing(InventoryController::naturalKey);
+
+    private static final Comparator<Item> SHELF_ORDER = Comparator.comparing(InventoryController::aisleOf, NATURAL)
+            .thenComparing(i -> i.getShelf() == null ? "" : naturalKey(i.getShelf()))
+            .thenComparing(i -> i.getRecord().getCallNumber() == null ? "" : i.getRecord().getCallNumber())
+            .thenComparing(Item::getBarcode);
+
+    private static String naturalKey(String s) {
+        Matcher m = DIGITS.matcher(s.toLowerCase(Locale.ROOT));
+        StringBuilder out = new StringBuilder();
+        while (m.find()) m.appendReplacement(out, String.format("%012d", Long.parseLong(m.group().length() > 12 ? m.group().substring(0, 12) : m.group())));
+        m.appendTail(out);
+        return out.toString();
     }
 }

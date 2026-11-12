@@ -113,10 +113,11 @@ public class CatalogTransferService {
                 } else {
                     if (commit) {
                         Item item = new Item(target, bc);
-                        // A section new to the library is added to the list, so imported copies keep theirs.
-                        item.setLocation(sections.findOrAdd(c.location()));
-                        item.setAisle(trim(c.aisle(), 20));
-                        item.setShelf(trim(c.shelf(), 20));
+                        // A section or aisle new to the library is added to the layout, so imported copies keep their place.
+                        SectionService.Spot spot = sections.findOrAddSpot(c.location(), c.aisle(), c.shelf());
+                        item.setLocation(spot.section());
+                        item.setAisle(spot.aisle());
+                        item.setShelf(spot.shelf());
                         item.setAcquiredDate(LocalDate.now());
                         // Saved now, so the copy can serve anyone already waiting for the title.
                         circulation.routeAvailableCopy(items.save(item));

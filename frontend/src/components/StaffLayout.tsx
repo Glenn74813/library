@@ -29,7 +29,6 @@ const NAV: { section: string; icon: IconName; items: NavItem[] }[] = [
     items: [
       { to: '/staff/catalog', label: 'Catalog' },
       { to: '/staff/inventory', label: 'Stocktake' },
-      { to: '/staff/sections', label: 'Sections' },
       { to: '/staff/authorities', label: 'Authorities' },
       { to: '/staff/labels', label: 'Labels & library IDs' },
     ],
@@ -58,6 +57,7 @@ const NAV: { section: string; icon: IconName; items: NavItem[] }[] = [
       { to: '/staff/settings', label: 'Loan rules & courses' },
       { to: '/staff/calendar', label: 'Library calendar' },
       { to: '/staff/catalog-fields', label: 'Catalog fields', roles: ['ADMIN', 'LIBRARIAN'] },
+      { to: '/staff/sections', label: 'Sections & Aisles', roles: ['ADMIN'] },
       { to: '/staff/notifications', label: 'Notifications', roles: ['ADMIN', 'LIBRARIAN'] },
       { to: '/staff/users', label: 'Users & devices', roles: ['ADMIN'] },
       { to: '/staff/audit', label: 'Audit trail', roles: ['ADMIN'] },

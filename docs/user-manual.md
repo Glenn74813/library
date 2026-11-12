@@ -152,16 +152,22 @@ statistics, and **Download report…** as Excel or PDF.
 and stops the alarm), alarm schedule, and **announcements**: pick a preset or type a message,
 choose the voice or play a recorded MP3, and send it to the kiosks.
 
-### 1.11a Sections
-**Collection → Sections** lists the library's sections and areas (Fiction Section, Filipiniana, ...).
-A copy's **Section / area** and a stocktake's location are picked from this list, so they are always
-spelled the same. Add a section here; rename one and its copies move with it; rename it to another
-section's name to merge the two. A section can be removed once no copies are in it. Imported copies
-with a new section add it to the list.
+### 1.11a Sections & Aisles (administrators)
+**Administration → Sections & Aisles** is the library's layout: sections (Fiction Section, Filipiniana,
+...), the aisles in each section and how many shelves each aisle has. Only administrators change it.
+Click a section to rename it (its copies move with it), merge it into another by using that section's
+name, or add aisles: how many, and how many shelves each (aisles are numbered after the library's
+highest aisle, or give one a name such as 3A). Click an aisle to rename it or change its shelves.
+Sections and aisles can be removed once no copies are in them.
+A copy's **Section / area**, **Aisle** and **Shelf** are picked from this layout, so a shelf beyond an
+aisle's last shelf can't be chosen. Imported copies with a new section or aisle add it to the layout.
 
 ### 1.12 Stocktake
-**Collection → Stocktake**: start a session for a section, scan every item on the shelves (scanner,
-RFID pad or camera), then open the report: *missing*, *misplaced*, *unexpected status* and *unknown codes*.
+**Collection → Stocktake**: start a session for a section, or one aisle of it, from the layout above.
+The **Shelf list** tab lists every copy that should be on those shelves in shelf order (print it with
+**Print shelf list…**) and ticks each one as it is scanned (scanner, RFID pad or camera), with found and
+missing counts per aisle. The report compares the shelf list with what was scanned, aisle by aisle, and
+lists *missing*, *misplaced* (another section or aisle), *unexpected status* and *unknown codes*.
 Closing the session can mark unscanned items MISSING; scanned LOST/MISSING items become AVAILABLE.
 **Download report…** as Excel or PDF.
 

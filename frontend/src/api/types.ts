@@ -432,6 +432,8 @@ export interface StocktakeSession {
   id: number
   name: string
   location: string | null
+  /** One aisle of that section; null = the whole section. */
+  aisle: string | null
   startedBy: string
   startedAt: string
   closedAt: string | null
@@ -456,10 +458,17 @@ export interface ReportItem {
   status: ItemStatus
 }
 
+/** A copy that should be on the shelves being counted, in shelf order. */
+export interface ShelfRow { aisle: string; shelf: string | null; callNumber: string | null; title: string; barcode: string; scanned: boolean }
+
+/** Shelf list vs. scanned, for one aisle. */
+export interface AisleCount { aisle: string; expected: number; found: number; missing: number }
+
 export interface StocktakeReport {
   session: StocktakeSession
   expected: number
   found: number
+  aisles: AisleCount[]
   missing: ReportItem[]
   misplaced: ReportItem[]
   unexpectedStatus: ReportItem[]
@@ -548,5 +557,8 @@ export interface RenewalRequest {
   problem: string | null
 }
 
-/** One of the library's sections / areas (Collection → Sections), with how many copies are in it. */
-export interface LibrarySection { id: number; name: string; sortOrder: number; copies: number }
+/** An aisle of a section and its number of shelves (shelves are numbered 1 to `shelves`). */
+export interface LibraryAisle { id: number; name: string; shelves: number; copies: number }
+
+/** One of the library's sections / areas (Administration → Sections & Aisles), with its aisles. */
+export interface LibrarySection { id: number; name: string; sortOrder: number; copies: number; aisles: LibraryAisle[] }
