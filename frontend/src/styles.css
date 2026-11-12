@@ -95,10 +95,18 @@ img { max-width: 100%; }
   align-items: center;
   gap: 8px;
   padding: 0 12px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  /* Same navy as the sidebar, so the two read as one frame around the page. */
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
 }
 .topbar .logo-img { width: 32px; height: 32px; }
+.topbar .icon-btn { color: var(--sidebar-text); }
+.topbar .icon-btn:hover { background: var(--sidebar-hover); }
+/* Notification count on navy: ring in the bar colour; the plain count uses gold so it stands out. */
+.topbar .bell-badge { border-color: var(--sidebar-bg); }
+.topbar .bell-badge:not(.warn):not(.bad) { background: var(--accent); color: var(--brand-navy); }
+.topbar .bell-panel { color: var(--text); }
 
 .topbar .brand { font-weight: 700; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
