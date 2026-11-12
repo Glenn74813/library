@@ -18,6 +18,10 @@ export default {
     headers.delete('Origin')
     headers.set('X-Forwarded-Host', url.host)
     headers.set('X-Forwarded-Proto', 'https')
+    // Client address as Cloudflare saw it; a client-sent X-Forwarded-For is replaced, never passed on.
+    const ip = request.headers.get('CF-Connecting-IP')
+    if (ip) { headers.set('X-Forwarded-For', ip); headers.set('X-Real-IP', ip) }
+    else { headers.delete('X-Forwarded-For'); headers.delete('X-Real-IP') }
     // Live updates (WebSocket): hand the upgrade request straight through.
     if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
       return fetch(target, { headers })

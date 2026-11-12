@@ -88,7 +88,8 @@ public class DeskSlipController {
     @PostMapping("/api/patrons/{id}/clearance")
     @Transactional
     public Clearance issue(@PathVariable Long id, @Valid @RequestBody(required = false) ClearanceRequest req) {
-        Patron p = patrons.findById(id).orElseThrow(() -> ApiException.notFound("Patron"));
+        // Locked like a checkout, so a loan or fine can't slip in between the check and the clearance.
+        Patron p = patrons.findByIdForUpdate(id).orElseThrow(() -> ApiException.notFound("Patron"));
         List<String> blocking = reasons(id);
         if (!blocking.isEmpty()) throw ApiException.conflict("Not cleared: " + String.join("; ", blocking));
         String purpose = req == null || req.purpose() == null || req.purpose().isBlank() ? null : req.purpose().trim();

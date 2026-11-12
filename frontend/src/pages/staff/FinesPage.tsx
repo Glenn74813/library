@@ -10,7 +10,7 @@ import { fmtDate, fmtMoney, isoDate } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
 import { useLibrary } from '../../api/library'
-import { CashReportSlip, printSlip, type CashReportData } from '../../print/slips'
+import { CashReportSlip, printRecorded, type CashReportData } from '../../print/slips'
 
 export function FinesPage() {
   const [status, setStatus] = useState<FineStatus | 'ALL'>('UNPAID')
@@ -96,7 +96,8 @@ function CashReportModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="End-of-day collection report" onClose={onClose} footer={<>
       <button className="btn" onClick={onClose}>Close</button>
-      <button className="btn primary" disabled={!data} onClick={() => data && void printSlip(<CashReportSlip lib={lib} r={data} />)}>
+      <button className="btn primary" disabled={!data} onClick={() => data && void printRecorded({ kind: 'CASH_REPORT', reference: `CASH-${data.date}`,
+        details: `${data.receipts.length} receipt(s), ${fmtMoney(data.total)}` }, <CashReportSlip lib={lib} r={data} />)}>
         <Icon name="printer" />Print on receipt printer</button></>}>
       <div className="stack">
         <Field label="Date"><input type="date" value={date} max={isoDate()} onChange={(e) => setDate(e.target.value)} /></Field>

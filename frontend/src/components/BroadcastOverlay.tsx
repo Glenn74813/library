@@ -37,11 +37,21 @@ export function BroadcastOverlay() {
   const audio = useRef<HTMLAudioElement | null>(null)
   const stopped = useRef(false)
 
+  // Only a newer announcement replaces the current one: repeated polls of the same one are ignored,
+  // and so is an older one returned by a slow poll that started before a live message arrived.
+  function offer(b: PublicBroadcast) {
+    const at = b.broadcast?.at
+    if (!at || !isNewer(at, lastSeen.current)) return
+    lastSeen.current = at
+    try { sessionStorage.setItem('smartlib.lastBroadcast', at) } catch { /* ignore */ }
+    setCurrent(b)
+  }
+
   // Fallback check: now and then while live, often while the live connection is down.
   useEffect(() => {
     let alive = true
     const load = () => api<PublicBroadcast>('/api/opac/broadcast', { anonymous: true, timeoutMs: 6_000 })
-      .then((b) => { if (alive) setCurrent(b) })
+      .then((b) => { if (alive) offer(b) })
       .catch(() => { /* offline for a moment: try again on the next tick */ })
     void load()
     const t = window.setInterval(load, live ? POLL_CONNECTED_MS : POLL_OFFLINE_MS)
@@ -59,7 +69,7 @@ export function BroadcastOverlay() {
       onConnect: () => {
         setLive(true)
         client.subscribe('/topic/announcements', (msg) => {
-          try { setCurrent(JSON.parse(msg.body) as PublicBroadcast) } catch { /* ignore a malformed message */ }
+          try { offer(JSON.parse(msg.body) as PublicBroadcast) } catch { /* ignore a malformed message */ }
         })
       },
       onWebSocketClose: () => setLive(false),
@@ -71,9 +81,7 @@ export function BroadcastOverlay() {
 
   useEffect(() => {
     const b = current?.broadcast
-    if (!b || b.at === lastSeen.current) return
-    lastSeen.current = b.at
-    try { sessionStorage.setItem('smartlib.lastBroadcast', b.at) } catch { /* ignore */ }
+    if (!b) return
     // Judge freshness by the server's clock: kiosk PCs often have the wrong time.
     if ((current?.ageSeconds ?? 0) > MAX_AGE_SECONDS) return
     setVisible(b.message)
@@ -85,9 +93,14 @@ export function BroadcastOverlay() {
     } else {
       void speak(b.message, v)
     }
+  }, [current])
+
+  // Hide after a while; a new announcement (new current) restarts the timer.
+  useEffect(() => {
+    if (!visible) return
     const t = setTimeout(() => setVisible(null), SHOW_MS)
     return () => clearTimeout(t)
-  }, [current])
+  }, [visible, current])
 
   async function playRecording(times: number) {
     const { data, contentType } = await fetchBytes('/api/opac/broadcast-audio', 'kiosk', true)
@@ -118,6 +131,14 @@ export function BroadcastOverlay() {
       <div><Icon name="volume-2" size="1.6em" /><br />{visible}<div style={{ fontSize: '0.4em', marginTop: '2em', fontWeight: 400 }}>Tap to dismiss</div></div>
     </div>
   )
+}
+
+/** True when `at` is later than `seen` (timestamps compared as dates; unparseable ones as text). */
+function isNewer(at: string, seen: string | null) {
+  if (!seen) return true
+  const a = Date.parse(at), b = Date.parse(seen)
+  if (Number.isNaN(a) || Number.isNaN(b)) return at !== seen
+  return a > b
 }
 
 function sessionStorageGet() {

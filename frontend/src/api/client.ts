@@ -67,6 +67,16 @@ export function setSession(slot: Slot, s: Session | null) {
   listeners.forEach((l) => l())
 }
 
+// Another tab signed in, out, or rotated the tokens: pick up its session so this tab never
+// refreshes with an already-used refresh token (the server treats reuse as theft).
+const SLOTS: Slot[] = ['user', 'patron', 'kiosk']
+window.addEventListener('storage', (e) => {
+  const slot = SLOTS.find((sl) => e.key === storageKey(sl))
+  if (!slot && e.key !== null) return
+  ;(slot ? [slot] : SLOTS).forEach((sl) => { sessions[sl] = load(sl) })
+  listeners.forEach((l) => l())
+})
+
 // ------------------------------------------------------------------ kiosk device key
 
 const DEVICE_KEY = 'smartlib.deviceKey'
@@ -109,9 +119,17 @@ export class ApiError extends Error {
 // Single-flight refresh per slot so parallel 401s trigger only one rotation.
 const refreshing: Partial<Record<Slot, Promise<boolean>>> = {}
 
-async function refresh(slot: Slot): Promise<boolean> {
+async function refresh(slot: Slot, usedToken?: string): Promise<boolean> {
+  // Re-read storage: another tab may have rotated the tokens since this one loaded them.
+  const stored = load(slot)
+  if (stored?.refreshToken !== sessions[slot]?.refreshToken) {
+    sessions[slot] = stored
+    listeners.forEach((l) => l())
+  }
   const current = sessions[slot]
   if (!current) return false
+  // Already refreshed elsewhere: retry with that access token instead of rotating again.
+  if (usedToken && current.accessToken !== usedToken && Date.parse(current.accessTokenExpiresAt) > Date.now()) return true
   if (!refreshing[slot]) {
     refreshing[slot] = (async () => {
       try {
@@ -144,6 +162,8 @@ export interface RequestOptions {
   anonymous?: boolean
   /** Give up after this long (treated like a network failure), e.g. so the desk can switch to offline mode. */
   timeoutMs?: number
+  /** Send this device key (kiosk setup checking a key before saving it) instead of the stored key or session. */
+  deviceKey?: string
 }
 
 async function send(path: string, opts: RequestOptions, retry: boolean): Promise<Response> {
@@ -152,9 +172,10 @@ async function send(path: string, opts: RequestOptions, retry: boolean): Promise
   const isForm = opts.body instanceof FormData
   if (opts.body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
   // A kiosk with a device key uses it instead of a session.
-  const useKey = slot === 'kiosk' && !!deviceKey && !opts.anonymous
-  const token = useKey ? undefined : sessions[slot]?.accessToken
-  if (useKey) headers['X-Device-Key'] = deviceKey!
+  const useKey = !opts.deviceKey && slot === 'kiosk' && !!deviceKey && !opts.anonymous
+  const token = useKey || opts.deviceKey ? undefined : sessions[slot]?.accessToken
+  if (opts.deviceKey) headers['X-Device-Key'] = opts.deviceKey
+  else if (useKey) headers['X-Device-Key'] = deviceKey!
   else if (token && !opts.anonymous) headers['Authorization'] = `Bearer ${token}`
 
   const res = await fetch(`${BASE}${path}`, {
@@ -163,7 +184,7 @@ async function send(path: string, opts: RequestOptions, retry: boolean): Promise
     body: opts.body === undefined ? undefined : isForm ? (opts.body as FormData) : JSON.stringify(opts.body),
     signal: opts.timeoutMs ? AbortSignal.timeout(opts.timeoutMs) : undefined,
   })
-  if (res.status === 401 && retry && token && !opts.anonymous && (await refresh(slot))) {
+  if (res.status === 401 && retry && token && !opts.anonymous && (await refresh(slot, token))) {
     return send(path, opts, false)
   }
   // A replaced or revoked key never starts working again: forget it so the kiosk shows its setup screen.

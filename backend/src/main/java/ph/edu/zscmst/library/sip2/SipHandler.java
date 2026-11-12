@@ -1,6 +1,7 @@
 package ph.edu.zscmst.library.sip2;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -51,6 +52,8 @@ import ph.edu.zscmst.library.user.Role;
 @Component
 public class SipHandler {
 
+    /** How old a station's offline ("no block") transaction may be. */
+    private static final Duration MAX_OFFLINE = Duration.ofDays(3);
     private static final Logger log = LoggerFactory.getLogger(SipHandler.class);
     private static final DateTimeFormatter SIP_DATE = DateTimeFormatter.ofPattern("yyyyMMdd'    'HHmmss");
     private static final List<Role> SIP_ROLES = List.of(Role.ADMIN, Role.LIBRARIAN, Role.STAFF, Role.KIOSK);
@@ -167,6 +170,18 @@ public class SipHandler {
     }
 
     /** SIP transaction date ("YYYYMMDDZZZZHHMMSS", local time); null if blank or invalid. */
+    /**
+     * The time of a transaction a station did while offline ("no block"), if it is plausible: at most
+     * {@link #MAX_OFFLINE} old and not in the future. Otherwise null, so it is handled as happening now
+     * and a station can't backdate returns (to avoid fines) or post-date loans.
+     */
+    private Instant offlineTime(String value) {
+        Instant at = parseDate(value);
+        Instant now = Instant.now();
+        if (at == null || at.isAfter(now.plus(Duration.ofMinutes(10))) || at.isBefore(now.minus(MAX_OFFLINE))) return null;
+        return at;
+    }
+
     private Instant parseDate(String value) {
         if (value == null || value.isBlank() || value.length() < 18) return null;
         try {
@@ -264,7 +279,8 @@ public class SipHandler {
 
     private Reply status() {
         // Supported messages, in the order the standard lists them (patron status ... renew all).
-        String supported = "YYYNYNYYYYYNNYNN";
+        // Patron status, checkout, checkin, -, SC status, resend, login, patron info, end session, -, item info, -, -, -, renew, -
+        String supported = "YYYNYYYYYNYNNNYN";
         return new Reply("98").yn(true).yn(true).yn(true).yn(true).yn(false).yn(false)
                 .fixed("030").fixed("003").fixed(now()).fixed("2.00")
                 .field("AO", settings.get("sip2.institutionId", system.profile().shortName()))
@@ -372,8 +388,10 @@ public class SipHandler {
         }
         if (error == null) {
             // "No block" means the station already lent the item while offline: record it at that time.
-            Instant at = noBlock ? Optional.ofNullable(parseDate(m.fixed().substring(2, 20))).orElse(Instant.now()) : null;
-            Result<CheckoutResult> result = attempt(() -> circulation.checkout(card, barcode, noBlock, at));
+            // A recent offline loan is recorded as it happened (limits become warnings); anything else is an
+            // ordinary checkout with every rule applied.
+            Instant at = noBlock ? offlineTime(m.fixed().substring(2, 20)) : null;
+            Result<CheckoutResult> result = attempt(() -> circulation.checkout(card, barcode, at != null, at));
             if (result.ok()) {
                 LoanDto loan = result.value().loan();
                 return r.fixed('1').fixed('N').fixed('N').fixed('Y').fixed(now()).field("AO", institution(m))
@@ -389,7 +407,7 @@ public class SipHandler {
     private Reply checkin(SipMessage m) {
         boolean noBlock = m.flag(0, 'N') == 'Y';
         String barcode = m.field("AB");
-        Instant returned = noBlock ? parseDate(m.fixed().substring(19, 37)) : null;
+        Instant returned = noBlock ? offlineTime(m.fixed().substring(19, 37)) : null;
         Result<CheckinResult> result = attempt(() -> circulation.checkin(barcode, returned));
         Reply r = new Reply("10");
         if (!result.ok()) {

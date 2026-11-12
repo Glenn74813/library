@@ -49,6 +49,11 @@ public interface BibRecordRepository extends JpaRepository<BibRecord, Long> {
 
     Optional<BibRecord> findFirstByIsbn(String isbn);
 
+    /** Matches an ISBN however it was typed (hyphens, spaces, lower-case x). */
+    @Query(value = "select * from bib_record where upper(regexp_replace(isbn, '[^0-9Xx]', '', 'g')) = "
+            + "upper(regexp_replace(:isbn, '[^0-9Xx]', '', 'g')) order by id limit 1", nativeQuery = true)
+    Optional<BibRecord> findFirstByNormalizedIsbn(String isbn);
+
     Optional<BibRecord> findFirstByTitleIgnoreCaseAndAuthorsIgnoreCase(String title, String authors);
 
     Optional<BibRecord> findFirstByTitleIgnoreCaseAndAuthorsIsNull(String title);

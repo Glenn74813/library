@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { api, login, logout, setDeviceKey } from '../api/client'
+import type { AuthResponse } from '../api/types'
+import { api, ApiError, fromAuthResponse, logout, setDeviceKey, setSession } from '../api/client'
 import { ErrorAlert, Field, PasswordInput } from './ui'
 import { errorText } from './Toast'
 import { Logo } from './Logo'
@@ -9,7 +10,7 @@ const RESET_HOLD_MS = 5000
 
 /**
  * One-time setup of a kiosk PC (attendance or self-checkout). The usual way is the device key
- * issued under Users & devices, pasted here or opened as a setup link (…?key=…). Signing in with a
+ * issued under Users & devices, pasted here or opened as a setup link (…#key=…). Signing in with a
  * kiosk account still works for kiosks set up that way before.
  */
 export function KioskSetup({ title }: { title: string }) {
@@ -21,44 +22,54 @@ export function KioskSetup({ title }: { title: string }) {
   const [busy, setBusy] = useState(false)
 
   async function connect(candidate: string) {
+    const k = candidate.trim()
+    if (!k) return
     setBusy(true)
     setError(null)
-    setDeviceKey(candidate)
     try {
-      // Any kiosk endpoint proves the key works; a wrong key is cleared by the client on 401.
-      await api('/api/kiosk/config', { slot: 'kiosk' })
+      // Check the key before saving it: saving switches this screen to the kiosk itself.
+      await api('/api/kiosk/config', { slot: 'kiosk', deviceKey: k, timeoutMs: 10_000 })
+      setDeviceKey(k)
     } catch (err) {
-      setDeviceKey(null)
-      setError(/not accepted|401|Unauthorized/i.test(errorText(err))
+      // Keep the key in the box so a network blip doesn't mean pasting it again.
+      setKey(k)
+      setError(err instanceof ApiError && err.status === 401
         ? 'This key was not accepted. Check that it was copied completely and that it is the device\'s current key.'
-        : errorText(err))
+        : !(err instanceof ApiError) || err.status >= 500 ? 'Can\'t reach the server, try again.' : errorText(err))
     } finally {
       setBusy(false)
     }
   }
 
-  // Setup link: /kiosk/attendance?key=kd_… stores the key and removes it from the address bar.
+  // Setup link: /kiosk/attendance#key=kd_… (older links: ?key=…) uses the key and removes it from the address bar.
+  // The fragment is never sent to the server, so the key stays out of access logs.
   const handledLink = useRef(false)
   useEffect(() => {
     if (handledLink.current) return
     handledLink.current = true
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
     const params = new URLSearchParams(window.location.search)
-    const fromLink = params.get('key')
+    const fromLink = hash.get('key') ?? params.get('key')
     if (!fromLink) return
+    hash.delete('key')
     params.delete('key')
-    const rest = params.toString()
-    window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : ''))
+    const rest = params.toString(), restHash = hash.toString()
+    window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + (restHash ? `#${restHash}` : ''))
     void connect(fromLink)
   }, [])
 
   async function signIn(e: FormEvent) {
     e.preventDefault()
+    setError(null)
     try {
-      const user = await login(username, password, 'kiosk')
-      if (!user.roles.some((r) => ['KIOSK', 'ADMIN', 'LIBRARIAN'].includes(r))) {
-        await logout('kiosk')
+      // Check the role before keeping the session: an unattended kiosk must not hold a staff account.
+      const r = await api<AuthResponse>('/api/auth/login', { body: { username, password }, anonymous: true })
+      if (!r.user.roles.includes('KIOSK')) {
+        await api('/api/auth/logout', { body: { refreshToken: r.refreshToken }, anonymous: true }).catch(() => {})
         setError('Use a KIOSK device account (create one under Users & devices).')
+        return
       }
+      setSession('kiosk', fromAuthResponse(r))
     } catch (err) {
       setError(errorText(err))
     }
@@ -111,5 +122,6 @@ export function KioskResetZone() {
     }, RESET_HOLD_MS)
   }
   const cancel = () => { if (timer.current) window.clearTimeout(timer.current) }
+  useEffect(() => cancel, [])
   return <div className="kiosk-reset-zone" aria-hidden onPointerDown={start} onPointerUp={cancel} onPointerLeave={cancel} onPointerCancel={cancel} />
 }

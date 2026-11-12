@@ -14,6 +14,8 @@ import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Stores uploaded files on disk under random keys, outside any web root. Files are only ever
@@ -57,8 +59,22 @@ public class FileStorage {
         return p;
     }
 
+    /**
+     * Deletes a stored file. Inside a transaction the file goes only once it commits, so a rolled-back
+     * delete or replace never leaves a database row pointing at a missing file.
+     */
     public void delete(String key) {
-        deleteQuietly(path(key));
+        Path p = path(key);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    deleteQuietly(p);
+                }
+            });
+        } else {
+            deleteQuietly(p);
+        }
     }
 
     private static void deleteQuietly(Path p) {

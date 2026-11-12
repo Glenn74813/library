@@ -10,13 +10,15 @@ import { errorText } from '../../components/Toast'
 import { fmtDate, fmtMoney } from '../../format'
 import { useInactivity } from '../../hooks/useInactivity'
 import { KioskResetZone, KioskSetup } from '../../components/KioskSetup'
-import { CheckoutSlip, printSlip, type SlipLoan } from '../../print/slips'
+import { CheckoutSlip, printRecorded, type SlipLoan } from '../../print/slips'
 
 interface Config { requirePin: boolean; allowReturns: boolean; idleSeconds: number }
 interface PatronView { firstName: string; fullName: string; cardNumber: string; loans: Loan[]; maxLoans: number; unpaidTotal: number; blocks: string[] }
 interface Checkout { title: string; barcode: string; dueAt: string; notice: string | null; patron: PatronView }
 interface Returned { title: string | null; dueAt: string | null; fine: number; message: string }
 interface Line { id: number; ok: boolean; title: string; detail: string }
+/** An item scan, with the patron session it was made in. */
+interface ScanJob { code: string; step: Step; card: string; pin: string; session: number }
 
 type Step = 'card' | 'pin' | 'borrow' | 'return' | 'done'
 
@@ -45,10 +47,18 @@ function SelfCheckScreen() {
   const [busy, setBusy] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
   const [scan, setScan] = useState('')
+  /** Bumped by every reset: responses from an earlier patron's session are dropped. */
+  const session = useRef(0)
+  /** Item scans waiting for the server, sent one at a time so back-to-back RFID reads are not lost. */
+  const pending = useRef<ScanJob[]>([])
+  const running = useRef(false)
+  // The PIN is kept only in memory for this patron's session and sent with each request.
+  const savedPin = useRef('')
 
   useEffect(() => { void api<Config>('/api/kiosk/selfcheck/config', opts).then(setConfig).catch(() => {}) }, [])
 
   const reset = useCallback(() => {
+    session.current++; pending.current = []; savedPin.current = ''
     setStep('card'); setCard(''); setPin(''); setPatron(null); setLines([]); setSlipLoans([]); setError(null); setScan('')
   }, [])
   useInactivity((step === 'done' ? 20 : config.idleSeconds) * 1000, reset)
@@ -66,56 +76,80 @@ function SelfCheckScreen() {
     setLines((l) => [{ id: Date.now() + Math.random(), ok, title, detail }, ...l])
 
   async function identify(code: string, withPin: string) {
+    const s = session.current
     setBusy(true); setError(null)
     try {
       const p = await api<PatronView>('/api/kiosk/selfcheck/identify', { ...opts, body: { card: code, pin: withPin || null } })
+      if (s !== session.current) return
       setPatron(p); setStep('borrow'); setPin('')
     } catch (e) {
+      if (s !== session.current) return
       setError(errorText(e)); setPin('')
       if (!config.requirePin || !/PIN/i.test(errorText(e))) { setStep('card'); setCard('') }
     } finally { setBusy(false) }
   }
 
-  async function onScan(e: FormEvent) {
+  function onScan(e: FormEvent) {
     e.preventDefault()
     const code = scan.trim()
     setScan('')
-    if (!code || busy) return
+    if (!code) return
     if (step === 'card') {
+      if (busy) return // still checking the card just scanned
       setCard(code)
       if (config.requirePin) { setStep('pin'); setError(null) } else void identify(code, '')
       return
     }
-    setBusy(true); setError(null)
+    if (step !== 'borrow' && step !== 'return') return
+    setError(null)
+    pending.current.push({ code, step, card, pin: savedPin.current, session: session.current })
+    void drain()
+  }
+
+  async function drain() {
+    if (running.current) return
+    running.current = true
     try {
-      if (step === 'borrow') {
-        const r = await api<Checkout>('/api/kiosk/selfcheck/checkout', { ...opts, body: { patron: { card, pin: savedPin.current }, item: code } })
+      for (let job = pending.current.shift(); job; job = pending.current.shift()) {
+        if (job.session === session.current) await scanOne(job)
+      }
+    } finally {
+      running.current = false
+    }
+  }
+
+  async function scanOne(job: ScanJob) {
+    try {
+      if (job.step === 'borrow') {
+        const r = await api<Checkout>('/api/kiosk/selfcheck/checkout', { ...opts, body: { patron: { card: job.card, pin: job.pin }, item: job.code } })
+        if (job.session !== session.current) return // the kiosk was reset meanwhile
         setPatron(r.patron)
         setSlipLoans((s) => [...s, { title: r.title, barcode: r.barcode, dueAt: r.dueAt }])
         add(true, r.title, `Due ${fmtDate(r.dueAt)}${r.notice ? ` — ${r.notice}` : ''}`)
-      } else if (step === 'return') {
-        const r = await api<Returned>('/api/kiosk/selfcheck/return', { ...opts, body: { item: code } })
-        add(true, r.title ?? code, r.message + (r.fine > 0 ? ` Overdue fine ${fmtMoney(r.fine)}; please pay at the desk.` : ''))
+      } else {
+        const r = await api<Returned>('/api/kiosk/selfcheck/return', { ...opts, body: { item: job.code } })
+        if (job.session !== session.current) return
+        add(true, r.title ?? job.code, r.message + (r.fine > 0 ? ` Overdue fine ${fmtMoney(r.fine)}; please pay at the desk.` : ''))
       }
     } catch (err) {
-      add(false, code, errorText(err))
-    } finally { setBusy(false) }
+      if (job.session === session.current) add(false, job.code, errorText(err))
+    }
   }
 
-  // The PIN is kept only in memory for this patron's session and sent with each request.
-  const savedPin = useRef('')
   function submitPin() {
     savedPin.current = pin
     void identify(card, pin)
   }
 
   async function renew(l: Loan) {
+    const s = session.current
     try {
       const r = await api<{ pending: boolean; message: string; patron: PatronView }>('/api/kiosk/selfcheck/renew',
         { ...opts, body: { patron: { card, pin: savedPin.current }, loanId: l.id } })
+      if (s !== session.current) return
       setPatron(r.patron)
       add(true, l.title, r.message)
-    } catch (e) { add(false, l.title, errorText(e)) }
+    } catch (e) { if (s === session.current) add(false, l.title, errorText(e)) }
   }
 
   const borrowed = lines.filter((l) => l.ok)
@@ -212,9 +246,10 @@ function SelfCheckScreen() {
               {borrowed.map((l) => <div key={l.id}><strong>{l.title}</strong><br /><span>{l.detail}</span></div>)}
             </div>}
             <div className="row" style={{ justifyContent: 'center' }}>
-              {slipLoans.length > 0 && patron && <button className="btn big" onClick={() => void printSlip(
+              {slipLoans.length > 0 && patron && <button className="btn big" onClick={() => void printRecorded(
+                { kind: 'CHECKOUT_SLIP', cardNumber: patron.cardNumber, details: `Self-checkout: ${slipLoans.map((l) => l.barcode).join(', ')}` },
                 <CheckoutSlip lib={lib} patron={patron} borrowed={slipLoans}
-                  otherLoans={patron.loans.filter((l) => !slipLoans.some((s) => s.barcode === l.barcode))} />)}>
+                  otherLoans={patron.loans.filter((l) => !slipLoans.some((s) => s.barcode === l.barcode))} />, true)}>
                 <Icon name="printer" />Print slip</button>}
               <button className="btn primary big" onClick={reset}>Done</button>
             </div>

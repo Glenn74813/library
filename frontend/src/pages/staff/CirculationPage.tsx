@@ -10,7 +10,7 @@ import { StatusBadge, Table, Tabs } from '../../components/ui'
 import { Icon } from '../../components/Icon'
 import { fmtDate, fmtDateTime, fmtMoney } from '../../format'
 import { useLibrary } from '../../api/library'
-import { CheckoutSlip, getPrintPrefs, HoldShelfSlip, printSlip, ReturnSlip, setPrintPrefs, type PrintPrefs, type ReturnedItem } from '../../print/slips'
+import { CheckoutSlip, getPrintPrefs, HoldShelfSlip, printRecorded, ReturnSlip, setPrintPrefs, type HoldSlipData, type PrintPrefs, type ReturnedItem } from '../../print/slips'
 
 type Mode = 'out' | 'in'
 
@@ -18,6 +18,9 @@ type Mode = 'out' | 'in'
 const DESK_TIMEOUT = 8000
 
 interface LogEntry { id: number; ok: boolean; text: string }
+
+/** One item scan for a patron, captured when it was scanned. */
+interface CheckoutJob { item: string; patron: string; patronId: number; seq: number; override: boolean }
 
 /** Offline state shared by the desk: how many transactions wait in this browser, and a way to queue one. */
 interface Offline { queued: number; offline: boolean; queue: (tx: Parameters<typeof enqueue>[0]) => void; markOnline: () => void }
@@ -122,7 +125,11 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
   const [offlinePatron, setOfflinePatron] = useState<string | null>(null)
   const [itemCode, setItemCode] = useState('')
   const [override, setOverride] = useState(false)
-  const [busy, setBusy] = useState(false)
+  /** Item scans waiting for the server, sent one at a time so a fast scanner never loses one. */
+  const pending = useRef<CheckoutJob[]>([])
+  const running = useRef(false)
+  /** Bumped whenever the desk switches patron: responses meant for an earlier patron are not shown. */
+  const patronSeq = useRef(0)
   /** Items this patron borrowed during the current visit, for the checkout slip. */
   const [visit, setVisit] = useState<Loan[]>([])
   const itemRef = useRef<HTMLInputElement>(null)
@@ -132,13 +139,15 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
   const lib = useLibrary()
 
   function printCheckoutSlip(s: PatronSummary, borrowed: Loan[]) {
-    void printSlip(<CheckoutSlip lib={lib} patron={s.patron} borrowed={borrowed}
+    void printRecorded({ kind: 'CHECKOUT_SLIP', patronId: s.patron.id, details: borrowed.map((l) => l.barcode).join(', ') },
+      <CheckoutSlip lib={lib} patron={s.patron} borrowed={borrowed}
       otherLoans={s.loans.filter((l) => !borrowed.some((b) => b.id === l.id))} />)
   }
 
   /** Done with this patron: print their slip if this desk does that automatically, then clear. */
   function finishPatron() {
     if (summary && visit.length > 0 && getPrintPrefs().checkoutOnFinish) printCheckoutSlip(summary, visit)
+    patronSeq.current++
     setSummary(null)
     setPatronCode('')
     setVisit([])
@@ -150,18 +159,23 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
       setVisit([])
     }
     e?.preventDefault()
-    if (!patronCode.trim()) return
+    const code = patronCode.trim()
+    if (!code) return
+    const seq = ++patronSeq.current
     try {
-      const p = await api<Patron>(`/api/patrons/lookup${qs({ code: patronCode.trim() })}`, { timeoutMs: DESK_TIMEOUT })
-      setSummary(await api<PatronSummary>(`/api/circulation/patrons/${p.id}/summary`, { timeoutMs: DESK_TIMEOUT }))
+      const p = await api<Patron>(`/api/patrons/lookup${qs({ code })}`, { timeoutMs: DESK_TIMEOUT })
+      const s = await api<PatronSummary>(`/api/circulation/patrons/${p.id}/summary`, { timeoutMs: DESK_TIMEOUT })
+      if (seq !== patronSeq.current) return // a later scan loaded someone else
+      setSummary(s)
       setOfflinePatron(null)
       off.markOnline()
       setOverride(false)
       setTimeout(() => itemRef.current?.focus(), 0)
     } catch (err) {
+      if (seq !== patronSeq.current) return
       setSummary(null)
       if (isOffline(err)) {
-        setOfflinePatron(patronCode.trim())
+        setOfflinePatron(code)
         setTimeout(() => itemRef.current?.focus(), 0)
       } else {
         setOfflinePatron(null)
@@ -170,46 +184,68 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
     }
   }
 
-  async function refresh() {
-    if (summary) setSummary(await api<PatronSummary>(`/api/circulation/patrons/${summary.patron.id}/summary`).catch(() => summary))
+  /** Reloads a patron's loans, unless the desk has moved on to another patron meanwhile. */
+  async function refresh(patronId: number, seq: number) {
+    const s = await api<PatronSummary>(`/api/circulation/patrons/${patronId}/summary`).catch(() => null)
+    if (s && seq === patronSeq.current) setSummary(s)
   }
 
-  function queueCheckout(patron: string) {
-    off.queue({ type: 'CHECKOUT', patron, item: itemCode.trim() })
-    addLog(true, `OFFLINE OUT ${itemCode.trim()} → card ${patron} (saved; uploads when back online)`)
-    setItemCode('')
+  function queueCheckout(patron: string, item: string) {
+    off.queue({ type: 'CHECKOUT', patron, item })
+    addLog(true, `OFFLINE OUT ${item} → card ${patron} (saved; uploads when back online)`)
   }
 
-  async function checkout(e: FormEvent) {
+  function checkout(e: FormEvent) {
     e.preventDefault()
-    if (!itemCode.trim()) return
+    const item = itemCode.trim()
+    if (!item) return
+    // Clear now, not after the response, so the next scan can already go in.
+    setItemCode('')
+    itemRef.current?.focus()
     if (!summary) {
-      if (offlinePatron) queueCheckout(offlinePatron)
-      itemRef.current?.focus()
+      if (offlinePatron) queueCheckout(offlinePatron, item)
       return
     }
-    setBusy(true)
+    pending.current.push({ item, patron: summary.patron.cardNumber, patronId: summary.patron.id, seq: patronSeq.current, override })
+    void drain()
+  }
+
+  async function drain() {
+    if (running.current) return
+    running.current = true
+    try {
+      let wentOffline = false
+      for (let job = pending.current.shift(); job; job = pending.current.shift()) {
+        // Once the server is unreachable, save the rest straight away instead of waiting out each timeout.
+        if (wentOffline) queueCheckout(job.patron, job.item)
+        else wentOffline = await checkoutOne(job)
+      }
+    } finally {
+      running.current = false
+    }
+  }
+
+  /** Sends one queued checkout; true when the server could not be reached (it was saved offline). */
+  async function checkoutOne(job: CheckoutJob) {
     try {
       const r = await api<CheckoutResult>('/api/circulation/checkout', {
-        body: { patron: summary.patron.cardNumber, item: itemCode.trim(), override }, timeoutMs: DESK_TIMEOUT,
+        body: { patron: job.patron, item: job.item, override: job.override }, timeoutMs: DESK_TIMEOUT,
       })
-      setVisit((v) => [...v, r.loan])
+      if (job.seq === patronSeq.current) setVisit((v) => [...v, r.loan])
       addLog(true, `OUT ${r.loan.barcode} "${r.loan.title}" → ${r.loan.patronName}, due ${fmtDate(r.loan.dueAt)}`
         + (r.warnings.length ? ` (override: ${r.warnings.join('; ')})` : '')
         + (r.notice ? ` — SHORT LOAN: ${r.notice}` : ''))
       if (r.notice) toast(`Short loan — ${r.notice}. Tell the patron.`, 'warn')
-      setItemCode('')
-      await refresh()
+      await refresh(job.patronId, job.seq)
+      return false
     } catch (err) {
       if (isOffline(err)) {
-        queueCheckout(summary.patron.cardNumber)
-      } else {
-        addLog(false, `${itemCode}: ${errorText(err)}`)
-        toast(errorText(err), 'error')
+        queueCheckout(job.patron, job.item)
+        return true
       }
-    } finally {
-      setBusy(false)
-      itemRef.current?.focus()
+      addLog(false, `${job.item}: ${errorText(err)}`)
+      toast(errorText(err), 'error')
+      return false
     }
   }
 
@@ -217,7 +253,7 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
     try {
       const l = await api<{ title: string; dueAt: string }>(`/api/circulation/loans/${loanId}/renew`, { method: 'POST' })
       addLog(true, `Renewed "${l.title}", now due ${fmtDate(l.dueAt)}`)
-      await refresh()
+      if (summary) await refresh(summary.patron.id, patronSeq.current)
     } catch (err) {
       toast(errorText(err), 'error')
     }
@@ -254,7 +290,7 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
               </div>
             </label>
           </form>
-          <div className="row end"><button className="btn small" onClick={() => { setOfflinePatron(null); setPatronCode('') }}>Next patron</button></div>
+          <div className="row end"><button className="btn small" onClick={() => { patronSeq.current++; setOfflinePatron(null); setPatronCode('') }}>Next patron</button></div>
         </>
       )}
       {summary && (
@@ -285,7 +321,7 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
                 <input ref={itemRef} className="scan-input" value={itemCode} onChange={(e) => setItemCode(e.target.value)}
                   placeholder="Item barcode" autoComplete="off" />
                 <CameraScanButton onScan={(t) => { setItemCode(t); setTimeout(() => itemForm.current?.requestSubmit(), 0) }} />
-                <button className="btn primary" disabled={busy}>Check out</button>
+                <button className="btn primary">Check out</button>
               </div>
             </label>
             {canOverride && (
@@ -319,41 +355,78 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
   const [last, setLast] = useState<CheckinResult | null>(null)
   /** Returns not printed yet, for one return slip covering several items. */
   const [returns, setReturns] = useState<ReturnedItem[]>([])
-  const [busy, setBusy] = useState(false)
+  /** Returns waiting for the server, sent one at a time so a fast scanner never loses one. */
+  const pending = useRef<string[]>([])
+  const running = useRef(false)
   const ref = useRef<HTMLInputElement>(null)
   const form = useRef<HTMLFormElement>(null)
 
-  async function submit(e: FormEvent) {
+  function printReturns(items: ReturnedItem[]) {
+    void printRecorded({ kind: 'RETURN_SLIP', cardNumber: items.find((i) => i.cardNumber)?.cardNumber,
+      details: items.map((i) => i.barcode).join(', ') }, <ReturnSlip lib={lib} items={items} />)
+  }
+
+  function printHoldSlip(hold: HoldSlipData) {
+    void printRecorded({ kind: 'HOLD_SLIP', cardNumber: hold.cardNumber, reference: `HOLD-${hold.holdId}`, details: hold.barcode },
+      <HoldShelfSlip lib={lib} hold={hold} />)
+  }
+
+  function submit(e: FormEvent) {
     e.preventDefault()
-    if (!code.trim()) return
-    setBusy(true)
+    const item = code.trim()
+    if (!item) return
+    // Clear now, not after the response, so the next scan can already go in.
+    setCode('')
+    ref.current?.focus()
+    pending.current.push(item)
+    void drain()
+  }
+
+  async function drain() {
+    if (running.current) return
+    running.current = true
     try {
-      const r = await api<CheckinResult>('/api/circulation/checkin', { body: { item: code.trim() }, timeoutMs: DESK_TIMEOUT })
+      let wentOffline = false
+      for (let item = pending.current.shift(); item; item = pending.current.shift()) {
+        // Once the server is unreachable, save the rest straight away instead of waiting out each timeout.
+        if (wentOffline) queueCheckin(item)
+        else wentOffline = await checkinOne(item)
+      }
+    } finally {
+      running.current = false
+    }
+  }
+
+  function queueCheckin(item: string) {
+    off.queue({ type: 'CHECKIN', item })
+    addLog(true, `OFFLINE IN ${item} (saved; fines and hold routing are worked out when it uploads)`)
+  }
+
+  /** Sends one queued return; true when the server could not be reached (it was saved offline). */
+  async function checkinOne(item: string) {
+    try {
+      const r = await api<CheckinResult>('/api/circulation/checkin', { body: { item }, timeoutMs: DESK_TIMEOUT })
       setLast(r)
       const prefs = getPrintPrefs()
       if (r.loan) {
         const item: ReturnedItem = { title: r.loan.title, barcode: r.loan.barcode, patronName: r.loan.patronName,
           cardNumber: r.loan.cardNumber, returnedAt: r.loan.returnedAt ?? new Date().toISOString(), fine: r.fineAmount }
-        if (prefs.returnEach) void printSlip(<ReturnSlip lib={lib} items={[item]} />)
+        if (prefs.returnEach) printReturns([item])
         else setReturns((list) => [...list, item])
       }
-      if (r.holdSlip && prefs.holdSlip) void printSlip(<HoldShelfSlip lib={lib} hold={r.holdSlip} />)
-      addLog(true, `IN ${r.loan?.barcode ?? code} ${r.loan ? `"${r.loan.title}" from ${r.loan.patronName}` : ''} — ${r.message}`
+      if (r.holdSlip && prefs.holdSlip) printHoldSlip(r.holdSlip)
+      addLog(true, `IN ${r.loan?.barcode ?? item} ${r.loan ? `"${r.loan.title}" from ${r.loan.patronName}` : ''} — ${r.message}`
         + (r.fineAmount > 0 ? ` · fine ${fmtMoney(r.fineAmount)}` : ''))
-      setCode('')
       off.markOnline()
+      return false
     } catch (err) {
       setLast(null)
       if (isOffline(err)) {
-        off.queue({ type: 'CHECKIN', item: code.trim() })
-        addLog(true, `OFFLINE IN ${code.trim()} (saved; fines and hold routing are worked out when it uploads)`)
-        setCode('')
-      } else {
-        addLog(false, `${code}: ${errorText(err)}`)
+        queueCheckin(item)
+        return true
       }
-    } finally {
-      setBusy(false)
-      ref.current?.focus()
+      addLog(false, `${item}: ${errorText(err)}`)
+      return false
     }
   }
 
@@ -366,7 +439,7 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
             <input ref={ref} className="scan-input" value={code} onChange={(e) => setCode(e.target.value)} autoFocus
               placeholder="Item barcode" autoComplete="off" />
             <CameraScanButton onScan={(t) => { setCode(t); setTimeout(() => form.current?.requestSubmit(), 0) }} />
-            <button className="btn primary" disabled={busy}>Check in</button>
+            <button className="btn primary">Check in</button>
           </div>
         </label>
       </form>
@@ -377,7 +450,7 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
             {last.loan.overdueDays > 0 || last.fineAmount > 0 ? '' : ' · on time'}</div>}
           {last.fineAmount > 0 && <div><StatusBadge status="UNPAID" /> Overdue fine {fmtMoney(last.fineAmount)} added</div>}
           {last.holdSlip && <div className="row" style={{ marginTop: 6 }}>
-            <button className="btn small" onClick={() => void printSlip(<HoldShelfSlip lib={lib} hold={last.holdSlip!} />)}>
+            <button className="btn small" onClick={() => printHoldSlip(last.holdSlip!)}>
               <Icon name="printer" />{getPrintPrefs().holdSlip ? 'Reprint hold slip' : 'Print hold slip'}</button>
           </div>}
         </div>
@@ -386,7 +459,7 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <span className="muted small">{returns.length} return(s) not printed yet</span>
           <span className="row-actions">
-            <button className="btn small" onClick={() => { void printSlip(<ReturnSlip lib={lib} items={returns} />); setReturns([]) }}>
+            <button className="btn small" onClick={() => { printReturns(returns); setReturns([]) }}>
               <Icon name="printer" />Print return slip</button>
             <button className="btn small" onClick={() => setReturns([])}>Clear</button>
           </span>

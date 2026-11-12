@@ -20,6 +20,9 @@ export function CameraScanButton({ onScan, title = 'Scan with camera' }: { onSca
 function CameraScanModal({ onScan, onClose }: { onScan: (text: string) => void; onClose: () => void }) {
   const video = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState<string | null>(null)
+  // The parent passes a new function on every render; keep the latest without restarting the camera.
+  const onScanRef = useRef(onScan)
+  useEffect(() => { onScanRef.current = onScan })
 
   useEffect(() => {
     let stop: (() => void) | null = null
@@ -40,7 +43,7 @@ function CameraScanModal({ onScan, onClose }: { onScan: (text: string) => void; 
               done = true
               controls.stop()
               navigator.vibrate?.(80)
-              onScan(result.getText().trim())
+              onScanRef.current(result.getText().trim())
             }
           })
         stop = () => controls.stop()
@@ -52,7 +55,7 @@ function CameraScanModal({ onScan, onClose }: { onScan: (text: string) => void; 
       }
     })
     return () => { done = true; stop?.() }
-  }, [onScan])
+  }, [])
 
   return (
     <Modal title="Scan barcode or QR code" onClose={onClose}>

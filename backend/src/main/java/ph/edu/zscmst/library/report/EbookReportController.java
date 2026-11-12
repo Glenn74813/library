@@ -56,7 +56,8 @@ public class EbookReportController {
                 (rs, i) -> new TitleUsage(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getLong(4), rs.getLong(5),
                         rs.getTimestamp(6).toInstant()), start, end);
         List<Count> byCourse = jdbc.query("""
-                select coalesce(c.code, case when v.patron_id is null then 'Anonymized' else 'No program' end), count(distinct v.patron_id)
+                select coalesce(c.code, case when v.patron_id is null then 'Anonymized' else 'No program' end),
+                       count(distinct coalesce(v.patron_id::text, 'view-' || v.id)) -- anonymized readers are unknown: count each view
                 from ebook_view v left join patron p on p.id = v.patron_id left join course c on c.id = p.course_id
                 where v.viewed_at >= ? and v.viewed_at < ?
                 group by 1 order by 2 desc""", (rs, i) -> new Count(rs.getString(1), rs.getLong(2)), start, end);

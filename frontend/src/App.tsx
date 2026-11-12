@@ -22,6 +22,7 @@ import { CatalogFieldsPage } from './pages/staff/CatalogFieldsPage'
 import { NotificationsPage } from './pages/staff/NotificationsPage'
 import { UsersPage } from './pages/staff/UsersPage'
 import { AuditPage } from './pages/staff/AuditPage'
+import { PrintLogPage } from './pages/staff/PrintLogPage'
 import { PrivacyPage } from './pages/staff/PrivacyPage'
 import { SystemSettingsPage } from './pages/staff/SystemSettingsPage'
 import { LabelsPage } from './pages/staff/LabelsPage'
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="audit" element={<AuditPage />} />
+        <Route path="print-log" element={<PrintLogPage />} />
         <Route path="privacy" element={<PrivacyPage />} />
         <Route path="system" element={<SystemSettingsPage />} />
         <Route path="labels" element={<LabelsPage />} />

@@ -120,6 +120,7 @@ public class TokenService {
                 yield issue(user);
             }
             case PATRON -> issue(patrons.findById(token.getSubjectId())
+                    .filter(p -> p.getAnonymizedAt() == null)
                     .orElseThrow(() -> new BadCredentialsException("Patron not found")));
         };
     }

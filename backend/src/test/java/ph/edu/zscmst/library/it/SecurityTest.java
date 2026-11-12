@@ -7,7 +7,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +57,28 @@ class SecurityTest extends IntegrationTest {
     @Test
     void wrongPasswordIsRefused() throws Exception {
         assertEquals(401, call("POST", "/api/auth/login", null, "{\"username\":\"admin\",\"password\":\"nope-nope\"}").statusCode());
+    }
+
+    @Test
+    void parallelGuessesStillLockTheAccount() throws Exception {
+        String name = "guess-" + UUID.randomUUID().toString().substring(0, 8);
+        AppUser staff = users.save(new AppUser(name, passwords.encode("Right-Pass-123"), "Guess Target", Role.STAFF));
+        try {
+            String wrong = "{\"username\":\"" + name + "\",\"password\":\"wrong-guess\"}";
+            List<CompletableFuture<HttpResponse<String>>> burst = new ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                burst.add(http.sendAsync(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
+                        .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(wrong)).build(),
+                        HttpResponse.BodyHandlers.ofString()));
+            }
+            long checked = burst.stream().map(CompletableFuture::join).filter(r -> r.statusCode() == 401).count();
+            // Only the allowed number of attempts reached the password check; the rest were refused as locked.
+            assertTrue(checked <= 5, checked + " guesses were checked");
+            assertEquals(423, call("POST", "/api/auth/login", null,
+                    "{\"username\":\"" + name + "\",\"password\":\"Right-Pass-123\"}").statusCode());
+        } finally {
+            users.delete(staff);
+        }
     }
 
     @Test

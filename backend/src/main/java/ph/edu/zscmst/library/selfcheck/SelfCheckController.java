@@ -29,6 +29,8 @@ import ph.edu.zscmst.library.common.SettingsService;
 import ph.edu.zscmst.library.common.SystemSettings;
 import ph.edu.zscmst.library.patron.Patron;
 import ph.edu.zscmst.library.patron.PatronRepository;
+import ph.edu.zscmst.library.security.LoginThrottle;
+import ph.edu.zscmst.library.security.LoginThrottle.Account;
 
 /**
  * Self-checkout kiosk (KIOSK accounts): patrons identify with their card (barcode or RFID) and PIN,
@@ -74,11 +76,13 @@ public class SelfCheckController {
     private final SystemSettings system;
     private final AuditService audit;
     private final RenewalService renewals;
+    private final LoginThrottle throttle;
 
     public SelfCheckController(PatronRepository patrons, PasswordEncoder passwords, CirculationService circulation,
                                SettingsService settings, SystemSettings system, AuditService audit,
-                               RenewalService renewals) {
+                               RenewalService renewals, LoginThrottle throttle) {
         this.renewals = renewals;
+        this.throttle = throttle;
         this.patrons = patrons;
         this.passwords = passwords;
         this.circulation = circulation;
@@ -146,17 +150,17 @@ public class SelfCheckController {
             if (p.getPinHash() == null) {
                 throw ApiException.badRequest("You don't have a PIN yet. Please ask at the circulation desk.");
             }
+            LoginThrottle.Claim claim = throttle.claim(Account.PATRON, p.getId(),
+                    integer("security.maxAttempts", 5), integer("security.lockMinutes", 15), now);
+            if (claim.locked() != null) {
+                throw new ApiException(HttpStatus.LOCKED, "Too many wrong PINs. Please ask at the circulation desk.");
+            }
             if (req.pin() == null || !passwords.matches(req.pin(), p.getPinHash())) {
-                p.pinFailed(integer("security.maxAttempts", 5), integer("security.lockMinutes", 15), now);
-                patrons.save(p);
                 audit.record(p.getCardNumber(), "SELFCHECK_PIN_FAILED", "Self-checkout kiosk");
                 // 403, not 401: the kiosk would treat 401 as an expired session and resend the request.
                 throw new ApiException(HttpStatus.FORBIDDEN, "Wrong PIN");
             }
-            if (p.getPinFailures() > 0 || p.getPinLockedUntil() != null) {
-                p.unlockPin();
-                patrons.save(p);
-            }
+            throttle.succeeded(Account.PATRON, p.getId());
         }
         if (p.isBlocked()) throw ApiException.conflict("Your account is blocked. Please see the circulation desk.");
         return p;

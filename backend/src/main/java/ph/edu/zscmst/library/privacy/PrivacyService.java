@@ -172,6 +172,8 @@ public class PrivacyService {
                 where patron_id = ? and status in ('SCHEDULED', 'PENDING', 'READY')""", p.getId());
         jdbc.update("delete from notice where patron_id = ?", p.getId());
         jdbc.update("update ebook_view set patron_id = null where patron_id = ?", p.getId());
+        // End any My Library session: the portal must not keep showing the erased patron's history.
+        jdbc.update("update refresh_token set revoked = true where subject_type = 'PATRON' and subject_id = ? and not revoked", p.getId());
     }
 
     /** Applies the retention limits (0 = keep forever). A dry run only counts what would change. */

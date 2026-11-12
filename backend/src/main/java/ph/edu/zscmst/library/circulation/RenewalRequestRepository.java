@@ -13,6 +13,9 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface RenewalRequestRepository extends JpaRepository<RenewalRequest, Long> {
 
+    @Query(value = "select id from renewal_request where id = :id for update", nativeQuery = true)
+    Optional<Long> lockById(Long id);
+
     @EntityGraph(attributePaths = {"loan", "loan.item", "loan.item.record", "patron"})
     List<RenewalRequest> findByStatusOrderByRequestedAtAsc(RenewalRequest.Status status);
 

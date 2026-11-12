@@ -78,11 +78,12 @@ public class ReportController {
     public Dashboard dashboard() {
         Instant start = clock.startOfDay(clock.today());
         Instant end = clock.startOfDay(clock.today().plusDays(1));
+        Instant last = lastInstantBefore(end);
         Instant now = Instant.now();
         return new Dashboard(records.count(), items.count(), patrons.countByAnonymizedAtIsNull(), loans.countByReturnedAtIsNull(),
                 loans.countByReturnedAtIsNullAndDueAtBefore(now), holds.countByStatus(HoldStatus.PENDING),
-                holds.countByStatus(HoldStatus.READY), fines.totalUnpaid(), loans.countByCheckoutAtBetween(start, end),
-                loans.countByReturnedAtBetween(start, end), attendance.countByTimeInBetween(start, end),
+                holds.countByStatus(HoldStatus.READY), fines.totalUnpaid(), loans.countByCheckoutAtBetween(start, last),
+                loans.countByReturnedAtBetween(start, last), attendance.countByTimeInBetween(start, last),
                 attendance.countByTimeInAfterAndTimeOutIsNull(start),
                 fines.sumSettled(FineStatus.PAID, start, end), items.countByStatus(ItemStatus.MISSING),
                 items.countByStatus(ItemStatus.LOST));
@@ -97,13 +98,14 @@ public class ReportController {
         LocalDate f = from == null ? t.minusDays(29) : from;
         Instant start = clock.startOfDay(f);
         Instant end = clock.startOfDay(t.plusDays(1));
-        PageRequest limit = PageRequest.of(0, Math.min(top, 50));
+        Instant last = lastInstantBefore(end);
+        PageRequest limit = PageRequest.of(0, Math.clamp(top, 1, 50));
         List<Ranked> borrowers = loans.topBorrowers(start, end, limit).stream()
                 .map(r -> new Ranked((Long) r[0], (String) r[1], (String) r[2], ((Number) r[3]).longValue())).toList();
         List<Ranked> titles = loans.topTitles(start, end, limit).stream()
                 .map(r -> new Ranked((Long) r[0], null, (String) r[1], ((Number) r[2]).longValue())).toList();
-        return new CirculationStats(f, t, loans.countByCheckoutAtBetween(start, end),
-                loans.countByReturnedAtBetween(start, end), fines.sumSettled(FineStatus.PAID, start, end),
+        return new CirculationStats(f, t, loans.countByCheckoutAtBetween(start, last),
+                loans.countByReturnedAtBetween(start, last), fines.sumSettled(FineStatus.PAID, start, end),
                 borrowers, titles);
     }
 
@@ -119,7 +121,7 @@ public class ReportController {
         return switch (type) {
             case "loans" -> Pdf.export(format, "loans-" + f + "-to-" + t, "Loans", f + " to " + t,
                     List.of("Checkout", "Due", "Returned", "Barcode", "Title", "Card Number", "Patron", "Renewals"),
-                    loans.findByCheckoutAtBetweenOrderByCheckoutAtAsc(clock.startOfDay(f), clock.startOfDay(t.plusDays(1)))
+                    loans.findByCheckoutAtBetweenOrderByCheckoutAtAsc(clock.startOfDay(f), lastInstantBefore(clock.startOfDay(t.plusDays(1))))
                             .stream().map(this::loanRow).toList());
             case "overdue" -> Pdf.export(format, "overdue-" + clock.today(), "Overdue Loans", "As of " + clock.today(),
                     List.of("Checkout", "Due", "Returned", "Barcode", "Title", "Card Number", "Patron", "Renewals"),
@@ -166,5 +168,10 @@ public class ReportController {
         return Arrays.asList(p.getCardNumber(), p.getLastName(), p.getFirstName(), p.getCategory().getName(),
                 p.getCourse() == null ? null : p.getCourse().getCode(), p.getEmail(), p.getPhone(),
                 p.getExpiryDate(), p.isBlocked());
+    }
+
+    /** Spring Data's "Between" includes both ends: stop just before the next midnight so days don't overlap. */
+    private static Instant lastInstantBefore(Instant end) {
+        return end.minusNanos(1000);
     }
 }

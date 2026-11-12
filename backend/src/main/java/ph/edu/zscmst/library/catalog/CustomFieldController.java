@@ -57,7 +57,8 @@ public class CustomFieldController {
     public FieldDto create(@Valid @RequestBody FieldRequest req) {
         String base = req.label().trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "_").replaceAll("^_|_$", "");
         String key = base.isEmpty() ? "field" : base.substring(0, Math.min(30, base.length()));
-        for (int i = 2; fields.existsByKey(key); i++) key = base + "_" + i;
+        String stem = key;
+        for (int i = 2; fields.existsByKey(key); i++) key = stem + "_" + i;
         CustomField f = new CustomField(key);
         apply(f, req);
         audit.record("CUSTOM_FIELD", "created " + f.getLabel());

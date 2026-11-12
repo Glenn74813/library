@@ -105,6 +105,11 @@ public class AttendanceService {
         if (last.isPresent()) {
             AttendanceLog l = last.get();
             Instant lastAction = l.getTimeOut() != null ? l.getTimeOut() : l.getTimeIn();
+            // A tap uploaded late by an offline kiosk, older than what another kiosk already recorded: using it
+            // would end a visit before it began, so it is left out.
+            if (now.isBefore(lastAction.minus(duplicateTapWindow()))) {
+                return result(p, l.getTimeOut() != null ? "OUT" : "IN", "A later visit is already recorded", lastAction, warnings);
+            }
             // Ignore repeated taps of the same card within this window (people double-tap).
             if (Duration.between(lastAction, now).abs().compareTo(duplicateTapWindow()) < 0) {
                 String action = l.getTimeOut() != null ? "OUT" : "IN";

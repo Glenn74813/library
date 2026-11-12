@@ -13,6 +13,7 @@ import java.util.Set;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ import ph.edu.zscmst.library.catalog.CatalogDtos.ItemRequest;
 import ph.edu.zscmst.library.catalog.CatalogDtos.RecordDetailDto;
 import ph.edu.zscmst.library.catalog.CatalogDtos.RecordDto;
 import ph.edu.zscmst.library.catalog.CatalogDtos.RecordRequest;
+import ph.edu.zscmst.library.circulation.CirculationService;
 import ph.edu.zscmst.library.circulation.LoanRepository;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.authority.Authority;
@@ -44,9 +46,13 @@ public class CatalogService {
     private final AuthorityService authorities;
     private final CustomFieldRepository customFields;
 
+    /** Lazy: circulation needs the catalog only indirectly, but keep the two from depending on start order. */
+    private final CirculationService circulation;
+
     public CatalogService(BibRecordRepository records, ItemRepository items, LoanRepository loans,
                           AuditService audit, DigitalService digital, LoanPolicy policy, AuthorityService authorities,
-                          CustomFieldRepository customFields) {
+                          CustomFieldRepository customFields, @Lazy CirculationService circulation) {
+        this.circulation = circulation;
         this.authorities = authorities;
         this.customFields = customFields;
         this.policy = policy;
@@ -182,7 +188,10 @@ public class CatalogService {
     public ItemDto addItem(Long recordId, ItemRequest req) {
         Item i = new Item(getRecord(recordId), req.barcode().trim());
         applyItem(i, req, true);
+        checkCodesFree(i);
         i = items.save(i);
+        // A new copy first serves anyone waiting for the title.
+        if (i.getStatus() == ItemStatus.AVAILABLE) circulation.routeAvailableCopy(i);
         audit.record("ITEM_CREATE", i.getBarcode() + " -> record " + recordId);
         return ItemDto.of(i, null, policy.isRoomUse(i));
     }
@@ -190,8 +199,12 @@ public class CatalogService {
     @Transactional
     public ItemDto updateItem(Long itemId, ItemRequest req) {
         Item i = items.findById(itemId).orElseThrow(() -> ApiException.notFound("Item"));
+        ItemStatus before = i.getStatus();
         i.setBarcode(req.barcode().trim());
         applyItem(i, req, false);
+        checkCodesFree(i);
+        // A copy that is back (found, repaired) goes to the next waiting hold before the shelf.
+        if (before != ItemStatus.AVAILABLE && i.getStatus() == ItemStatus.AVAILABLE) circulation.routeAvailableCopy(i);
         items.flush();
         audit.record("ITEM_UPDATE", i.getBarcode() + " status=" + i.getStatus());
         return ItemDto.of(i, dueDates(List.of(i)).get(i.getId()), policy.isRoomUse(i));
@@ -208,6 +221,15 @@ public class CatalogService {
         }
         items.delete(i);
         audit.record("ITEM_DELETE", i.getBarcode());
+    }
+
+    /** A barcode or EPC may not match (in any case) another copy's barcode or EPC: scans must find one copy. */
+    private void checkCodesFree(Item i) {
+        for (String code : new String[] {i.getBarcode(), i.getRfidEpc()}) {
+            if (code != null && items.idsUsingCode(code).stream().anyMatch(id -> !id.equals(i.getId()))) {
+                throw ApiException.conflict("Another copy already uses the code " + code + " (as barcode or RFID tag)");
+            }
+        }
     }
 
     private static void applyItem(Item i, ItemRequest req, boolean isNew) {

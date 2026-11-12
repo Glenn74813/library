@@ -27,6 +27,7 @@ import ph.edu.zscmst.library.catalog.Item;
 import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.ItemStatus;
 import ph.edu.zscmst.library.common.ApiException;
+import ph.edu.zscmst.library.circulation.CirculationService;
 import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.common.Pdf;
 
@@ -67,9 +68,11 @@ public class InventoryController {
     private final StocktakeScanRepository scans;
     private final ItemRepository items;
     private final AuditService audit;
+    private final CirculationService circulation;
 
     public InventoryController(StocktakeSessionRepository sessions, StocktakeScanRepository scans,
-                               ItemRepository items, AuditService audit) {
+                               ItemRepository items, AuditService audit, CirculationService circulation) {
+        this.circulation = circulation;
         this.sessions = sessions;
         this.scans = scans;
         this.items = items;
@@ -187,7 +190,8 @@ public class InventoryController {
         for (StocktakeScan x : scanned) {
             Item i = x.getItem();
             if (i != null && (i.getStatus() == ItemStatus.LOST || i.getStatus() == ItemStatus.MISSING)) {
-                i.setStatus(ItemStatus.AVAILABLE);
+                // Found: it goes to the next waiting hold, if any, rather than straight to the shelf.
+                circulation.routeAvailableCopy(i);
                 found++;
             }
         }

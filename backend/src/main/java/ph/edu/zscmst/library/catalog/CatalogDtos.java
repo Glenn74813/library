@@ -60,6 +60,12 @@ public final class CatalogDtos {
                     r.getMaterialType(), r.getLanguage(), r.getSummary(), a.total(), a.available(),
                     r.getCreatedAt(), r.getUpdatedAt(), ebook, customValues(r.getCustomFields()));
         }
+
+        /** For the public OPAC: without custom fields (staff-only ones included); the detail page lists the public ones. */
+        public RecordDto withoutCustomFields() {
+            return new RecordDto(id, title, subtitle, authors, isbn, publisher, publicationYear, edition, subjects, callNumber,
+                    materialType, language, summary, totalCopies, availableCopies, createdAt, updatedAt, ebook, Map.of());
+        }
     }
 
     public record RecordDetailDto(RecordDto record, List<ItemDto> items) {

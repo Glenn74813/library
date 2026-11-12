@@ -74,6 +74,13 @@ The 80 mm receipt printer prints these slips (only the slip prints, sized to its
 | End-of-day collection report | **Fines & payments → End-of-day report** |
 
 Which slips print automatically is set per desk under **Receipt printer on this computer** on the circulation desk.
+
+**Print log.** Every slip, official receipt, clearance and ID card that is printed is recorded with who printed it and when.
+- Each patron's page has a **Printed** tab (also **Print… → Print history**) listing everything printed for them.
+- **Security & reports → Print log** lists all prints, filterable by document, date and **Reprints only**.
+- Printing an ID card or card slip that was printed before asks first, showing when and by whom. A clearance shows the clearances already issued.
+- A second or later copy of a receipt, clearance or card slip prints **REPRINT · COPY n** at the top, and the log shows the copy number.
+- PIN slips are logged without the PIN.
 Start the desk browser with `--kiosk-printing` (receipt printer as default) to skip the print dialog.
 
 ### 1.6 Holds, reservations and bookings

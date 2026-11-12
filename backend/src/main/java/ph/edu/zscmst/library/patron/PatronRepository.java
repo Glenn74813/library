@@ -24,6 +24,10 @@ public interface PatronRepository extends JpaRepository<Patron, Long> {
     @Query("select p from Patron p where lower(p.cardNumber) = lower(:code) or lower(p.rfidUid) = lower(:code)")
     Optional<Patron> findByIdentifier(String code);
 
+    /** Patrons already using a code as card number or RFID UID (any case), to keep every scan unambiguous. */
+    @Query("select p.id from Patron p where lower(p.cardNumber) = lower(:code) or lower(p.rfidUid) = lower(:code)")
+    java.util.List<Long> idsUsingCode(String code);
+
     @Query("""
             select p from Patron p
             where p.cardNumber <> '__ANONYMIZED__' and (:q = '' or lower(p.cardNumber) like lower(concat('%', :q, '%'))

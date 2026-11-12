@@ -280,7 +280,8 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
               <>
                 <span>On the kiosk PC, open one of these setup links (it saves the key and starts the kiosk), or open the kiosk page and paste the key:</span>
                 {[['Attendance kiosk', '/kiosk/attendance'], ['Self-checkout kiosk', '/kiosk/selfcheck']].map(([label, path]) => {
-                  const link = `${window.location.origin}${path}?key=${encodeURIComponent(deviceKey)}`
+                  // Key in the fragment: browsers never send it, so it stays out of server access logs.
+                  const link = `${window.location.origin}${path}#key=${encodeURIComponent(deviceKey)}`
                   return (
                     <div key={path} className="row" style={{ flexWrap: 'nowrap' }}>
                       <input readOnly className="mono small" value={link} onFocus={(e) => e.target.select()} aria-label={`${label} setup link`} />

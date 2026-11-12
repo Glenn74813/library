@@ -47,6 +47,7 @@ const NAV: { section: string; icon: IconName; items: NavItem[] }[] = [
     items: [
       { to: '/staff/gate', label: 'Security gate' },
       { to: '/staff/reports', label: 'Reports' },
+      { to: '/staff/print-log', label: 'Print log' },
     ],
   },
   {

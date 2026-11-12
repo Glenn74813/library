@@ -30,6 +30,7 @@ import ph.edu.zscmst.library.catalog.Item;
 import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.MaterialType;
 import ph.edu.zscmst.library.common.ApiException;
+import ph.edu.zscmst.library.circulation.CirculationService;
 import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.common.Csv;
 
@@ -54,8 +55,11 @@ public class CatalogTransferService {
     private final BibRecordRepository records;
     private final ItemRepository items;
     private final AuditService audit;
+    private final CirculationService circulation;
 
-    public CatalogTransferService(BibRecordRepository records, ItemRepository items, AuditService audit) {
+    public CatalogTransferService(BibRecordRepository records, ItemRepository items, AuditService audit,
+                                  CirculationService circulation) {
+        this.circulation = circulation;
         this.records = records;
         this.items = items;
         this.audit = audit;
@@ -100,7 +104,7 @@ public class CatalogTransferService {
                 if (bc.length() > 50) {
                     problems.add(t.source + ": barcode too long (" + bc + ") — copy skipped");
                     copiesSkipped++;
-                } else if (!seenBarcodes.add(bc.toLowerCase(Locale.ROOT)) || items.existsByBarcodeIgnoreCase(bc)) {
+                } else if (!seenBarcodes.add(bc.toLowerCase(Locale.ROOT)) || !items.idsUsingCode(bc).isEmpty()) {
                     problems.add(t.source + ": barcode " + bc + " already exists — copy skipped");
                     copiesSkipped++;
                 } else {
@@ -110,7 +114,8 @@ public class CatalogTransferService {
                         item.setAisle(trim(c.aisle(), 20));
                         item.setShelf(trim(c.shelf(), 20));
                         item.setAcquiredDate(LocalDate.now());
-                        items.save(item);
+                        // Saved now, so the copy can serve anyone already waiting for the title.
+                        circulation.routeAvailableCopy(items.save(item));
                     }
                     copiesCreated++;
                     added++;
@@ -135,7 +140,7 @@ public class CatalogTransferService {
 
     private Optional<BibRecord> findExisting(ParsedTitle t) {
         if (t.isbn != null) {
-            Optional<BibRecord> byIsbn = records.findFirstByIsbn(t.isbn);
+            Optional<BibRecord> byIsbn = records.findFirstByNormalizedIsbn(t.isbn);
             if (byIsbn.isPresent()) return byIsbn;
         }
         return t.authors == null ? records.findFirstByTitleIgnoreCaseAndAuthorsIsNull(t.title)
@@ -165,11 +170,21 @@ public class CatalogTransferService {
 
     // ------------------------------------------------------------------ parsing
 
+    private static boolean declaresDoctype(byte[] data) {
+        String text = new String(data, StandardCharsets.UTF_8).toUpperCase(Locale.ROOT);
+        return text.contains("<!DOCTYPE") || text.contains("<!ENTITY");
+    }
+
     List<ParsedTitle> parse(String filename, byte[] data, List<String> problems) {
         String name = filename == null ? "" : filename.toLowerCase(Locale.ROOT);
         String head = new String(data, 0, Math.min(data.length, 200), StandardCharsets.UTF_8).stripLeading();
         if (name.endsWith(".csv") || (!head.startsWith("<") && head.toLowerCase(Locale.ROOT).startsWith("title"))) {
             return parseCsv(new String(data, StandardCharsets.UTF_8), problems);
+        }
+        if (head.startsWith("<") && declaresDoctype(data)) {
+            // MARCXML never needs a DTD; refusing it rules out external-entity (XXE) tricks in uploads.
+            problems.add("The XML file declares a DOCTYPE or entities, which is not allowed in MARCXML");
+            return List.of();
         }
         MarcReader reader = head.startsWith("<")
                 ? new MarcXmlReader(new ByteArrayInputStream(data))

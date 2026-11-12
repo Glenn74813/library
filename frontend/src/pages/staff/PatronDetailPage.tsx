@@ -14,9 +14,9 @@ import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
 import { useLibrary } from '../../api/library'
-import { ClearanceSlip, PatronSlip, printSlip } from '../../print/slips'
+import { ClearanceSlip, confirmReprint, PatronSlip, printRecorded, type PrintEntry } from '../../print/slips'
 
-type Tab = 'loans' | 'history' | 'holds' | 'fines' | 'attendance'
+type Tab = 'loans' | 'history' | 'holds' | 'fines' | 'attendance' | 'printed'
 
 export function PatronDetailPage() {
   const { id } = useParams()
@@ -43,7 +43,21 @@ export function PatronDetailPage() {
     () => tab === 'history' ? api<Page<Loan>>(`/api/circulation/patrons/${id}/history${qs({ page: histPage })}`) : Promise.resolve(undefined),
     [id, tab, histPage])
 
-  const refreshAll = () => { void reload(); void reloadFines(); setSelected([]) }
+  const { data: prints, reload: reloadPrints } = useAsync(() => api<PrintEntry[]>(`/api/patrons/${id}/prints`), [id])
+  const refreshAll = () => { void reload(); void reloadFines(); void reloadPrints(); setSelected([]) }
+
+  async function printCardSlip() {
+    if (!s || !(await confirmReprint('CARD_SLIP', s.patron.cardNumber, 'This patron\'s card slip'))) return
+    await printRecorded({ kind: 'CARD_SLIP', patronId: s.patron.id, reference: s.patron.cardNumber }, <PatronSlip lib={lib} patron={s.patron} />)
+    void reloadPrints()
+  }
+
+  async function printIdCard() {
+    if (!s || !(await confirmReprint('ID_CARD', s.patron.cardNumber, 'This patron\'s library ID card'))) return
+    // The server records the ID card when it generates the PDF.
+    await openPdf(`/api/labels/patron-cards${qs({ cards: s.patron.cardNumber })}`).catch((err) => toast(errorText(err), 'error'))
+    void reloadPrints()
+  }
 
   async function act(fn: () => Promise<unknown>, ok: string) {
     try {
@@ -143,14 +157,16 @@ export function PatronDetailPage() {
           <button className="btn" onClick={() => setPinOpen(true)}>{p.hasPin ? 'Reset PIN' : 'Set portal PIN'}</button>
           <select className="btn" style={{ width: 'auto' }} value="" aria-label="Print" onChange={(e) => {
             const v = e.target.value
-            if (v === 'card') openPdf(`/api/labels/patron-cards${qs({ cards: p.cardNumber })}`).catch((err) => toast(errorText(err), 'error'))
-            if (v === 'welcome') void printSlip(<PatronSlip lib={lib} patron={p} />)
+            if (v === 'card') void printIdCard()
+            if (v === 'welcome') void printCardSlip()
+            if (v === 'history') setTab('printed')
             if (v === 'clearance') setClearanceOpen(true)
           }}>
             <option value="" disabled>Print…</option>
             <option value="welcome">Card slip (receipt printer)</option>
             <option value="clearance">Library clearance…</option>
             <option value="card">ID card (PDF)</option>
+            <option value="history">Print history ({prints?.length ?? 0})</option>
           </select>
           <button className="btn" onClick={() => setHoldOpen(true)}>Reserve / book</button>
           <select className="btn" style={{ width: 'auto' }} value="" aria-label="Data privacy" onChange={(e) => {
@@ -168,7 +184,7 @@ export function PatronDetailPage() {
         <span><strong>Patron registered.</strong> Give them a card slip with their card number and the My Library address
           {p.hasPin ? '' : ', and set a PIN so they can sign in'}.</span>
         <span className="row-actions">
-          <button className="btn small" onClick={() => void printSlip(<PatronSlip lib={lib} patron={p} />)}><Icon name="printer" />Print card slip</button>
+          <button className="btn small" onClick={() => void printCardSlip()}><Icon name="printer" />Print card slip</button>
           {!p.hasPin && <button className="btn small" onClick={() => setPinOpen(true)}>Set PIN</button>}
           <button className="btn small" onClick={() => setParams({}, { replace: true })}>Done</button>
         </span>
@@ -185,7 +201,8 @@ export function PatronDetailPage() {
 
       <Tabs value={tab} onChange={setTab} tabs={[
         { id: 'loans', label: `Loans (${s.loans.length})` }, { id: 'history', label: 'History' },
-        { id: 'holds', label: `Holds (${activeHolds.length})` }, { id: 'fines', label: `Fines (${unpaid.length})` }, { id: 'attendance', label: 'Attendance' }]} />
+        { id: 'holds', label: `Holds (${activeHolds.length})` }, { id: 'fines', label: `Fines (${unpaid.length})` }, { id: 'attendance', label: 'Attendance' },
+        { id: 'printed', label: `Printed (${prints?.length ?? 0})` }]} />
 
       <div className="card">
         {tab === 'loans' && <Table rows={s.loans} rowKey={(l) => l.id} empty="No items on loan" columns={[
@@ -238,6 +255,8 @@ export function PatronDetailPage() {
 
         {tab === 'attendance' && <PatronAttendanceTab patronId={p.id} />}
 
+        {tab === 'printed' && <PrintHistory rows={prints} />}
+
         {tab === 'fines' && <div className="stack">
           <div className="row">
             <button className="btn primary" disabled={!selected.length} onClick={paySelected}>
@@ -261,7 +280,8 @@ export function PatronDetailPage() {
 
       {editing && <PatronFormModal patron={p} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); refreshAll() }} />}
       {pinOpen && <PinModal patron={p} onClose={() => setPinOpen(false)} onSaved={() => { setPinOpen(false); refreshAll() }} />}
-      {clearanceOpen && <ClearanceModal patron={p} onClose={() => setClearanceOpen(false)} />}
+      {clearanceOpen && <ClearanceModal patron={p} earlier={prints?.filter((e) => e.kind === 'CLEARANCE') ?? []}
+        onClose={() => { setClearanceOpen(false); void reloadPrints() }} />}
       {holdOpen && <HoldModal patronId={p.id} onClose={() => setHoldOpen(false)} onSaved={() => { setHoldOpen(false); refreshAll(); setTab('holds') }} />}
       {photoOpen && <PatronPhotoModal patron={p} onClose={() => setPhotoOpen(false)} onSaved={() => { setPhotoOpen(false); refreshAll() }} />}
       {receipt && <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />}
@@ -278,7 +298,8 @@ function PinModal({ patron, onClose, onSaved }: { patron: Patron; onClose: () =>
   async function save() {
     try {
       await api(`/api/patrons/${patron.id}/pin`, { body: { pin } })
-      if (printIt) void printSlip(<PatronSlip lib={lib} patron={patron} pin={pin} />)
+      // The PIN itself is never logged, only that a PIN slip was printed.
+      if (printIt) void printRecorded({ kind: 'PIN_SLIP', patronId: patron.id }, <PatronSlip lib={lib} patron={patron} pin={pin} />)
       onSaved()
     } catch (e) {
       setError(errorText(e))
@@ -303,7 +324,7 @@ interface Clearance { reference: string; patronName: string; cardNumber: string;
   purpose: string | null; issuedAt: string; issuedBy: string; stillClear: boolean }
 
 /** Library clearance: only when nothing is on loan and no fines are unpaid; printed with a reference number. */
-function ClearanceModal({ patron, onClose }: { patron: Patron; onClose: () => void }) {
+function ClearanceModal({ patron, earlier, onClose }: { patron: Patron; earlier: PrintEntry[]; onClose: () => void }) {
   const lib = useLibrary()
   const toast = useToast()
   const { data: check, error } = useAsync(() => api<{ cleared: boolean; reasons: string[] }>(`/api/patrons/${patron.id}/clearance-check`), [patron.id])
@@ -315,17 +336,27 @@ function ClearanceModal({ patron, onClose }: { patron: Patron; onClose: () => vo
     try {
       const c = await api<Clearance>(`/api/patrons/${patron.id}/clearance`, { body: { purpose } })
       setIssued(c)
-      void printSlip(<ClearanceSlip lib={lib} c={c} />)
+      printClearance(c)
     } catch (e) { toast(errorText(e), 'error') } finally { setBusy(false) }
   }
+  const printClearance = (c: Clearance) => void printRecorded({ kind: 'CLEARANCE', patronId: patron.id, reference: c.reference,
+    details: c.purpose ?? undefined }, <ClearanceSlip lib={lib} c={c} />)
+  // Earlier clearances (one entry per document; reprints listed once, with their copy count).
+  const previous = [...new Map([...earlier].reverse().map((e) => [e.reference, e])).values()].reverse()
   return (
     <Modal title="Library clearance" onClose={onClose} footer={issued
-      ? <><button className="btn" onClick={() => void printSlip(<ClearanceSlip lib={lib} c={issued} />)}><Icon name="printer" />Reprint</button>
+      ? <><button className="btn" onClick={() => printClearance(issued)}><Icon name="printer" />Reprint</button>
           <button className="btn primary" onClick={onClose}>Done</button></>
       : <><button className="btn" onClick={onClose}>Cancel</button>
           {check?.cleared && <button className="btn primary" disabled={busy} onClick={issue}><Icon name="printer" />Issue and print</button>}</>}>
       <div className="stack">
         <ErrorAlert error={error} />
+        {!issued && previous.length > 0 && <div className="alert warn">
+          <strong>Already issued {previous.length === 1 ? 'a clearance' : `${previous.length} clearances`}:</strong>
+          <ul style={{ margin: '4px 0 0' }}>{previous.map((e) => <li key={e.reference}>
+            <span className="mono">{e.reference}</span>{e.details && ` (${e.details})`} · {fmtDateTime(e.printedAt)} by {e.printedBy}
+            {e.copy > 1 && ` · printed ${e.copy} times`}</li>)}</ul>
+        </div>}
         {!check ? <p className="muted">Checking…</p> : issued ? (
           <div className="alert success">Clearance <strong className="mono">{issued.reference}</strong> issued to {issued.patronName}.
             Anyone can verify it on the Patrons page with this number.</div>
@@ -447,4 +478,15 @@ function AnonymizeModal({ patronId, name, onClose, onDone }: { patronId: number;
       </div>
     </Modal>
   )
+}
+
+/** Everything printed for this patron: slips, receipts, clearances and ID cards, with reprints marked. */
+function PrintHistory({ rows }: { rows: PrintEntry[] | undefined }) {
+  return <Table rows={rows} rowKey={(e) => e.id} empty="Nothing printed for this patron yet" columns={[
+    { header: 'Printed', render: (e) => <span className="nowrap">{fmtDateTime(e.printedAt)}</span> },
+    { header: 'Document', render: (e) => <>{e.label}{e.copy > 1 && <> <span className="badge warn">Reprint · copy {e.copy}</span></>}</> },
+    { header: 'Reference', render: (e) => e.reference ? <span className="mono">{e.reference}</span> : '—' },
+    { header: 'Details', render: (e) => <span className="small">{e.details ?? '—'}</span> },
+    { header: 'By', render: (e) => e.printedBy },
+  ]} />
 }

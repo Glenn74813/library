@@ -48,12 +48,12 @@ public class OpacController {
                                           @RequestParam(required = false) MaterialType type,
                                           @RequestParam(defaultValue = "0") int page,
                                           @RequestParam(defaultValue = "12") int size) {
-        return PageResponse.of(service.search(q, field, type, PageRequest.of(page, Math.min(size, 50))), r -> r);
+        return PageResponse.of(service.search(q, field, type, PageRequest.of(page, Math.min(size, 50))), RecordDto::withoutCustomFields);
     }
 
     @GetMapping("/new-arrivals")
     public List<RecordDto> newArrivals() {
-        return service.newArrivals();
+        return service.newArrivals().stream().map(RecordDto::withoutCustomFields).toList();
     }
 
     @GetMapping("/records/{id}")
@@ -69,7 +69,7 @@ public class OpacController {
         List<CatalogDtos.LabeledValue> extra = customFields.findAllByOrderBySortOrderAscLabelAsc().stream()
                 .filter(f -> f.isShowInOpac() && values.containsKey(f.getKey()))
                 .map(f -> new CatalogDtos.LabeledValue(f.getLabel(), values.get(f.getKey()))).toList();
-        return new OpacDetailDto(RecordDto.of(r, a, digital.summaries(List.of(r)).get(id)), list.stream()
+        return new OpacDetailDto(RecordDto.of(r, a, digital.summaries(List.of(r)).get(id)).withoutCustomFields(), list.stream()
                 .map(i -> new OpacItemDto(i.getBarcode(), i.getLocation(), i.getAisle(), i.getShelf(), i.getShelfLocation(),
                         r.getCallNumber(), i.getStatus(), due.get(i.getId()), policy.isRoomUse(i)))
                 .toList(), extra);

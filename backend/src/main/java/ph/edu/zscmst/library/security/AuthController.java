@@ -26,6 +26,7 @@ import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.common.SettingsService;
 import ph.edu.zscmst.library.patron.Patron;
 import ph.edu.zscmst.library.patron.PatronRepository;
+import ph.edu.zscmst.library.security.LoginThrottle.Account;
 import ph.edu.zscmst.library.user.AppUser;
 import ph.edu.zscmst.library.user.AppUserRepository;
 
@@ -60,12 +61,14 @@ public class AuthController {
     private final TokenService tokens;
     private final AuditService audit;
     private final SettingsService settings;
+    private final LoginThrottle throttle;
     /** Compared against for unknown accounts so they take as long to reject as wrong passwords. */
     private final String dummyHash;
 
     public AuthController(AppUserRepository users, PatronRepository patrons, PasswordEncoder passwordEncoder,
-                          TokenService tokens, AuditService audit, SettingsService settings) {
+                          TokenService tokens, AuditService audit, SettingsService settings, LoginThrottle throttle) {
         this.settings = settings;
+        this.throttle = throttle;
         this.users = users;
         this.patrons = patrons;
         this.passwordEncoder = passwordEncoder;
@@ -78,55 +81,45 @@ public class AuthController {
     public AuthResponse login(@Valid @RequestBody LoginRequest req) {
         AppUser user = users.findByUsernameIgnoreCase(req.username().trim()).orElse(null);
         Instant now = Instant.now();
-        if (user != null && user.isLocked(now)) {
-            throw locked(user.getLockedUntil(), now);
+        LoginThrottle.Claim claim = null;
+        if (user != null) {
+            claim = throttle.claim(Account.STAFF, user.getId(), maxAttempts(), lockMinutes(), now);
+            if (claim.locked() != null) throw locked(claim.locked(), now);
         }
         String hash = user != null ? user.getPasswordHash() : dummyHash;
         if (!passwordEncoder.matches(req.password(), hash) || user == null || !user.isEnabled()) {
             audit.record(req.username(), "LOGIN_FAILED", "Staff login");
-            if (user != null) {
-                user.loginFailed(maxAttempts(), lockMinutes(), now);
-                users.save(user);
-                if (user.isLocked(now)) {
-                    audit.record(user.getUsername(), "LOGIN_LOCKED", "Locked after repeated failed sign-ins");
-                    throw locked(user.getLockedUntil(), now);
-                }
+            if (claim != null && claim.locksOnFailure() != null) {
+                audit.record(user.getUsername(), "LOGIN_LOCKED", "Locked after repeated failed sign-ins");
+                throw locked(claim.locksOnFailure(), now);
             }
             throw new BadCredentialsException("Invalid username or password");
         }
-        if (user.getFailedLogins() > 0 || user.getLockedUntil() != null) {
-            user.unlock();
-            users.save(user);
-        }
+        throttle.succeeded(Account.STAFF, user.getId());
         audit.record(user.getUsername(), "LOGIN", "Staff login");
         return AuthResponse.of(tokens.issue(user));
     }
 
     @PostMapping("/patron-login")
     public AuthResponse patronLogin(@Valid @RequestBody PatronLoginRequest req) {
-        Patron patron = patrons.findByCardNumberIgnoreCase(req.cardNumber().trim()).orElse(null);
+        Patron patron = patrons.findByCardNumberIgnoreCase(req.cardNumber().trim())
+                .filter(p -> p.getAnonymizedAt() == null).orElse(null);
         Instant now = Instant.now();
-        if (patron != null && patron.isPinLocked(now)) {
-            throw locked(patron.getPinLockedUntil(), now);
+        LoginThrottle.Claim claim = null;
+        if (patron != null && patron.getPinHash() != null) {
+            claim = throttle.claim(Account.PATRON, patron.getId(), maxAttempts(), lockMinutes(), now);
+            if (claim.locked() != null) throw locked(claim.locked(), now);
         }
         String hash = patron != null && patron.getPinHash() != null ? patron.getPinHash() : dummyHash;
         if (!passwordEncoder.matches(req.pin(), hash) || patron == null || patron.getPinHash() == null) {
             audit.record(req.cardNumber(), "LOGIN_FAILED", "Patron login");
-            if (patron != null && patron.getPinHash() != null) {
-                patron.pinFailed(maxAttempts(), lockMinutes(), now);
-                patrons.save(patron);
-                if (patron.isPinLocked(now)) {
-                    audit.record(patron.getCardNumber(), "LOGIN_LOCKED", "Patron PIN locked after repeated failures");
-                    throw locked(patron.getPinLockedUntil(), now);
-                }
+            if (claim != null && claim.locksOnFailure() != null) {
+                audit.record(patron.getCardNumber(), "LOGIN_LOCKED", "Patron PIN locked after repeated failures");
+                throw locked(claim.locksOnFailure(), now);
             }
             throw new BadCredentialsException("Invalid card number or PIN");
         }
-        // A correct PIN clears earlier failed attempts.
-        if (patron.getPinFailures() > 0 || patron.getPinLockedUntil() != null) {
-            patron.unlockPin();
-            patrons.save(patron);
-        }
+        throttle.succeeded(Account.PATRON, patron.getId());
         return AuthResponse.of(tokens.issue(patron));
     }
 
@@ -157,6 +150,7 @@ public class AuthController {
 
     @GetMapping("/me")
     public TokenService.PrincipalInfo me(@AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) throw new ApiException(HttpStatus.FORBIDDEN, "Not available with a device key");
         Number patronId = jwt.getClaim("patronId");
         return new TokenService.PrincipalInfo(jwt.getSubject(), jwt.getClaimAsString("username"),
                 jwt.getClaimAsString("name"), jwt.getClaimAsStringList("roles") == null ? List.of()
@@ -168,6 +162,7 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Transactional
     public void changePassword(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ChangePasswordRequest req) {
+        if (jwt == null) throw new ApiException(HttpStatus.FORBIDDEN, "Not available with a device key");
         String subject = jwt.getSubject();
         if (!subject.startsWith("user:")) {
             throw ApiException.badRequest("Patrons change their PIN from the patron portal");

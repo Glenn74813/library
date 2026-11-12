@@ -15,6 +15,8 @@ import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.common.Csv;
 import ph.edu.zscmst.library.patron.PatronDtos.ImportResult;
 import ph.edu.zscmst.library.patron.PatronDtos.PatronRequest;
+import ph.edu.zscmst.library.privacy.PrivacyService;
+import ph.edu.zscmst.library.security.TokenService;
 
 @Service
 public class PatronService {
@@ -27,9 +29,11 @@ public class PatronService {
     private final CourseRepository courses;
     private final PasswordEncoder passwordEncoder;
     private final AuditService audit;
+    private final TokenService tokens;
 
     public PatronService(PatronRepository patrons, PatronCategoryRepository categories, CourseRepository courses,
-                         PasswordEncoder passwordEncoder, AuditService audit) {
+                         PasswordEncoder passwordEncoder, AuditService audit, TokenService tokens) {
+        this.tokens = tokens;
         this.patrons = patrons;
         this.categories = categories;
         this.courses = courses;
@@ -47,6 +51,15 @@ public class PatronService {
         return patrons.findById(id).orElseThrow(() -> ApiException.notFound("Patron"));
     }
 
+    /** Anonymized patrons (and the system record holding anonymized history) can't be edited back. */
+    private Patron editable(Long id) {
+        Patron p = get(id);
+        if (p.getAnonymizedAt() != null || PrivacyService.ANONYMIZED_CARD.equals(p.getCardNumber())) {
+            throw ApiException.conflict("This record was anonymized under the Data Privacy Act and can't be changed");
+        }
+        return p;
+    }
+
     @Transactional(readOnly = true)
     public Patron lookup(String code) {
         return patrons.findByIdentifier(code.trim()).orElseThrow(() -> ApiException.notFound("Patron"));
@@ -56,6 +69,7 @@ public class PatronService {
     public Patron create(PatronRequest req) {
         Patron p = new Patron(req.cardNumber().trim());
         apply(p, req);
+        checkCodesFree(p);
         Patron saved = patrons.save(p);
         audit.record("PATRON_CREATE", saved.getCardNumber() + " " + saved.getFullName());
         return saved;
@@ -63,19 +77,31 @@ public class PatronService {
 
     @Transactional
     public Patron update(Long id, PatronRequest req) {
-        Patron p = get(id);
+        Patron p = editable(id);
         p.setCardNumber(req.cardNumber().trim());
         apply(p, req);
+        checkCodesFree(p);
         audit.record("PATRON_UPDATE", p.getCardNumber() + " blocked=" + p.isBlocked());
         return p;
     }
 
     @Transactional
     public void setPin(Long id, String pin) {
-        Patron p = get(id);
+        Patron p = editable(id);
         p.setPinHash(passwordEncoder.encode(pin));
         p.unlockPin();
+        // A new PIN from the desk (e.g. the old one was shared) ends the patron's existing sessions.
+        tokens.revokeAll(TokenService.SubjectType.PATRON, p.getId());
         audit.record("PATRON_PIN_SET", p.getCardNumber());
+    }
+
+    /** A card number or RFID UID may not match (in any case) another patron's card or RFID: scans must find one patron. */
+    private void checkCodesFree(Patron p) {
+        for (String code : new String[] {p.getCardNumber(), p.getRfidUid()}) {
+            if (code != null && patrons.idsUsingCode(code).stream().anyMatch(id -> !id.equals(p.getId()))) {
+                throw ApiException.conflict("Another patron already uses the code " + code + " (as card number or RFID)");
+            }
+        }
     }
 
     private void apply(Patron p, PatronRequest req) {

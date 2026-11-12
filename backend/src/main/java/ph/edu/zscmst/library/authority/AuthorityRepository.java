@@ -15,7 +15,7 @@ public interface AuthorityRepository extends JpaRepository<Authority, Long> {
     /** Authority whose variant list contains {@code form} (case-insensitive, whole '|' token). */
     @Query(value = """
             SELECT * FROM authority a WHERE a.type = :type
-              AND lower('|' || coalesce(a.variants, '') || '|') LIKE '%|' || lower(:form) || '|%' LIMIT 1
+              AND strpos(lower('|' || coalesce(a.variants, '') || '|'), '|' || lower(:form) || '|') > 0 LIMIT 1
             """, nativeQuery = true)
     Optional<Authority> findByVariant(String type, String form);
 

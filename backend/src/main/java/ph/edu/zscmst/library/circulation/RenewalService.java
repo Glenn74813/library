@@ -116,6 +116,8 @@ public class RenewalService {
     }
 
     private RenewalRequest pendingRequest(Long id) {
+        // Lock first, so two staff deciding the same request at once can't both renew the loan.
+        requests.lockById(id);
         RenewalRequest r = requests.findWithDetailsById(id).orElseThrow(() -> ApiException.notFound("Renewal request"));
         if (r.getStatus() != RenewalRequest.Status.PENDING) {
             throw ApiException.conflict("This request was already " + r.getStatus().name().toLowerCase());

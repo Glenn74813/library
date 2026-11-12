@@ -18,6 +18,15 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     @Query("select i from Item i where lower(i.barcode) = lower(:code) or lower(i.rfidEpc) = lower(:code)")
     Optional<Item> findByIdentifier(String code);
 
+    /** Items already using a code as barcode or EPC (any case), to keep every scan unambiguous. */
+    @Query("select i.id from Item i where lower(i.barcode) = lower(:code) or lower(i.rfidEpc) = lower(:code)")
+    List<Long> idsUsingCode(String code);
+
+    /** Row-locks a copy so two desks can't lend or route it at the same moment. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select i from Item i where i.id = :id")
+    Optional<Item> findByIdForUpdate(Long id);
+
     List<Item> findByRecordIdOrderByBarcodeAsc(Long recordId);
 
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "record")

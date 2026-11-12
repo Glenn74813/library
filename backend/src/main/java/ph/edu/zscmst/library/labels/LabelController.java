@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -43,6 +45,8 @@ import ph.edu.zscmst.library.common.SystemSettings;
 import ph.edu.zscmst.library.digital.FileStorage;
 import ph.edu.zscmst.library.patron.Patron;
 import ph.edu.zscmst.library.patron.PatronRepository;
+import ph.edu.zscmst.library.printlog.PrintLogService;
+import ph.edu.zscmst.library.printlog.PrintLogService.Kind;
 
 /**
  * Printable PDFs on A4 label sheets: item barcode labels (Avery L7160, 21 per sheet), spine
@@ -85,15 +89,17 @@ public class LabelController {
     private final SystemSettings system;
     private final LibraryClock clock;
     private final AuditService audit;
+    private final PrintLogService printLog;
 
     public LabelController(ItemRepository items, PatronRepository patrons, FileStorage storage, SystemSettings system,
-                           LibraryClock clock, AuditService audit) {
+                           LibraryClock clock, AuditService audit, PrintLogService printLog) {
         this.items = items;
         this.patrons = patrons;
         this.storage = storage;
         this.system = system;
         this.clock = clock;
         this.audit = audit;
+        this.printLog = printLog;
     }
 
     /**
@@ -114,7 +120,11 @@ public class LabelController {
             if (i.isPresent()) list.add(i.get());
             else unknown.add(code);
         });
-        if (recordId != null) list.addAll(items.findByRecordIdOrderByBarcodeAsc(recordId));
+        if (recordId != null) {
+            // Skip copies already listed by barcode, so each label prints once.
+            Set<Long> listed = list.stream().map(Item::getId).collect(Collectors.toSet());
+            items.findByRecordIdOrderByBarcodeAsc(recordId).stream().filter(i -> !listed.contains(i.getId())).forEach(list::add);
+        }
         if (addedSince != null) list.addAll(items.findByCreatedAtGreaterThanEqualOrderByBarcodeAsc(clock.startOfDay(addedSince)));
         if (!unknown.isEmpty()) throw ApiException.badRequest("Unknown barcode(s): " + String.join(", ", unknown));
         if (list.isEmpty()) throw ApiException.badRequest("No copies match; enter barcodes, a record, or a date");
@@ -150,6 +160,7 @@ public class LabelController {
         if (list.size() > MAX_LABELS) throw ApiException.badRequest("Too many cards at once (max " + MAX_LABELS + ")");
         byte[] pdf = render(Sheet.CR80, list, skip, this::patronCard);
         audit.record("ID_CARDS_PRINTED", list.size() + " patron card(s)");
+        list.forEach(p -> printLog.record(Kind.ID_CARD, p.getId(), p.getCardNumber(), "PDF generated", false));
         return file(pdf, "patron-id-cards.pdf");
     }
 
@@ -192,6 +203,10 @@ public class LabelController {
     }
 
     private static Image barcode(PdfContentByte cb, String code, float barHeight, float width) {
+        // Code 128 only encodes ASCII: say which code is the problem instead of failing the whole sheet.
+        if (!code.chars().allMatch(c -> c >= 32 && c < 127)) {
+            throw ApiException.badRequest("Can't print a barcode for \"" + code + "\": use letters, digits and symbols only");
+        }
         Barcode128 b = new Barcode128();
         b.setCode(code);
         b.setBarHeight(barHeight);

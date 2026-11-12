@@ -51,6 +51,8 @@ public class NoticeService {
         String template = settings.get("notice.template." + type, "{name}: {title} ({due})");
         String message = render(template, Map.of("name", patron.getFirstName(), "title", title,
                 "due", clock.format(date), "reason", reason == null ? "" : reason));
+        // The column holds 1000 characters; a long title in a long template must not stop every notice.
+        if (message.length() > 1000) message = message.substring(0, 999) + "…";
         notices.save(new Notice(patron, type, message, reference));
     }
 

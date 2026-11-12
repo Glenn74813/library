@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { ApiError, api } from '../../api/client'
+import { isOffline } from '../../api/offlineCirculation'
 import type { EntryMethod, KioskConfig, TapResult } from '../../api/types'
 import { useKioskConnected } from '../../auth/AuthContext'
 import { KioskResetZone, KioskSetup } from '../../components/KioskSetup'
@@ -11,8 +12,12 @@ import { useLibrary } from '../../api/library'
 
 const QUEUE_KEY = 'smartlib.attendance.offlineQueue'
 const RESULT_MS = 4500
+/** A tap that gets no answer within this long is queued like an offline one. */
+const TAP_TIMEOUT = 6000
 
-interface QueuedTap { code: string; method: EntryMethod; timestamp: string }
+interface QueuedTap { id?: string; code: string; method: EntryMethod; timestamp: string }
+
+const newId = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
 
 function readQueue(): QueuedTap[] {
   try { return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? '[]') } catch { return [] }
@@ -51,26 +56,36 @@ function KioskScreen() {
   const scanRef = useRef<HTMLInputElement>(null)
   const buffer = useRef('')
   const hideTimer = useRef<number>(0)
+  const syncing = useRef(false)
 
   const loadConfig = useCallback(async () => {
     try {
       setConfig(await api<KioskConfig>('/api/kiosk/config', { slot: 'kiosk' }))
       setOnline(true)
     } catch (e) {
-      if (!(e instanceof ApiError)) setOnline(false)
+      if (isOffline(e)) setOnline(false)
     }
   }, [])
 
   const syncQueue = useCallback(async () => {
-    const q = readQueue()
+    if (syncing.current) return
+    // Give older entries an id so only the uploaded ones are removed afterwards.
+    const q = readQueue().map((t) => (t.id ? t : { ...t, id: newId() }))
     if (!q.length) return
+    writeQueue(q)
+    syncing.current = true
     try {
-      await api('/api/kiosk/attendance/sync', { slot: 'kiosk', body: { taps: q } })
-      writeQueue([])
-      setQueued(0)
+      await api('/api/kiosk/attendance/sync', { slot: 'kiosk', body: { taps: q.map(({ code, method, timestamp }) => ({ code, method, timestamp })) } })
+      // Taps queued during the upload stay for the next sync.
+      const sent = new Set(q.map((t) => t.id))
+      const rest = readQueue().filter((t) => !t.id || !sent.has(t.id))
+      writeQueue(rest)
+      setQueued(rest.length)
       setOnline(true)
     } catch (e) {
-      if (!(e instanceof ApiError)) setOnline(false)
+      if (isOffline(e)) setOnline(false)
+    } finally {
+      syncing.current = false
     }
   }, [])
 
@@ -107,14 +122,14 @@ function KioskScreen() {
     const c = code.trim()
     if (!c) return
     try {
-      const result = await api<TapResult>('/api/kiosk/attendance/tap', { slot: 'kiosk', body: { code: c, method } })
+      const result = await api<TapResult>('/api/kiosk/attendance/tap', { slot: 'kiosk', body: { code: c, method }, timeoutMs: TAP_TIMEOUT })
       setOnline(true)
       show({ kind: 'ok', result })
     } catch (e) {
-      if (e instanceof ApiError) {
+      if (e instanceof ApiError && !isOffline(e)) {
         show({ kind: 'error', message: e.status === 404 ? 'Card not recognized. Please see the librarian.' : e.message })
       } else {
-        const q = [...readQueue(), { code: c, method, timestamp: new Date().toISOString() }]
+        const q = [...readQueue(), { id: newId(), code: c, method, timestamp: new Date().toISOString() }]
         writeQueue(q)
         setQueued(q.length)
         setOnline(false)

@@ -100,8 +100,12 @@ public class CirculationService {
      */
     @Transactional
     public CheckoutResult checkout(String patronCode, String itemCode, boolean override, Instant offlineAt) {
-        Patron p = patrons.findByIdentifier(patronCode.trim()).orElseThrow(() -> ApiException.notFound("Patron"));
-        Item item = items.findByIdentifier(itemCode.trim()).orElseThrow(() -> ApiException.notFound("Item"));
+        Patron found = patrons.findByIdentifier(patronCode.trim()).orElseThrow(() -> ApiException.notFound("Patron"));
+        Item scanned = items.findByIdentifier(itemCode.trim()).orElseThrow(() -> ApiException.notFound("Item"));
+        // Lock patron then copy: parallel checkouts for one patron can't pass the loan limit together, and
+        // two desks lending the same copy get a clear "already checked out".
+        Patron p = patrons.findByIdForUpdate(found.getId()).orElseThrow(() -> ApiException.notFound("Patron"));
+        Item item = items.findByIdForUpdate(scanned.getId()).orElseThrow(() -> ApiException.notFound("Item"));
         PatronCategory cat = p.getCategory();
         List<String> warnings = new ArrayList<>();
 
@@ -150,6 +154,18 @@ public class CirculationService {
         // Borrowing a title you booked for later fulfils your own booking.
         holds.findFirstByRecordIdAndPatronIdAndStatus(item.getRecord().getId(), p.getId(), HoldStatus.SCHEDULED)
                 .ifPresent(b -> b.close(HoldStatus.FULFILLED, AuditService.currentActor(), now));
+        // So does borrowing another copy of a title you had waiting: the copy set aside for you goes to the next
+        // in the queue (or back to the shelf), and a still-waiting hold of yours is fulfilled too.
+        if (released == null) {
+            holds.findFirstByRecordIdAndPatronIdAndStatus(item.getRecord().getId(), p.getId(), HoldStatus.READY)
+                    .ifPresent(h -> {
+                        Item setAside = h.getItem();
+                        h.close(HoldStatus.FULFILLED, AuditService.currentActor(), now);
+                        if (setAside != null && !setAside.getId().equals(item.getId())) routeAvailableCopy(setAside);
+                    });
+            holds.findFirstByRecordIdAndPatronIdAndStatus(item.getRecord().getId(), p.getId(), HoldStatus.PENDING)
+                    .ifPresent(h -> h.close(HoldStatus.FULFILLED, AuditService.currentActor(), now));
+        }
         item.setStatus(ItemStatus.ON_LOAN);
         Loan loan = loans.save(new Loan(item, p, now, clock.endOfDay(dueDate), AuditService.currentActor()));
         audit.record("CHECKOUT", item.getBarcode() + " -> " + p.getCardNumber()
@@ -237,7 +253,12 @@ public class CirculationService {
     public LoanDto renewLoan(Long loanId, Long requiredPatronId, boolean requestedBeforeDue) {
         Loan loan = renewableLoan(loanId, requiredPatronId);
         Instant newDue = renewedDueDate(loan, requestedBeforeDue);
-        if (newDue.isAfter(loan.getDueAt())) loan.setDueAt(newDue);
+        // Don't use up a renewal that wouldn't move the due date (e.g. renewing on the day it was borrowed).
+        if (!newDue.isAfter(loan.getDueAt())) {
+            throw ApiException.conflict("Renewing now would not extend the due date (" + clock.format(loan.getDueAt())
+                    + "); try again closer to the due date");
+        }
+        loan.setDueAt(newDue);
         loan.setRenewals(loan.getRenewals() + 1);
         audit.record("RENEW", loan.getItem().getBarcode() + " for " + loan.getPatron().getCardNumber());
         return toDto(loan);
@@ -329,6 +350,15 @@ public class CirculationService {
     }
 
     /** Sends a returned copy to the next waiting hold, or back to the shelf. */
+    /**
+     * A copy becomes available again (found in a stocktake, status changed by staff, set-aside copy no longer
+     * needed): it goes to the next waiting hold, if any, instead of straight to the shelf.
+     */
+    @Transactional
+    public String routeAvailableCopy(Item item) {
+        return routeReturnedItem(item);
+    }
+
     private String routeReturnedItem(Item item) {
         if (policy.isRoomUse(item)) {
             item.setStatus(ItemStatus.AVAILABLE);
@@ -662,7 +692,7 @@ public class CirculationService {
 
     @Transactional
     public ReceiptDto pay(List<Long> fineIds) {
-        List<Fine> list = fines.findByIdIn(fineIds);
+        List<Fine> list = fines.lockByIds(fineIds);
         if (list.size() != fineIds.stream().distinct().count()) throw ApiException.notFound("Fine");
         if (list.stream().anyMatch(f -> f.getStatus() != FineStatus.UNPAID)) {
             throw ApiException.conflict("Some fines are already settled");

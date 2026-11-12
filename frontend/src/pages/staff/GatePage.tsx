@@ -202,6 +202,8 @@ function Recording({ preset, onChange }: { preset: Preset; onChange: (p: Preset)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const recorder = useRef<MediaRecorder | null>(null)
   const timer = useRef<number>(0)
+  /** False once unmounted: a microphone that is granted after that is switched straight off. */
+  const alive = useRef(true)
   const [busy, setBusy] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [recording, setRecording] = useState(false)
@@ -210,10 +212,14 @@ function Recording({ preset, onChange }: { preset: Preset; onChange: (p: Preset)
   const toast = useToast()
   const canRecord = typeof window !== 'undefined' && 'MediaRecorder' in window && !!navigator.mediaDevices?.getUserMedia
 
-  useEffect(() => () => {
-    audioRef.current?.pause()
-    window.clearInterval(timer.current)
-    recorder.current?.stream.getTracks().forEach((t) => t.stop())
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+      audioRef.current?.pause()
+      window.clearInterval(timer.current)
+      recorder.current?.stream.getTracks().forEach((t) => t.stop())
+    }
   }, [])
 
   if (!preset.id) {
@@ -240,6 +246,7 @@ function Recording({ preset, onChange }: { preset: Preset; onChange: (p: Preset)
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      if (!alive.current) { stream.getTracks().forEach((t) => t.stop()); return }
       const type = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((t) => MediaRecorder.isTypeSupported(t))
       const rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined)
       const chunks: Blob[] = []

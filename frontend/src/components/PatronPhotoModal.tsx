@@ -21,12 +21,19 @@ export function PatronPhotoModal({ patron, onClose, onSaved, endpoint = `/api/pa
   const stream = useRef<MediaStream | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => () => { stream.current?.getTracks().forEach((t) => t.stop()) }, [])
+  /** False once closed: a camera that is granted after that is switched straight off. */
+  const alive = useRef(true)
+
+  useEffect(() => {
+    alive.current = true
+    return () => { alive.current = false; stream.current?.getTracks().forEach((t) => t.stop()) }
+  }, [])
 
   async function startCamera() {
     setError(null)
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 640, facingMode: 'user' } })
+      if (!alive.current) { s.getTracks().forEach((t) => t.stop()); return }
       stream.current = s
       setMode('camera')
       setTimeout(() => { if (video.current) { video.current.srcObject = s; void video.current.play() } }, 0)

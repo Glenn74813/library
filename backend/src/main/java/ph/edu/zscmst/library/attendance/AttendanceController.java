@@ -14,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -82,6 +83,9 @@ public class AttendanceController {
                 ok++;
             } catch (ApiException e) {
                 rejected.add(tap.code() + ": " + e.getMessage());
+            } catch (RuntimeException e) {
+                // One bad tap must not abort the rest (the kiosk would resend, and re-apply, those already done).
+                rejected.add(tap.code() + ": could not be recorded");
             }
         }
         return new SyncResult(ok, rejected);
@@ -130,20 +134,29 @@ public class AttendanceController {
 
     @GetMapping("/api/attendance/settings")
     public Map<String, String> getSettings() {
-        return settings.getByPrefix("kiosk.");
+        return kioskOnly(settings.getByPrefix("kiosk."));
+    }
+
+    /** Only this page's settings; other kiosk.* keys (OPAC reset, duplicate taps) belong to System settings. */
+    private static Map<String, String> kioskOnly(Map<String, String> all) {
+        Map<String, String> out = new java.util.LinkedHashMap<>();
+        all.forEach((k, v) -> { if (KIOSK_KEYS.contains(k)) out.put(k, v); });
+        return out;
     }
 
     @PutMapping("/api/attendance/settings")
     @PreAuthorize("hasAnyRole('ADMIN','LIBRARIAN')")
+    @Transactional
     public Map<String, String> updateSettings(@RequestBody Map<String, String> values) {
+        // Check everything before saving anything, so a bad value can't leave half the settings saved.
         values.forEach((k, v) -> {
             if (!KIOSK_KEYS.contains(k)) throw ApiException.badRequest("Unknown setting: " + k);
-            if (k.equals("mode") && !v.equals("ATTENDANCE") && !v.equals("STANDBY")) {
+            if (k.equals("mode") && !"ATTENDANCE".equals(v) && !"STANDBY".equals(v)) {
                 throw ApiException.badRequest("mode must be ATTENDANCE or STANDBY");
             }
-            settings.put("kiosk." + k, v);
         });
+        values.forEach((k, v) -> settings.put("kiosk." + k, v == null ? "" : v));
         audit.record("KIOSK_SETTINGS", values.keySet().toString());
-        return settings.getByPrefix("kiosk.");
+        return kioskOnly(settings.getByPrefix("kiosk."));
     }
 }

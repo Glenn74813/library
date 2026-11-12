@@ -29,6 +29,8 @@ public final class Csv {
             if (i > 0) sb.append(',');
             Object v = values.get(i);
             String s = v == null ? "" : v.toString();
+            // Text starting like a formula would run in Excel (CSV injection): prefix an apostrophe to keep it text.
+            if (v instanceof CharSequence && !s.isEmpty() && "=+-@\t\r".indexOf(s.charAt(0)) >= 0) s = "'" + s;
             if (s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r")) {
                 s = "\"" + s.replace("\"", "\"\"") + "\"";
             }

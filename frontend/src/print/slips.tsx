@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import qrcode from 'qrcode-generator'
+import { api, qs } from '../api/client'
 import type { LibraryProfile } from '../api/library'
 import type { Receipt } from '../api/types'
 import { fmtDate, fmtDateTime, fmtMoney } from '../format'
@@ -29,12 +30,50 @@ const SLIP_CSS = `
   .item b { display: block; }
   .qr { display: block; margin: 6px auto 2px; width: 30mm; height: 30mm; image-rendering: pixelated; }
   .box { border: 1px solid #000; padding: 4px 6px; margin: 6px 0; }
+  .reprint { border: 2px solid #000; text-align: center; font-weight: 700; font-size: 13px; letter-spacing: 0.08em; padding: 2px; margin-bottom: 6px; }
 `
 
+export type PrintKind = 'ID_CARD' | 'CARD_SLIP' | 'PIN_SLIP' | 'CLEARANCE' | 'CHECKOUT_SLIP' | 'RETURN_SLIP' | 'HOLD_SLIP'
+  | 'RECEIPT' | 'CASH_REPORT'
+
+/** What a print is recorded as. Prints with a reference (receipt, clearance, card) are numbered copy 1, 2, … */
+export interface PrintRecord { kind: PrintKind; patronId?: number; cardNumber?: string; reference?: string; details?: string }
+
+export interface PrintEntry {
+  id: number; kind: PrintKind; label: string; patronId: number | null; patronName: string | null; cardNumber: string | null
+  reference: string | null; details: string | null; copy: number; printedBy: string; printedAt: string
+}
+
+/**
+ * Records the print in the print log, then prints the slip; a second or later copy of the same document is
+ * marked "REPRINT · COPY n". If the log can't be reached the slip still prints.
+ */
+/**
+ * Before printing a document again (ID card, card slip): says when and by whom it was printed before and
+ * asks to go ahead. Resolves true when it was never printed or staff confirm.
+ */
+export async function confirmReprint(kind: PrintKind, reference: string, what: string): Promise<boolean> {
+  const before = await api<PrintEntry[]>(`/api/print-log/document${qs({ kind, reference })}`).catch(() => [] as PrintEntry[])
+  if (!before.length) return true
+  const last = before[0]
+  return confirm(`${what} was already printed ${before.length === 1 ? 'once' : `${before.length} times`}, `
+    + `last on ${fmtDateTime(last.printedAt)} by ${last.printedBy}.\n\nPrint another copy? It is recorded as copy ${before.length + 1}.`)
+}
+
+export async function printRecorded(record: PrintRecord, slip: ReactElement, kiosk = false): Promise<void> {
+  let copy = 1
+  try {
+    const entry = await api<PrintEntry>(kiosk ? '/api/kiosk/print-log' : '/api/print-log', { body: record, slot: kiosk ? 'kiosk' : undefined })
+    copy = entry.copy
+  } catch { /* printing must not depend on the log */ }
+  return printSlip(slip, copy)
+}
+
 /** Prints one slip on the receipt printer. Resolves once the print dialog (or direct print) is done. */
-export function printSlip(slip: ReactElement): Promise<void> {
+export function printSlip(slip: ReactElement, copy = 1): Promise<void> {
+  const banner = copy > 1 ? `<div class="reprint">REPRINT · COPY ${copy}</div>` : ''
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Slip</title><style>${SLIP_CSS}</style></head>`
-    + `<body>${renderToStaticMarkup(slip)}</body></html>`
+    + `<body>${banner}${renderToStaticMarkup(slip)}</body></html>`
   return new Promise((resolve) => {
     const frame = document.createElement('iframe')
     frame.setAttribute('aria-hidden', 'true')
