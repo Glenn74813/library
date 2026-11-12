@@ -54,6 +54,10 @@ export function RecordPage() {
 
   async function lookupIsbn() {
     if (!form.isbn) return toast('Enter an ISBN first', 'warn')
+    if (!isIsbn(form.isbn)) {
+      return toast(`${form.isbn.trim()} is not an ISBN (an ISBN has 10 or 13 digits, usually starting with 978 or 979). `
+        + 'Store or product barcodes can\'t be looked up: type the details in, or try LoC by title.', 'warn')
+    }
     try {
       const r = await api<IsbnResult>(`/api/catalog/isbn/${encodeURIComponent(form.isbn)}`)
       setForm((f) => ({
@@ -227,6 +231,20 @@ function BorrowerHistory({ recordId }: { recordId: number }) {
       <Pager page={data} onPage={setPage} />
     </div>
   )
+}
+
+/** ISBN-10 or ISBN-13 with a valid check digit (hyphens and spaces ignored). */
+function isIsbn(value: string) {
+  const v = value.replace(/[\s-]/g, '').toUpperCase()
+  if (/^\d{9}[\dX]$/.test(v)) {
+    const sum = [...v].reduce((t, c, i) => t + (c === 'X' ? 10 : Number(c)) * (10 - i), 0)
+    return sum % 11 === 0
+  }
+  if (/^97[89]\d{10}$/.test(v)) {
+    const sum = [...v].reduce((t, c, i) => t + Number(c) * (i % 2 ? 3 : 1), 0)
+    return sum % 10 === 0
+  }
+  return false
 }
 
 const SECTIONS = ['General Circulation', 'Fiction Section', 'Filipiniana', 'Reference Section', 'Periodicals Section',
