@@ -11,15 +11,20 @@ import { useInactivity } from '../../hooks/useInactivity'
 import { Icon } from '../../components/Icon'
 import { Logo } from '../../components/Logo'
 import { useLibraryConfig } from '../../api/library'
+import { usePatronSession } from '../../auth/AuthContext'
 
 /**
  * Online Public Access Catalog. Live link to the LMS catalog with real-time availability.
- * Add ?kiosk=1 on touch kiosks: large controls, on-screen keyboard, auto-reset after inactivity.
+ * /opac is the touch-kiosk view: large controls, on-screen keyboard, auto-reset after inactivity.
+ * Students get the ordinary web view (with Privacy and My account): when signed in to My Library, or
+ * through the catalog links on the My Library pages (?view=student). ?kiosk=1 always forces the kiosk view.
  */
 export function OpacKiosk() {
   const config = useLibraryConfig()
   const [params] = useSearchParams()
-  const kiosk = params.get('kiosk') === '1'
+  const patron = usePatronSession()
+  const student = params.get('kiosk') !== '1' && (params.get('view') === 'student' || !!patron)
+  const kiosk = !student
   const [input, setInput] = useState('')
   const [query, setQuery] = useState({ q: '', field: 'any', type: '' })
   const [field, setField] = useState('any')

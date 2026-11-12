@@ -302,7 +302,7 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
                 {f.hasDeviceKey && <button className="btn small danger" onClick={() => revokeKey(f.id!)}>Revoke key</button>}
               </div>
             )}
-            <span className="muted">The public search kiosk (<span className="mono">/opac?kiosk=1</span>) needs no key.</span>
+            <span className="muted">The public search kiosk (<span className="mono">/opac</span>) needs no key.</span>
           </div>
         ) : (
           <div className="alert small">After saving, you get this kiosk's device key and setup links to open on the kiosk PC.</div>

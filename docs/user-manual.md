@@ -10,7 +10,7 @@ administrator, for example `https://library.zscmst.edu.ph`.
 |-----|-------|---------------|
 | Staff | `/staff` | Username and password |
 | Patrons (students, faculty, staff) | `/my` | Library card / ID number and a PIN from the circulation desk |
-| Anyone | `/opac` | Nothing; searching the catalog is public |
+| Anyone | `/opac` (kiosk view) or `/opac?view=student` | Nothing; searching the catalog is public |
 
 ---
 
@@ -178,7 +178,7 @@ from which programs, and the most-read titles.
 ## 2. Patrons
 
 ### 2.1 Searching the catalog (OPAC)
-Open `/opac` on any device or use a library kiosk. Search by title, author, subject or ISBN. Each copy shows
+Use a library kiosk (`/opac`, with an on-screen keyboard), or the **Catalog** link in My Library, which opens the normal web view on your own device. Search by title, author, subject or ISBN. Each copy shows
 whether it is **Available** or **On loan** and where it is shelved. School-owned e-books open in the reader.
 
 ### 2.2 My Library (`/my`)
