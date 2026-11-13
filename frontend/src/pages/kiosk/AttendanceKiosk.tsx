@@ -11,7 +11,8 @@ import { Logo } from '../../components/Logo'
 import { useLibrary } from '../../api/library'
 
 const QUEUE_KEY = 'smartlib.attendance.offlineQueue'
-const RESULT_MS = 4500
+/** How long a tap result (name, photo, time in/out) stays on screen before the kiosk is ready for the next person. */
+const RESULT_MS = 5000
 /** A tap that gets no answer within this long is queued like an offline one. */
 const TAP_TIMEOUT = 6000
 
