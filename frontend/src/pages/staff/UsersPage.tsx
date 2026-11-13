@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api } from '../../api/client'
-import type { Role, User } from '../../api/types'
+import type { GateSummary, Role, User } from '../../api/types'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Table, PasswordInput } from '../../components/ui'
 import { fmtDate, fmtDateTime } from '../../format'
@@ -270,6 +270,7 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
               <div className="row"><button className="btn small primary" onClick={copy}>Copy token</button>
                 <span className="muted">Keep it secret, like a password. It is not shown again.</span></div>
             </>}
+            <GateConnectSteps token={token} />
           </div>
         ) : f.id ? (
           <div className="alert small stack" style={{ gap: 8 }}>
@@ -337,5 +338,55 @@ function SignInProtection() {
       </div>
       <div className="row end"><button className="btn primary" onClick={save}>Save</button></div>
     </div>
+  )
+}
+
+/**
+ * How to connect a security gate of any brand: the RFID bridge runs on the PC wired to the gate and calls the
+ * library with this device's token. Also lists the gates reporting to the library, so staff can see it worked.
+ */
+function GateConnectSteps({ token }: { token: string | null }) {
+  const { data } = useAsync(() => api<GateSummary>('/api/gate/summary'), [])
+  const settings = [
+    'mode=gate',
+    'gate.id=GATE-1',
+    `lms.url=${window.location.origin}`,
+    `lms.deviceKey=${token ?? '<paste the device token here>'}`,
+    'reader=tcp            # or serial / exec / push / simulator (see step 2)',
+    'tcp.host=192.168.1.60',
+    'tcp.port=6000',
+    '#gate.alarm="C:/Program Files/Vendor/gate-cli.exe" alarm --seconds 5',
+  ].join('\n')
+  return (
+    <details>
+      <summary style={{ cursor: 'pointer' }}><strong>How to connect a gate (any brand)</strong></summary>
+      <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+        <span>The gate connects to the library, not the other way round: the <strong>RFID bridge</strong> program
+          (<span className="mono">rfid-bridge</span> folder of the system) runs on the PC wired to the gate, reads its tags, asks the
+          library if each item is borrowed, and sounds the alarm if not.</span>
+        <ol style={{ margin: 0, paddingLeft: 20 }}>
+          <li><strong>Token:</strong> press <em>Issue new device token</em> above and copy it. One device per gate.</li>
+          <li><strong>Ask the gate vendor</strong> how the gate sends the tags it reads, and pick the matching setting:
+            USB/COM port → <span className="mono">reader=serial</span>, <span className="mono">serial.device=COM4</span>;
+            network IP and port → <span className="mono">reader=tcp</span>; a command-line tool or SDK sample →
+            <span className="mono"> reader=exec</span>; their software can post to a web address → <span className="mono">reader=push</span>.
+            Also ask for a command that sounds the alarm (<span className="mono">gate.alarm</span>).</li>
+          <li><strong>On the gate PC:</strong> install Java 21 or newer, copy the <span className="mono">rfid-bridge</span> folder,
+            and save these settings as <span className="mono">rfid-bridge.properties</span> (paths with forward slashes):</li>
+        </ol>
+        <textarea readOnly className="mono small" rows={8} value={settings} onFocus={(e) => e.target.select()} />
+        <ol start={4} style={{ margin: 0, paddingLeft: 20 }}>
+          <li><strong>Run</strong> <span className="mono">java RfidBridge.java</span> in that folder, and make it start with Windows
+            (Task Scheduler, "At log on").</li>
+          <li><strong>Check:</strong> within a minute the gate appears below as online. Walk out with a copy that is not checked
+            out: it shows as an alarm on the Security gate page. No hardware yet? Use <span className="mono">reader=simulator</span> to try it.</li>
+        </ol>
+        <span><strong>Gates reporting now:</strong>{' '}
+          {data?.gates.length
+            ? data.gates.map((g) => <span key={g.gateId} className={`badge ${g.online ? 'ok' : ''}`} style={{ marginRight: 6 }}>
+                {g.gateId} · {g.online ? 'online' : `last seen ${fmtDateTime(g.lastSeen)}`}</span>)
+            : <span className="muted">none yet</span>}</span>
+      </div>
+    </details>
   )
 }
