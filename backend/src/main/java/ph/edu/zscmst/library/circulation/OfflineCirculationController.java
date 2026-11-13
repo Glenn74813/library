@@ -46,7 +46,9 @@ public class OfflineCirculationController {
     }
 
     /** {@code ok=false} means the transaction was not applied; {@code message} says why, or what to do next. */
-    public record SyncResult(String id, String type, String item, boolean ok, String message, List<String> warnings) {
+    /** {@code rfidEpc}: the copy's tag, so the desk can switch its security once the transaction is applied. */
+    public record SyncResult(String id, String type, String item, boolean ok, String message, List<String> warnings,
+                             String rfidEpc) {
     }
 
     private final CirculationService service;
@@ -71,15 +73,15 @@ public class OfflineCirculationController {
                 // The marker commits together with the transaction, so a failure can be retried later.
                 SyncResult r = tx.execute(status -> {
                     if (jdbc.update("insert into offline_applied (id) values (?) on conflict do nothing", t.id()) == 0) {
-                        return new SyncResult(t.id(), t.type(), t.item(), true, "Already recorded in an earlier upload", List.of());
+                        return new SyncResult(t.id(), t.type(), t.item(), true, "Already recorded in an earlier upload", List.of(), null);
                     }
                     return apply(t, at);
                 });
                 results.add(r);
             } catch (ApiException e) {
-                results.add(new SyncResult(t.id(), t.type(), t.item(), false, e.getMessage(), List.of()));
+                results.add(new SyncResult(t.id(), t.type(), t.item(), false, e.getMessage(), List.of(), null));
             } catch (RuntimeException e) {
-                results.add(new SyncResult(t.id(), t.type(), t.item(), false, "Could not be applied: " + e.getMessage(), List.of()));
+                results.add(new SyncResult(t.id(), t.type(), t.item(), false, "Could not be applied: " + e.getMessage(), List.of(), null));
             }
         });
         return results;
@@ -92,10 +94,11 @@ public class OfflineCirculationController {
             CheckoutResult r = service.checkout(t.patron(), t.item(), true, at);
             return new SyncResult(t.id(), t.type(), t.item(), true,
                     r.loan().title() + " → " + r.loan().patronName() + (r.notice() == null ? "" : ". " + r.notice()),
-                    r.warnings());
+                    r.warnings(), r.loan().rfidEpc());
         }
         CheckinResult r = service.checkin(t.item(), at);
         String fine = r.fineAmount().signum() > 0 ? " Fine PHP " + r.fineAmount() + "." : "";
-        return new SyncResult(t.id(), t.type(), t.item(), true, r.message() + "." + fine, List.of());
+        return new SyncResult(t.id(), t.type(), t.item(), true, r.message() + "." + fine, List.of(),
+                r.loan() == null ? null : r.loan().rfidEpc());
     }
 }

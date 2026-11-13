@@ -139,7 +139,9 @@ async function refresh(slot: Slot, usedToken?: string): Promise<boolean> {
           body: JSON.stringify({ refreshToken: current.refreshToken }),
         })
         if (!res.ok) {
-          setSession(slot, null)
+          // Only a refused token ends the session. A server or network error (502 while the API restarts,
+          // 429) keeps it, so the desk stays signed in and can carry on in offline mode.
+          if (res.status === 400 || res.status === 401 || res.status === 403) setSession(slot, null)
           return false
         }
         setSession(slot, fromAuthResponse(await res.json()))

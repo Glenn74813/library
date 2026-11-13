@@ -83,7 +83,8 @@ function refresh(): Promise<boolean> {
           body: JSON.stringify({ refreshToken: current.refreshToken }),
         })
         if (!res.ok) {
-          await setSession(null)
+          // Only a refused token signs the patron out; a server hiccup (502, 503) keeps the session.
+          if (res.status === 400 || res.status === 401 || res.status === 403) await setSession(null)
           return false
         }
         await setSession((await res.json()) as AuthResponse)

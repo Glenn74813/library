@@ -68,7 +68,7 @@ public class AttendanceController {
 
     @PostMapping("/api/kiosk/attendance/tap")
     public TapResult tap(@RequestBody TapRequest req) {
-        return service.tap(new TapRequest(req.code(), req.method(), null));
+        return service.tap(new TapRequest(req.code(), req.method(), null, req.clientId()));
     }
 
     /** Uploads taps the kiosk captured while the server was unreachable. */

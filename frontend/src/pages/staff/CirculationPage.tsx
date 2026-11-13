@@ -38,6 +38,12 @@ interface Offline { queued: number; offline: boolean; queue: (tx: Parameters<typ
 export function CirculationPage() {
   const toast = useToast()
   const [mode, setMode] = useState<Mode>('out')
+  const outPanel = useRef<HTMLDivElement>(null)
+  const inPanel = useRef<HTMLDivElement>(null)
+  // The panels stay mounted, so autoFocus only fires once: put the cursor in the scan box on every tab switch.
+  useEffect(() => {
+    (mode === 'out' ? outPanel : inPanel).current?.querySelector<HTMLInputElement>('input.scan-input')?.focus()
+  }, [mode])
   const [log, setLog] = useState<LogEntry[]>([])
   const [queued, setQueued] = useState(offlineQueue().length)
   const [offline, setOffline] = useState(false)
@@ -54,6 +60,10 @@ export function CirculationPage() {
       setFailed(failedSyncs())
       results.forEach((r) => addLog(r.ok, `SYNCED ${r.type === 'CHECKOUT' ? 'OUT' : 'IN'} ${r.item}: ${r.message}`
         + (r.warnings.length ? ` (rules overridden: ${r.warnings.join('; ')})` : '')))
+      // Items lent or returned while offline still have their old tag security: switch it now
+      // (off for a loan, on for a return) when this desk has an RFID station.
+      results.filter((r) => r.ok && r.rfidEpc).forEach((r) =>
+        void switchSecurity(r.rfidEpc, r.type === 'CHECKIN', r.item).then((w) => { if (w) addLog(false, w) }))
       const bad = results.filter((r) => !r.ok).length
       toast(`Uploaded ${results.length - bad} offline transaction(s)` + (bad ? `; ${bad} need attention` : ''), bad ? 'warn' : 'success')
     } catch (e) {
@@ -104,7 +114,10 @@ export function CirculationPage() {
       )}
       <Tabs value={mode} onChange={setMode} tabs={[{ id: 'out', label: 'Check out / renew' }, { id: 'in', label: 'Check in (return)' }]} />
       <div className="grid cols-2" style={{ alignItems: 'start' }}>
-        {mode === 'out' ? <Checkout addLog={addLog} off={off} /> : <Checkin addLog={addLog} off={off} />}
+        {/* Both stay mounted (the other is only hidden): switching tabs must not drop returns still in the queue
+            or a return waiting in the settle-fines window. */}
+        <div hidden={mode !== 'out'} ref={outPanel}><Checkout addLog={addLog} off={off} /></div>
+        <div hidden={mode !== 'in'} ref={inPanel}><Checkin addLog={addLog} off={off} /></div>
         <div className="stack">
         <PrintHelp />
         <RfidStationCard />

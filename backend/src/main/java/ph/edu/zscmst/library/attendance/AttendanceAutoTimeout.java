@@ -26,7 +26,11 @@ public class AttendanceAutoTimeout {
     private final LibraryCalendar calendar;
     private final LibraryClock clock;
 
-    public AttendanceAutoTimeout(AttendanceLogRepository logs, LibraryCalendar calendar, LibraryClock clock) {
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    public AttendanceAutoTimeout(AttendanceLogRepository logs, LibraryCalendar calendar, LibraryClock clock,
+                                 org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
         this.logs = logs;
         this.calendar = calendar;
         this.clock = clock;
@@ -48,5 +52,7 @@ public class AttendanceAutoTimeout {
             closed++;
         }
         if (closed > 0) log.info("Auto timed-out {} visit(s) at closing time", closed);
+        // Tap ids only matter while a kiosk might still upload its offline queue.
+        jdbc.update("delete from attendance_tap where seen_at < now() - interval '30 days'");
     }
 }

@@ -34,7 +34,8 @@ public class AttendanceService {
     public record Broadcast(String message, Instant at, String presetId, boolean hasAudio) {
     }
 
-    public record TapRequest(String code, EntryMethod method, Instant timestamp) {
+    /** {@code clientId}: the kiosk's own id for the tap, so a tap sent twice is recorded once. */
+    public record TapRequest(String code, EntryMethod method, Instant timestamp, String clientId) {
     }
 
     public record TapResult(String action, String patronName, String cardNumber, String course, String category,
@@ -64,9 +65,12 @@ public class AttendanceService {
     private final LibraryClock clock;
     private final BroadcastService broadcasts;
     private final SystemSettings system;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     public AttendanceService(AttendanceLogRepository logs, PatronRepository patrons, SettingsService settings,
-                             LibraryClock clock, BroadcastService broadcasts, SystemSettings system) {
+                             LibraryClock clock, BroadcastService broadcasts, SystemSettings system,
+                             org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
         this.system = system;
         this.broadcasts = broadcasts;
         this.logs = logs;
@@ -101,6 +105,14 @@ public class AttendanceService {
         List<String> warnings = new java.util.ArrayList<>();
         if (p.isBlocked()) warnings.add("Account is blocked - please see the librarian");
         if (p.isExpired(day)) warnings.add("Library ID expired on " + p.getExpiryDate());
+
+        // Sent before but the answer was lost (slow network), then uploaded again from the offline queue.
+        if (req.clientId() != null && !req.clientId().isBlank() && jdbc.update(
+                "insert into attendance_tap (client_id) values (?) on conflict do nothing", req.clientId().trim()) == 0) {
+            AttendanceLog l = last.orElse(null);
+            return result(p, l != null && l.getTimeOut() != null ? "OUT" : "IN", "Already recorded",
+                    l == null ? now : l.getTimeOut() != null ? l.getTimeOut() : l.getTimeIn(), warnings);
+        }
 
         if (last.isPresent()) {
             AttendanceLog l = last.get();

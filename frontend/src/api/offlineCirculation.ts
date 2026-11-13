@@ -5,7 +5,7 @@ import { api, ApiError } from './client'
  * (so the circulation page must stay on the same PC) and uploaded with their original times.
  */
 export interface OfflineTx { id: string; type: 'CHECKOUT' | 'CHECKIN'; patron?: string; item: string; at: string }
-export interface SyncResult { id: string; type: 'CHECKOUT' | 'CHECKIN'; item: string; ok: boolean; message: string; warnings: string[] }
+export interface SyncResult { id: string; type: 'CHECKOUT' | 'CHECKIN'; item: string; ok: boolean; message: string; warnings: string[]; rfidEpc?: string | null }
 
 const QUEUE_KEY = 'smartlib.circulation.offlineQueue'
 const FAILED_KEY = 'smartlib.circulation.offlineFailed'

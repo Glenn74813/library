@@ -76,7 +76,7 @@ function KioskScreen() {
     writeQueue(q)
     syncing.current = true
     try {
-      await api('/api/kiosk/attendance/sync', { slot: 'kiosk', body: { taps: q.map(({ code, method, timestamp }) => ({ code, method, timestamp })) } })
+      await api('/api/kiosk/attendance/sync', { slot: 'kiosk', body: { taps: q.map(({ id, code, method, timestamp }) => ({ code, method, timestamp, clientId: id })) } })
       // Taps queued during the upload stay for the next sync.
       const sent = new Set(q.map((t) => t.id))
       const rest = readQueue().filter((t) => !t.id || !sent.has(t.id))
@@ -122,15 +122,18 @@ function KioskScreen() {
   async function tap(code: string, method: EntryMethod) {
     const c = code.trim()
     if (!c) return
+    // The same id goes with the tap and, if the answer doesn't come, with its offline copy: the server
+    // records it once even when it did get the first one.
+    const id = newId()
     try {
-      const result = await api<TapResult>('/api/kiosk/attendance/tap', { slot: 'kiosk', body: { code: c, method }, timeoutMs: TAP_TIMEOUT })
+      const result = await api<TapResult>('/api/kiosk/attendance/tap', { slot: 'kiosk', body: { code: c, method, clientId: id }, timeoutMs: TAP_TIMEOUT })
       setOnline(true)
       show({ kind: 'ok', result })
     } catch (e) {
       if (e instanceof ApiError && !isOffline(e)) {
         show({ kind: 'error', message: e.status === 404 ? 'ID not recognized. Please see the librarian.' : e.message })
       } else {
-        const q = [...readQueue(), { id: newId(), code: c, method, timestamp: new Date().toISOString() }]
+        const q = [...readQueue(), { id, code: c, method, timestamp: new Date().toISOString() }]
         writeQueue(q)
         setQueued(q.length)
         setOnline(false)
