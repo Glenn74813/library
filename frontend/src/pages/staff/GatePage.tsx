@@ -4,7 +4,7 @@ import type { GateConfig, GateEvent, GateEventType, GateSummary, Page, VoiceSett
 import { loadVoices, pickVoice, speak, speechSupported } from '../../speech'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
-import { ErrorAlert, Field, Modal, Pager, Stat, StatusBadge, Table, ExportMenu } from '../../components/ui'
+import { ErrorAlert, Field, Modal, Pager, Stat, StatusBadge, Table, Tabs, ExportMenu } from '../../components/ui'
 import { daysAgo, fmtDateTime, isoDate, label } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
@@ -17,6 +17,7 @@ const TYPES: GateEventType[] = ['ALARM', 'TAMPER', 'POWER_LOSS', 'POWER_RESTORED
 
 export function GatePage() {
   const canEdit = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
+  const [tab, setTab] = useState<'control' | 'broadcast' | 'voice' | 'events'>('control')
   const [type, setType] = useState('')
   const [from, setFrom] = useState(daysAgo(6))
   const [to, setTo] = useState(isoDate())
@@ -72,8 +73,14 @@ export function GatePage() {
           <Stat label="Power-loss events" value={summary.powerLossToday} tone={summary.powerLossToday ? 'warn' : undefined} />
         </div>
       )}
-      <div className="grid cols-2" style={{ marginBottom: 16 }}>
-        <div className="card stack">
+      <Tabs value={tab} onChange={setTab} tabs={[
+        { id: 'control', label: 'Gate control & device health' },
+        { id: 'broadcast', label: 'Announcement broadcast' },
+        { id: 'voice', label: 'Announcement voice' },
+        { id: 'events', label: 'Event log' },
+      ]} />
+      {tab === 'control' && (
+        <div className="card stack" style={{ marginBottom: 16 }}>
           <h2>Gate control & device health</h2>
           {summary && <AlarmSchedule config={summary.config} canEdit={canEdit} onSaved={() => void reloadSummary()} />}
           {summary?.gates.length ? summary.gates.map((g) => (
@@ -89,7 +96,9 @@ export function GatePage() {
             </div>
           )}
         </div>
-        <div className="card stack">
+      )}
+      {tab === 'broadcast' && (
+        <div className="card stack" style={{ marginBottom: 16 }}>
           <h2>Announcement broadcast</h2>
           <p className="muted small">Shows on every library kiosk/display and is read aloud (text-to-speech).</p>
           <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="e.g. Earthquake drill: please proceed calmly to the nearest exit." />
@@ -110,11 +119,11 @@ export function GatePage() {
             </div>
           ) : <p className="muted small" style={{ margin: 0 }}>No presets yet.</p>}
         </div>
-      </div>
-      <VoiceCard canEdit={canEdit} />
+      )}
+      {tab === 'voice' && <VoiceCard canEdit={canEdit} />}
       {managing && presets && <PresetsModal value={presets} onClose={() => { setManaging(false); void reloadPresets() }}
         onSaved={(p) => { setPresets(p); setManaging(false) }} />}
-      <div className="card">
+      {tab === 'events' && <div className="card">
         <h2>Event log</h2>
         <div className="form-grid" style={{ marginBottom: 12 }}>
           <Field label="Event"><select value={type} onChange={(e) => { setType(e.target.value); setPage(0) }}>
@@ -131,7 +140,7 @@ export function GatePage() {
           { header: 'Details', render: (e) => e.visitorCount != null ? `${e.visitorCount} visitor(s)` : e.message ?? '—' },
         ]} />
         <Pager page={events} onPage={setPage} />
-      </div>
+      </div>}
     </>
   )
 }
