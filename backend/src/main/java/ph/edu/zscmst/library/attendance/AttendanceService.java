@@ -158,8 +158,16 @@ public class AttendanceService {
 
     @Transactional(readOnly = true)
     public List<LogDto> allLogs(LocalDate from, LocalDate to) {
-        return logs.findByTimeInBetweenOrderByTimeInAsc(clock.startOfDay(from), clock.startOfDay(to.plusDays(1)))
-                .stream().map(LogDto::of).toList();
+        return allLogs(from, to, null, null);
+    }
+
+    /** Visits in the period, optionally only by patrons of one category and/or course. */
+    @Transactional(readOnly = true)
+    public List<LogDto> allLogs(LocalDate from, LocalDate to, Long categoryId, Long courseId) {
+        return logs.findByTimeInBetweenOrderByTimeInAsc(clock.startOfDay(from), clock.startOfDay(to.plusDays(1))).stream()
+                .filter(a -> categoryId == null || a.getPatron().getCategory().getId().equals(categoryId))
+                .filter(a -> courseId == null || (a.getPatron().getCourse() != null && a.getPatron().getCourse().getId().equals(courseId)))
+                .map(LogDto::of).toList();
     }
 
     @Transactional(readOnly = true)

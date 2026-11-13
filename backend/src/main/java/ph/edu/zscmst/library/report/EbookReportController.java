@@ -3,6 +3,7 @@ package ph.edu.zscmst.library.report;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.format.annotation.DateTimeFormat;
@@ -13,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import ph.edu.zscmst.library.common.LibraryClock;
-import ph.edu.zscmst.library.common.Pdf;
+import ph.edu.zscmst.library.common.ReportTable;
 
 /** How school-owned e-books are used: openings per title, distinct readers, and readers by program. */
 @RestController
@@ -39,32 +40,34 @@ public class EbookReportController {
 
     @GetMapping("/api/reports/ebooks")
     public EbookUsage usage(@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-                            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+                            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+                            @RequestParam(required = false) Long categoryId, @RequestParam(required = false) Long courseId) {
         LocalDate t = to == null ? clock.today() : to;
         LocalDate f = from == null ? t.minusDays(29) : from;
-        Timestamp start = Timestamp.from(clock.startOfDay(f));
-        Timestamp end = Timestamp.from(clock.startOfDay(t.plusDays(1)));
-        Long views = jdbc.queryForObject("select count(*) from ebook_view where viewed_at >= ? and viewed_at < ?", Long.class, start, end);
-        Long readers = jdbc.queryForObject("select count(distinct patron_id) from ebook_view where viewed_at >= ? and viewed_at < ?",
-                Long.class, start, end);
+        // Openings in the period, optionally only by patrons of one category and/or program.
+        String where = " from ebook_view v left join patron p on p.id = v.patron_id where v.viewed_at >= ? and v.viewed_at < ?"
+                + (categoryId == null ? "" : " and p.category_id = ?") + (courseId == null ? "" : " and p.course_id = ?");
+        List<Object> args = new ArrayList<>(List.of(Timestamp.from(clock.startOfDay(f)), Timestamp.from(clock.startOfDay(t.plusDays(1)))));
+        if (categoryId != null) args.add(categoryId);
+        if (courseId != null) args.add(courseId);
+        Object[] a = args.toArray();
+        Long views = jdbc.queryForObject("select count(*)" + where, Long.class, a);
+        Long readers = jdbc.queryForObject("select count(distinct v.patron_id)" + where, Long.class, a);
         Long available = jdbc.queryForObject("select count(*) from digital_file", Long.class);
-        List<TitleUsage> titles = jdbc.query("""
-                select r.id, r.title, r.authors, count(*) as views, count(distinct v.patron_id) as readers, max(v.viewed_at) as last
-                from ebook_view v join bib_record r on r.id = v.record_id
-                where v.viewed_at >= ? and v.viewed_at < ?
-                group by r.id, r.title, r.authors order by views desc, r.title""",
+        List<TitleUsage> titles = jdbc.query("select r.id, r.title, r.authors, count(*) as views, count(distinct v.patron_id) as readers,"
+                + " max(v.viewed_at) as last" + where.replace(" where", " join bib_record r on r.id = v.record_id where")
+                + " group by r.id, r.title, r.authors order by views desc, r.title",
                 (rs, i) -> new TitleUsage(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getLong(4), rs.getLong(5),
-                        rs.getTimestamp(6).toInstant()), start, end);
-        List<Count> byCourse = jdbc.query("""
-                select coalesce(c.code, case when v.patron_id is null then 'Anonymized' else 'No program' end),
-                       count(distinct coalesce(v.patron_id::text, 'view-' || v.id)) -- anonymized readers are unknown: count each view
-                from ebook_view v left join patron p on p.id = v.patron_id left join course c on c.id = p.course_id
-                where v.viewed_at >= ? and v.viewed_at < ?
-                group by 1 order by 2 desc""", (rs, i) -> new Count(rs.getString(1), rs.getLong(2)), start, end);
-        List<Count> byDay = jdbc.query("""
-                select to_char(viewed_at at time zone ?, 'YYYY-MM-DD'), count(*) from ebook_view
-                where viewed_at >= ? and viewed_at < ? group by 1 order by 1""",
-                (rs, i) -> new Count(rs.getString(1), rs.getLong(2)), clock.zone().getId(), start, end);
+                        rs.getTimestamp(6).toInstant()), a);
+        // Anonymized readers are unknown: count each of their views.
+        List<Count> byCourse = jdbc.query("select coalesce(c.code, case when v.patron_id is null then 'Anonymized' else 'No program' end),"
+                + " count(distinct coalesce(v.patron_id::text, 'view-' || v.id))"
+                + where.replace(" where", " left join course c on c.id = p.course_id where") + " group by 1 order by 2 desc",
+                (rs, i) -> new Count(rs.getString(1), rs.getLong(2)), a);
+        List<Object> dayArgs = new ArrayList<>(List.of(clock.zone().getId()));
+        dayArgs.addAll(args);
+        List<Count> byDay = jdbc.query("select to_char(v.viewed_at at time zone ?, 'YYYY-MM-DD'), count(*)" + where + " group by 1 order by 1",
+                (rs, i) -> new Count(rs.getString(1), rs.getLong(2)), dayArgs.toArray());
         return new EbookUsage(f, t, views == null ? 0 : views, readers == null ? 0 : readers, titles.size(),
                 available == null ? 0 : available, titles, byCourse, byDay);
     }
@@ -72,13 +75,32 @@ public class EbookReportController {
     @GetMapping("/api/reports/export/ebooks")
     public ResponseEntity<byte[]> export(@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                          @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-                                         @RequestParam(defaultValue = "csv") String format) {
-        EbookUsage u = usage(from, to);
+                                         @RequestParam(defaultValue = "csv") String format,
+                                         @RequestParam(required = false) Long categoryId, @RequestParam(required = false) Long courseId) {
+        return table(from, to, categoryId, courseId).download(format);
+    }
+
+    @GetMapping("/api/reports/export/ebooks/preview")
+    public ReportTable.Preview preview(@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+                                       @RequestParam(required = false) Long categoryId, @RequestParam(required = false) Long courseId) {
+        return table(from, to, categoryId, courseId).preview();
+    }
+
+    private ReportTable table(LocalDate from, LocalDate to, Long categoryId, Long courseId) {
+        EbookUsage u = usage(from, to, categoryId, courseId);
         List<List<?>> rows = u.titles().stream().<List<?>>map(x -> List.of(x.title(), x.authors() == null ? "" : x.authors(),
                 x.views(), x.readers(), x.lastViewed().atZone(clock.zone()).toLocalDateTime().withNano(0).toString()
                         .replace('T', ' '))).toList();
-        return Pdf.export(format, "ebook-usage-" + u.from() + "-to-" + u.to(), "E-book Usage",
-                u.from() + " to " + u.to() + " · " + u.views() + " openings by " + u.readers() + " reader(s)",
+        String who = (categoryId == null ? "" : " · Category: " + name("patron_category", "name", categoryId))
+                + (courseId == null ? "" : " · Course: " + name("course", "code", courseId));
+        return new ReportTable("ebook-usage-" + u.from() + "-to-" + u.to(), "E-book Usage",
+                ReportTable.day(u.from()) + " to " + ReportTable.day(u.to()) + " · " + u.views() + " openings by " + u.readers() + " reader(s)" + who,
                 List.of("Title", "Authors", "Openings", "Readers", "Last opened"), rows);
+    }
+
+    private String name(String table, String column, long id) {
+        return jdbc.query("select " + column + " from " + table + " where id = ?", (rs, i) -> rs.getString(1), id)
+                .stream().findFirst().orElse("#" + id);
     }
 }

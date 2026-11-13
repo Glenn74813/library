@@ -30,7 +30,6 @@ import ph.edu.zscmst.library.attendance.AttendanceService.TapRequest;
 import ph.edu.zscmst.library.attendance.AttendanceService.TapResult;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
-import ph.edu.zscmst.library.common.Pdf;
 import ph.edu.zscmst.library.common.LibraryClock;
 import ph.edu.zscmst.library.common.PageResponse;
 import ph.edu.zscmst.library.common.SettingsService;
@@ -119,12 +118,30 @@ public class AttendanceController {
     @GetMapping("/api/attendance/export")
     public ResponseEntity<byte[]> export(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                          @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-                                         @RequestParam(defaultValue = "csv") String format) {
-        List<List<?>> rows = service.allLogs(from, to).stream().<List<?>>map(l -> List.of(
+                                         @RequestParam(defaultValue = "csv") String format,
+                                         @RequestParam(required = false) Long categoryId, @RequestParam(required = false) Long courseId) {
+        return table(from, to, categoryId, courseId).download(format);
+    }
+
+    @GetMapping("/api/attendance/export/preview")
+    public ph.edu.zscmst.library.common.ReportTable.Preview exportPreview(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long categoryId, @RequestParam(required = false) Long courseId) {
+        return table(from, to, categoryId, courseId).preview();
+    }
+
+    /** Visits in the period, optionally only patrons of one category and/or course. */
+    private ph.edu.zscmst.library.common.ReportTable table(LocalDate from, LocalDate to, Long categoryId, Long courseId) {
+        List<AttendanceService.LogDto> logs = service.allLogs(from, to, categoryId, courseId);
+        List<List<?>> rows = logs.stream().<List<?>>map(l -> List.of(
                 l.cardNumber(), l.patronName(), l.course() == null ? "" : l.course(), l.category(),
                 stamp(l.timeIn()), l.timeOut() == null ? "" : stamp(l.timeOut()),
                 l.method())).toList();
-        return Pdf.export(format, "attendance-" + from + "-to-" + to, "Attendance Log", from + " to " + to,
+        long people = logs.stream().map(AttendanceService.LogDto::patronId).distinct().count();
+        return new ph.edu.zscmst.library.common.ReportTable("attendance-" + from + "-to-" + to, "Attendance Log",
+                ph.edu.zscmst.library.common.ReportTable.day(from) + " to " + ph.edu.zscmst.library.common.ReportTable.day(to)
+                        + " · " + rows.size() + " visit(s) by " + people + " patron(s)",
                 List.of("ID Number", "Name", "Course", "Category", "Time In", "Time Out", "Method"), rows);
     }
 

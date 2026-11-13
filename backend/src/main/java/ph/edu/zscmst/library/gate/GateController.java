@@ -43,7 +43,6 @@ import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.ItemStatus;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
-import ph.edu.zscmst.library.common.Pdf;
 import ph.edu.zscmst.library.common.LibraryClock;
 import ph.edu.zscmst.library.common.PageResponse;
 import ph.edu.zscmst.library.common.SettingsService;
@@ -354,12 +353,27 @@ public class GateController {
     public ResponseEntity<byte[]> export(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                          @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                                          @RequestParam(defaultValue = "csv") String format) {
+        return table(from, to).download(format);
+    }
+
+    @GetMapping("/api/gate/export/preview")
+    @Transactional(readOnly = true)
+    public ph.edu.zscmst.library.common.ReportTable.Preview exportPreview(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return table(from, to).preview();
+    }
+
+    private ph.edu.zscmst.library.common.ReportTable table(LocalDate from, LocalDate to) {
         List<List<?>> rows = events.findByOccurredAtBetweenOrderByOccurredAtAsc(clock.startOfDay(from),
                         clock.startOfDay(to.plusDays(1))).stream().map(EventDto::of)
                 .<List<?>>map(e -> java.util.Arrays.asList(e.occurredAt().atZone(clock.zone()).toLocalDateTime().withNano(0).toString().replace('T', ' '),
                         e.gateId(), e.type(), e.epc(), e.barcode(), e.title(), e.visitorCount(), e.message()))
                 .toList();
-        return Pdf.export(format, "gate-events-" + from + "-to-" + to, "Gate Events", from + " to " + to,
+        long alarms = rows.stream().filter(r -> r.get(2) == GateEventType.ALARM).count();
+        return new ph.edu.zscmst.library.common.ReportTable("gate-events-" + from + "-to-" + to, "Gate Events",
+                ph.edu.zscmst.library.common.ReportTable.day(from) + " to " + ph.edu.zscmst.library.common.ReportTable.day(to)
+                        + " · " + rows.size() + " event(s), " + alarms + " alarm(s)",
                 List.of("Time", "Gate", "Event", "EPC", "Barcode", "Title", "Visitors", "Message"), rows);
     }
 }
