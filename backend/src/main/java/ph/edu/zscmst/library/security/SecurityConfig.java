@@ -93,6 +93,11 @@ public class SecurityConfig {
         if (bytes.length < 32) {
             throw new IllegalStateException("app.jwt.secret (JWT_SECRET) must be at least 32 bytes");
         }
+        // Example values from the docs are public: anyone could sign an administrator's token with them.
+        String lower = props.secret().toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("change-me") || lower.contains("replace-with") || lower.contains("placeholder")) {
+            throw new IllegalStateException("JWT_SECRET is still an example value; set a long random one in .env");
+        }
         return new SecretKeySpec(bytes, "HmacSHA256");
     }
 

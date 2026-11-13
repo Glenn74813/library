@@ -19,6 +19,8 @@ import org.springframework.test.context.DynamicPropertySource;
         "app.sip2.enabled=false",
         "app.bootstrap-admin.username=admin",
         "app.bootstrap-admin.password=Admin-Test-123",
+        "app.bootstrap-admin.must-change=false",
+        "app.jwt.secret=integration-tests-only-signing-key-0123456789abcdef",
         "app.storage.dir=${java.io.tmpdir}/smart-library-test-files",
         "spring.datasource.hikari.maximum-pool-size=5"})
 public abstract class IntegrationTest {

@@ -26,15 +26,17 @@ smart-library/
 ## Quick start (Docker)
 
 ```bash
-cp .env.example .env        # then edit JWT_SECRET, DB_PASSWORD, ADMIN_PASSWORD
+cp .env.example .env        # then set DB_PASSWORD and JWT_SECRET (ADMIN_PASSWORD optional)
 docker compose up -d --build
 ```
 
-- Web app: http://localhost:8081 opens the staff sign-in — sign in as `admin` / `ADMIN_PASSWORD` and **change the password**.
+- Web app: http://localhost:8081 opens the staff sign-in. Sign in as `admin` with `ADMIN_PASSWORD` (or, if you left it
+  empty, the password printed once by `docker compose logs api`); you are asked to choose a new one straight away.
   Patrons use `/my` (My Library) and `/opac` (catalog).
-- API: http://localhost:8080/api, health at `/actuator/health`.
-- PostgreSQL is published on host port `5433` (override with `DB_HOST_PORT`).
-- SIP2 (self-check / RFID stations) listens on TCP `6001`. Keep it on the library LAN.
+- API: http://localhost:8080/api, health at `/actuator/health` (this PC only; others reach it through the web app).
+- PostgreSQL: host port `5433` on this PC only (override with `DB_HOST_PORT`).
+- SIP2 (self-check stations): TCP `6001`, this PC only. For stations on the library LAN, set `SIP_BIND` in `.env` to
+  this PC's LAN address. It is not encrypted: never expose it to the internet.
 
 Manuals: [user](docs/user-manual.md), [administrator](docs/admin-manual.md),
 [UAT checklist](docs/uat-checklist.md), [kiosk lockdown](docs/kiosk-lockdown.md).

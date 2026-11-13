@@ -10,7 +10,8 @@ cp .env.example .env            # set JWT_SECRET (32+ random characters), DB_PAS
 docker compose up -d --build    # db, api, web, backup
 ```
 
-- Web app on port 8081, API on 8080, SIP2 on 6001, PostgreSQL on 5433.
+- Web app on port 8081 (the network). API on 8080 and PostgreSQL on 5433 answer on this PC only. SIP2 on 6001 is this PC
+  only unless `SIP_BIND` in `.env` is set to the PC's library-LAN address.
 - First sign-in: `admin` with `ADMIN_PASSWORD`. **Change it immediately** (Account).
 - Update to a new version: copy the new source over the old, then `docker compose up -d --build`.
   Database changes are applied automatically (Flyway) on start-up. Take a backup first.
@@ -140,7 +141,8 @@ The API listens for SIP2 on TCP port **6001** (to change it, add `APP_SIP2_PORT`
    recorded at its original time with rules logged as overrides. Patron PINs are checked when the station sends one.
 5. Every station action appears in the audit trail as `sip2:<account>`.
 
-SIP2 is not encrypted: keep port 6001 reachable only from the library LAN (firewall), never from the internet.
+SIP2 is not encrypted: keep port 6001 reachable only from the library LAN (`SIP_BIND` = the PC's LAN address, plus a
+firewall), never from the internet. Only device (KIOSK) accounts can sign in over SIP2.
 Writing RFID tags (AFI/EAS security bit) is done by the tagging station's own vendor software.
 
 Optional settings (database table `app_setting`): `sip2.institutionId`, `sip2.screenMessage`.

@@ -70,4 +70,5 @@ jobs:
       - name: Build api and web images
         env:
           JWT_SECRET: ci-only-placeholder-secret-not-used-at-runtime
+          DB_PASSWORD: ci-only-not-used-at-runtime
         run: docker compose build api web

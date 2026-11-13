@@ -8,11 +8,12 @@ services:
     environment:
       POSTGRES_DB: smartlibrary
       POSTGRES_USER: smartlibrary
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-smartlibrary}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql
     ports:
-      - "${DB_HOST_PORT:-5433}:5432"
+      # This PC only (backups, restore test, integration tests); never the network.
+      - "127.0.0.1:${DB_HOST_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U smartlibrary -d smartlibrary"]
       interval: 5s
@@ -28,17 +29,20 @@ services:
     environment:
       DB_URL: jdbc:postgresql://db:5432/smartlibrary
       DB_USERNAME: smartlibrary
-      DB_PASSWORD: ${DB_PASSWORD:-smartlibrary}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (at least 32 characters)}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@12345}
+      # First start only: the first administrator's password (leave empty to have one generated and logged once).
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8081}
       STORAGE_DIR: /data/files
     volumes:
       - files:/data/files          # uploaded e-books (back this up together with the database)
     ports:
-      - "8080:8080"
-      # SIP2 for self-check kiosks and RFID stations (keep it on the library LAN; it is not encrypted)
-      - "6001:6001"
+      # This PC only: the web container and the Cloudflare tunnel reach the API from here.
+      - "127.0.0.1:8080:8080"
+      # SIP2 for self-check stations. Not encrypted: this PC only unless SIP_BIND is set to the library-LAN
+      # address of this PC (never a public one).
+      - "${SIP_BIND:-127.0.0.1}:6001:6001"
 
   # Daily database + uploaded-files backups into ./backups (copy that folder off the server too).
   backup:
@@ -52,7 +56,7 @@ services:
       PGHOST: db
       PGUSER: smartlibrary
       PGDATABASE: smartlibrary
-      PGPASSWORD: ${DB_PASSWORD:-smartlibrary}
+      PGPASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       TZ: ${LIBRARY_TIMEZONE:-Asia/Manila}
       BACKUP_HOUR: ${BACKUP_HOUR:-2}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
