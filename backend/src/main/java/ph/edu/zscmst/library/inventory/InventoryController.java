@@ -313,10 +313,17 @@ public class InventoryController {
             .thenComparing(i -> i.getRecord().getCallNumber() == null ? "" : i.getRecord().getCallNumber())
             .thenComparing(Item::getBarcode);
 
-    private static String naturalKey(String s) {
+    /**
+     * Each run of digits becomes its length (3 digits) followed by the digits without leading zeros, so numbers of
+     * any length compare by value as plain text: "2" -> "0012", "10" -> "00210", "007" -> "0017".
+     */
+    static String naturalKey(String s) {
         Matcher m = DIGITS.matcher(s.toLowerCase(Locale.ROOT));
         StringBuilder out = new StringBuilder();
-        while (m.find()) m.appendReplacement(out, String.format("%012d", Long.parseLong(m.group().length() > 12 ? m.group().substring(0, 12) : m.group())));
+        while (m.find()) {
+            String digits = m.group().replaceFirst("^0+(?=\\d)", "");
+            m.appendReplacement(out, String.format("%03d", digits.length()) + digits);
+        }
         m.appendTail(out);
         return out.toString();
     }
