@@ -89,7 +89,7 @@ export function CalendarPage() {
           <Table rows={closed} rowKey={(c) => c.day} empty="No closed days scheduled" columns={[
             { header: 'Date', render: (c) => <strong>{fmtDate(c.day)}</strong> },
             { header: 'Reason', render: (c) => c.reason },
-            { header: '', render: (c) => canEdit && <button className="btn small danger" onClick={() => removeClosed(c.day)}>Remove</button> },
+            { header: 'Actions', render: (c) => canEdit && <button className="btn small danger" onClick={() => removeClosed(c.day)}>Remove</button> },
           ]} />
         </div>
       </div>

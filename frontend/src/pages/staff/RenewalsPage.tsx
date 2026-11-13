@@ -46,7 +46,7 @@ export function RenewalsPage() {
               ? <span className="badge bad" title={r.problem}>Can't renew</span>
               : <strong className="nowrap">{fmtDate(r.proposedDueAt)}</strong> },
             { header: 'Renewals', render: (r) => `${r.renewals}/${r.maxRenewals}` },
-            { header: '', render: (r) => <div className="stack" style={{ gap: 4 }}>
+            { header: 'Actions', render: (r) => <div className="stack" style={{ gap: 4 }}>
               {r.problem && <span className="small" style={{ color: 'var(--danger)' }}>{r.problem}</span>}
               <span className="row-actions">
                 <button className="btn small primary" disabled={!!r.problem} onClick={() => approve(r)}>Approve</button>

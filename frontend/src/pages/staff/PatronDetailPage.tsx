@@ -151,7 +151,7 @@ export function PatronDetailPage() {
       ? <>Copy <span className="mono">{h.itemBarcode}</span>{h.itemShelfLocation && <> from <strong>{h.itemShelfLocation}</strong></>} · pick up by {fmtDate(h.expiresAt)}</>
       : h.pickupDate ? <>Booked for <strong>{fmtDate(h.pickupDate)}</strong> · first in line for the next returned copy</>
       : `Queue #${h.queuePosition}` },
-    { header: '', render: (h: Hold) => <span className="row-actions">
+    { header: 'Actions', render: (h: Hold) => <span className="row-actions">
       {h.status === 'READY' && <button className="btn small primary" onClick={() => release(h)}>Release (check out)</button>}
       <button className="btn small danger" onClick={() => cancelHold(h)}>Cancel</button>
     </span> },
@@ -243,7 +243,7 @@ export function PatronDetailPage() {
           { header: 'Borrowed', render: (l) => <>{fmtDate(l.checkoutAt)}{l.checkedOutBy && <div className="muted small">by {l.checkedOutBy}</div>}</> },
           { header: 'Due', render: (l) => <span className="nowrap">{fmtDate(l.dueAt)} {l.overdue && <span className="badge bad">{l.overdueDays}d late</span>}</span> },
           { header: 'Renewed', render: (l) => `${l.renewals}/${l.maxRenewals}` },
-          { header: '', render: (l) => <div className="row-actions">
+          { header: 'Actions', render: (l) => <div className="row-actions">
             <button className="btn small primary" onClick={() => void returnLoan(l)}><Icon name="corner-down-left" />Return</button>
             <button className="btn small" onClick={() => act(() => api(`/api/circulation/loans/${l.id}/renew`, { method: 'POST' }), 'Renewed')}><Icon name="refresh-cw" />Renew</button>
             {isLibrarian && <button className="btn small danger" onClick={() => markLost(l)}><Icon name="help-circle" />Lost</button>}
@@ -433,7 +433,7 @@ function HoldModal({ patronId, onClose, onSaved }: { patronId: number; onClose: 
         {data && <Table rows={data.content} rowKey={(r) => r.id} empty="No matches" columns={[
           { header: 'Title', render: (r) => <>{r.title}<div className="muted small">{r.authors}</div></> },
           { header: 'Available', render: (r) => `${r.availableCopies}/${r.totalCopies}` },
-          { header: '', render: (r) => <span className="row-actions">
+          { header: 'Actions', render: (r) => <span className="row-actions">
             <button className="btn small primary" disabled={busy} onClick={() => place(r)}>Reserve</button>
             <button className="btn small" onClick={() => setBooking(r)}>Book a date</button>
           </span> },

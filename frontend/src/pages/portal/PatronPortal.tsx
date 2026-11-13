@@ -107,7 +107,7 @@ export function PatronPortal() {
                 { header: 'Title', render: (l) => <strong>{l.title}</strong> },
                 { header: 'Due', render: (l) => <span className="nowrap">{fmtDate(l.dueAt)} {l.overdue && <span className="badge bad">Overdue</span>}</span> },
                 { header: 'Renewals', render: (l) => `${l.renewals} of ${l.maxRenewals}` },
-                { header: '', render: (l) => pendingLoans.has(l.id)
+                { header: 'Actions', render: (l) => pendingLoans.has(l.id)
                   ? <span className="badge info">Renewal requested</span>
                   : <button className="btn small primary" disabled={l.overdue || l.renewals >= l.maxRenewals} onClick={() => renew(l.id)}><Icon name="refresh-cw" />Renew</button> },
               ]} />
@@ -155,7 +155,7 @@ function HoldsTab({ onChange }: { onChange: () => void }) {
         { header: 'Info', render: (h) => h.status === 'READY' ? `Pick up by ${fmtDate(h.expiresAt)}`
           : h.status === 'SCHEDULED' ? `Pickup on ${fmtDate(h.pickupDate)}`
           : h.queuePosition ? `#${h.queuePosition} in line` : fmtDate(h.placedAt) },
-        { header: '', render: (h) => (h.status === 'PENDING' || h.status === 'READY' || h.status === 'SCHEDULED') && <button className="btn small danger" onClick={() => cancel(h)}>Cancel</button> },
+        { header: 'Actions', render: (h) => (h.status === 'PENDING' || h.status === 'READY' || h.status === 'SCHEDULED') && <button className="btn small danger" onClick={() => cancel(h)}>Cancel</button> },
       ]} />
     </div>
   )
@@ -181,7 +181,7 @@ function EbooksTab() {
         { header: 'Title', render: (e) => <><strong>{e.title}</strong><div className="muted small">{[e.authors, e.publicationYear].filter(Boolean).join(' · ')}</div></> },
         { header: 'Type', render: (e) => <EbookBadge ebook={{ kind: e.kind, format: e.format, provider: e.provider, externalUrl: e.externalUrl }} /> },
         { header: 'Size', render: (e) => e.kind === 'SCHOOL_OWNED' ? fmtBytes(e.sizeBytes) : '—' },
-        { header: '', render: (e) => e.kind === 'SCHOOL_OWNED'
+        { header: 'Actions', render: (e) => e.kind === 'SCHOOL_OWNED'
           ? <Link className="btn small primary" to={`/read/${e.recordId}`}><Icon name="book-open" />Read</Link>
           : <a className="btn small" href={e.externalUrl!} target="_blank" rel="noopener noreferrer"><Icon name="external-link" />Open on {e.provider ?? 'provider'}</a> },
       ]} />
@@ -227,7 +227,7 @@ function SearchTab({ onReserved, onBook }: { onReserved: () => void; onBook: (r:
       {data && <Table rows={data.content} rowKey={(r) => r.id} empty="No titles found" columns={[
         { header: 'Title', render: (r) => <><strong>{r.title}</strong><div className="muted small">{r.authors}</div></> },
         { header: 'Available', render: (r) => <span className={`badge ${r.availableCopies ? 'ok' : 'warn'}`}>{r.availableCopies}/{r.totalCopies}</span> },
-        { header: '', render: (r) => r.totalCopies > 0 && <span className="row-actions">
+        { header: 'Actions', render: (r) => r.totalCopies > 0 && <span className="row-actions">
           <button className="btn small primary" disabled={busy !== null} onClick={() => reserve(r)}>{busy === r.id ? 'Reserving…' : 'Reserve'}</button>
           <button className="btn small" onClick={() => onBook(r)}>Book a date</button>
         </span> },

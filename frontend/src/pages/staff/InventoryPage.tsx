@@ -183,7 +183,7 @@ function SessionView({ session, onBack }: { session: StocktakeSession; onBack: (
               Scanned copies are ticked; the rest are what is missing so far.</p>
             {shelf && <AisleTable aisles={countByAisle(shelf)} />}
             <Table rows={shelf} rowKey={(r) => r.barcode} empty="The catalog has no copies on these shelves" columns={[
-              { header: '', render: (r) => r.scanned ? <span className="badge ok" aria-label="Scanned"><Icon name="check" /></span>
+              { header: 'Scanned', render: (r) => r.scanned ? <span className="badge ok" aria-label="Scanned"><Icon name="check" /></span>
                 : <span className="badge" aria-label="Not scanned yet">—</span> },
               { header: 'Aisle', render: (r) => r.aisle },
               { header: 'Shelf', render: (r) => r.shelf ?? '—' },

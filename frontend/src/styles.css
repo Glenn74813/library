@@ -232,15 +232,16 @@ button.section:focus-visible { outline: 2px solid var(--accent); outline-offset:
   .main { padding: 24px 32px; }
 }
 
+/* Title first, its buttons right after it (not pushed to the far edge of wide screens); wraps when narrow. */
 .page-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px 12px;
   margin-bottom: 16px;
 }
-.page-head h1 { margin: 0; }
+.page-head h1 { margin: 0 12px 0 0; }
 
 /* ---------------------------------------------------------------- surfaces */
 
@@ -290,7 +291,7 @@ button.section:focus-visible { outline: 2px solid var(--accent); outline-offset:
   border-radius: var(--radius);
   padding: 12px 14px;
 }
-.stat { border-top: 3px solid var(--primary); }
+.stat { border-top: 3px solid var(--primary); min-width: 0; overflow-wrap: anywhere; }
 .stat.warn { border-top-color: var(--accent); }
 .stat.bad { border-top-color: var(--danger); }
 .stat .label { font-size: 0.8rem; color: var(--muted); font-weight: 700; }
@@ -441,7 +442,12 @@ label.check { display: inline-flex; align-items: center; gap: 8px; cursor: point
 /* ---------------------------------------------------------------- tables -> cards on phones */
 
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-table.data { width: 100%; border-collapse: collapse; }
+/*
+ * Tables are as wide as their content (at least the card's width on smaller screens, up to all of it), so
+ * on wide screens the columns stay together and row buttons sit right after the data, not at the far edge.
+ */
+table.data { width: auto; min-width: min(100%, 900px); max-width: 100%; border-collapse: collapse; }
+table.data th:last-child, table.data td:last-child { padding-right: 16px; }
 table.data th, table.data td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
 table.data th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
 table.data tr.clickable { cursor: pointer; }

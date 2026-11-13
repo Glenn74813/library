@@ -330,7 +330,7 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
             { header: 'Title', render: (l) => <>{l.title}<div className="muted small mono">{l.barcode}</div></> },
             { header: 'Due', render: (l) => <span className="nowrap">{fmtDate(l.dueAt)} {l.overdue && <span className="badge bad">{l.overdueDays}d late</span>}</span> },
             { header: 'Renewed', render: (l) => `${l.renewals}/${l.maxRenewals}` },
-            { header: '', render: (l) => <button className="btn small" onClick={() => renew(l.id)}><Icon name="refresh-cw" />Renew</button> },
+            { header: 'Actions', render: (l) => <button className="btn small" onClick={() => renew(l.id)}><Icon name="refresh-cw" />Renew</button> },
           ]} />
           {summary.holds.filter((h) => h.status === 'READY').length > 0 && (
             <div className="alert">

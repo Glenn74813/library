@@ -50,7 +50,7 @@ export function HoldsPage() {
       ? <>Copy <span className="mono">{h.itemBarcode}</span>{h.itemShelfLocation && <> from <strong>{h.itemShelfLocation}</strong></>} · pick up by {fmtDate(h.expiresAt)}</>
       : h.pickupDate ? <>Booked for <strong>{fmtDate(h.pickupDate)}</strong> · first in line for the next returned copy</>
       : `Queue #${h.queuePosition}` },
-    { header: '', render: (h: Hold) => <span className="row-actions">
+    { header: 'Actions', render: (h: Hold) => <span className="row-actions">
       {h.status === 'READY' && <button className="btn small primary" onClick={() => release(h)}>Release (check out)</button>}
       <button className="btn small danger" onClick={() => cancel(h)}>Cancel</button>
     </span> },
