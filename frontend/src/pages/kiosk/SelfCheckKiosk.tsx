@@ -57,11 +57,16 @@ function SelfCheckScreen() {
   const running = useRef(false)
   // The PIN is kept only in memory for this patron's session and sent with each request.
   const savedPin = useRef('')
+  /**
+   * Items already borrowed or returned this session ("borrow:CODE" / "return:CODE", for every code they answer to:
+   * scanned code, barcode, RFID EPC), with their title: a book scanned twice, or left on the RFID pad, counts once.
+   */
+  const handled = useRef(new Map<string, string>())
 
   useEffect(() => { void api<Config>('/api/kiosk/selfcheck/config', opts).then(setConfig).catch(() => {}) }, [])
 
   const reset = useCallback(() => {
-    session.current++; pending.current = []; savedPin.current = ''
+    session.current++; pending.current = []; savedPin.current = ''; handled.current = new Map()
     setStep('card'); setCard(''); setPin(''); setPatron(null); setLines([]); setSlipLoans([]); setSlipReturns([]); setError(null); setScan('')
   }, [])
   useInactivity((step === 'done' ? 20 : config.idleSeconds) * 1000, reset)
@@ -104,8 +109,25 @@ function SelfCheckScreen() {
     }
     if (step !== 'borrow' && step !== 'return') return
     setError(null)
+    if (alreadyHandled(step, code)) return
     pending.current.push({ code, step, card, pin: savedPin.current, session: session.current })
     void drain()
+  }
+
+  /** A repeat scan of an item already in this session: say so instead of sending it again. */
+  function alreadyHandled(step: Step, code: string) {
+    const key = `${step}:${code.toUpperCase()}`
+    if (!handled.current.has(key)) {
+      handled.current.set(key, code) // claimed now, so a quick double scan waiting in the queue is caught too
+      return false
+    }
+    add(true, handled.current.get(key) ?? code, 'Already scanned. Nothing more to do for this item.')
+    return true
+  }
+
+  /** Remembers every code an item answers to once the server has handled it. */
+  function remember(step: Step, code: string, title: string, ...more: (string | null)[]) {
+    for (const c of [code, ...more]) if (c) handled.current.set(`${step}:${c.toUpperCase()}`, title)
   }
 
   /** First scan on the start screen: a book is returned straight away (no PIN needed); anything else is a card. */
@@ -122,6 +144,7 @@ function SelfCheckScreen() {
     setError(null)
     if (isItem) {
       setStep('return')
+      if (alreadyHandled('return', code)) return
       pending.current.push({ code, step: 'return', card: '', pin: '', session: s })
       void drain()
       return
@@ -149,6 +172,7 @@ function SelfCheckScreen() {
         if (job.session !== session.current) return // the kiosk was reset meanwhile
         setPatron(r.patron)
         setSlipLoans((s) => [...s, { title: r.title, barcode: r.barcode, dueAt: r.dueAt }])
+        remember('borrow', job.code, r.title, r.barcode, r.rfidEpc)
         add(true, r.title, `Due ${fmtDate(r.dueAt)}${r.notice ? ` — ${r.notice}` : ''}`)
         // The kiosk's RFID pad switches the tag's security off; if it can't, staff must do it before the patron leaves.
         const w = await switchSecurity(r.rfidEpc, false, r.barcode)
@@ -159,12 +183,15 @@ function SelfCheckScreen() {
         if (r.title && r.barcode) {
           const back: ReturnedItem = { title: r.title, barcode: r.barcode, returnedAt: r.returnedAt ?? new Date().toISOString(), fine: r.fine }
           setSlipReturns((s) => [...s, back])
+          remember('return', job.code, r.title, r.barcode, r.rfidEpc)
         }
         add(true, r.title ?? job.code, r.message + (r.fine > 0 ? ` Overdue fine ${fmtMoney(r.fine)}; please pay at the desk.` : ''))
         if (r.barcode) void switchSecurity(r.rfidEpc, true, r.barcode)
       }
     } catch (err) {
-      if (job.session === session.current) add(false, job.code, errorText(err))
+      if (job.session !== session.current) return
+      handled.current.delete(`${job.step}:${job.code.toUpperCase()}`) // not done: scanning it again tries again
+      add(false, job.code, errorText(err))
     }
   }
 

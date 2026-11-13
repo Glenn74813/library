@@ -143,12 +143,22 @@ public class SelfCheckController {
     public Returned giveBack(@Valid @RequestBody ReturnRequest req) {
         if (!config().allowReturns()) throw ApiException.badRequest("Please return items at the circulation desk");
         // Fines tied to this borrowing (overdue, damage...) are paid at the desk before the return is completed.
-        if (circulation.previewCheckin(req.item()).total().signum() > 0) {
+        var preview = circulation.previewCheckin(req.item());
+        if (preview.total().signum() > 0) {
             throw ApiException.conflict("This item has fines to settle. Please return it at the circulation desk.");
+        }
+        // Not on loan: usually the same book scanned again after it was returned. Nothing to do, and the kiosk
+        // is public, so it never says who the copy is set aside for. Lost or missing copies still come back in.
+        if (preview.loan() == null) {
+            var status = items.findByIdentifier(req.item().trim()).map(i -> i.getStatus()).orElse(null);
+            if (status != ph.edu.zscmst.library.catalog.ItemStatus.LOST && status != ph.edu.zscmst.library.catalog.ItemStatus.MISSING) {
+                return new Returned(null, null, null, null, BigDecimal.ZERO,
+                        "This item is already returned. Please place it on the return cart.", null);
+            }
         }
         CheckinResult r = circulation.checkin(req.item());
         // Patrons put the item on the return cart; staff route it to the hold shelf or the shelves.
-        String message = r.loan() == null ? r.message() : "Thank you! Please place the item on the return cart.";
+        String message = "Thank you! Please place the item on the return cart.";
         LoanDto l = r.loan();
         return new Returned(l == null ? null : l.title(), l == null ? null : l.barcode(), l == null ? null : l.dueAt(),
                 l == null ? null : l.returnedAt(), r.fineAmount(), message, l == null ? null : l.rfidEpc());
