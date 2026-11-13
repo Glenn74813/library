@@ -36,6 +36,10 @@ public class CalendarController {
     public record ClosedDayDto(@NotNull LocalDate day, @NotBlank @Size(max = 120) String reason) {
     }
 
+    /** A Philippine holiday, and whether it is already a closed day here. */
+    public record HolidayDto(LocalDate day, String name, PhilippineHolidays.Kind kind, boolean added) {
+    }
+
     /** Public view (OPAC, kiosks): opening hours and upcoming closures. */
     public record PublicCalendar(List<DayHours> hours, List<ClosedDayDto> upcomingClosures, boolean openToday) {
     }
@@ -45,9 +49,11 @@ public class CalendarController {
     private final LibraryCalendar calendar;
     private final LibraryClock clock;
     private final AuditService audit;
+    private final PhilippineHolidays holidays;
 
     public CalendarController(LibraryHoursRepository hours, ClosedDayRepository closed, LibraryCalendar calendar,
-                              LibraryClock clock, AuditService audit) {
+                              LibraryClock clock, AuditService audit, PhilippineHolidays holidays) {
+        this.holidays = holidays;
         this.hours = hours;
         this.closed = closed;
         this.calendar = calendar;
@@ -106,5 +112,31 @@ public class CalendarController {
     @Transactional
     public void removeClosedDay(@PathVariable LocalDate day) {
         closed.deleteById(day);
+    }
+
+    /** The year's Philippine holidays, to pick from and add as closed days. */
+    @GetMapping("/api/calendar/ph-holidays")
+    @Transactional(readOnly = true)
+    public List<HolidayDto> philippineHolidays(@org.springframework.web.bind.annotation.RequestParam(required = false) Integer year) {
+        int y = year == null ? clock.today().getYear() : year;
+        if (y < 2000 || y > 2100) throw ApiException.badRequest("Year must be between 2000 and 2100");
+        java.util.Set<LocalDate> already = new java.util.HashSet<>();
+        closed.findByDayBetween(LocalDate.of(y, 1, 1), LocalDate.of(y, 12, 31)).forEach(c -> already.add(c.getDay()));
+        return holidays.forYear(y).stream().map(h -> new HolidayDto(h.day(), h.name(), h.kind(), already.contains(h.day()))).toList();
+    }
+
+    /** Adds the chosen holidays as closed days; days already closed keep their own reason. */
+    @PostMapping("/api/calendar/ph-holidays")
+    @PreAuthorize("hasAnyRole('ADMIN','LIBRARIAN')")
+    @Transactional
+    public java.util.Map<String, Integer> addPhilippineHolidays(@RequestBody List<@Valid ClosedDayDto> days) {
+        int added = 0;
+        for (ClosedDayDto d : days) {
+            if (closed.existsById(d.day())) continue;
+            closed.save(new ClosedDay(d.day(), d.reason().trim()));
+            added++;
+        }
+        if (added > 0) audit.record("CALENDAR_CLOSED_DAY", added + " Philippine holiday(s) added");
+        return java.util.Map.of("added", added, "skipped", days.size() - added);
     }
 }

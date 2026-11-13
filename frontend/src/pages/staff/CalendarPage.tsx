@@ -3,7 +3,7 @@ import { api } from '../../api/client'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { Icon } from '../../components/Icon'
 import { errorText, useToast } from '../../components/Toast'
-import { Field, Table } from '../../components/ui'
+import { ErrorAlert, Field, Modal, Table } from '../../components/ui'
 import { fmtDate } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 
@@ -25,6 +25,7 @@ export function CalendarPage() {
   const [week, setWeek] = useState<DayHours[]>([])
   const [day, setDay] = useState('')
   const [reason, setReason] = useState('')
+  const [importing, setImporting] = useState(false)
 
   useEffect(() => { if (pub) setWeek(pub.hours.map((h) => ({ ...h, openTime: hhmm(h.openTime), closeTime: hhmm(h.closeTime) }))) }, [pub])
   const set = (wd: number, patch: Partial<DayHours>) => setWeek((w) => w.map((h) => (h.weekday === wd ? { ...h, ...patch } : h)))
@@ -78,7 +79,10 @@ export function CalendarPage() {
           {canEdit && <div className="row end"><button className="btn primary" onClick={saveHours}>Save hours</button></div>}
         </div>
         <div className="card stack">
-          <h2 style={{ margin: 0 }}>Closed days & holidays</h2>
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <h2 style={{ margin: 0 }}>Closed days & holidays</h2>
+            {canEdit && <button className="btn small" onClick={() => setImporting(true)}><Icon name="calendar" />Add Philippine holidays</button>}
+          </div>
           {canEdit && (
             <form className="form-grid" onSubmit={addClosed}>
               <Field label="Date"><input type="date" value={day} onChange={(e) => setDay(e.target.value)} required /></Field>
@@ -93,6 +97,66 @@ export function CalendarPage() {
           ]} />
         </div>
       </div>
+      {importing && <HolidaysModal onClose={() => setImporting(false)} onAdded={() => { setImporting(false); void reload() }} />}
     </>
+  )
+}
+
+interface Holiday { day: string; name: string; kind: 'REGULAR' | 'SPECIAL' | 'ONLINE'; added: boolean }
+
+const KIND: Record<Holiday['kind'], { text: string; badge: string }> = {
+  REGULAR: { text: 'Regular holiday', badge: 'badge ok' },
+  SPECIAL: { text: 'Special non-working day', badge: 'badge' },
+  ONLINE: { text: 'From online list: check the proclamation', badge: 'badge warn' },
+}
+
+/**
+ * The year's Philippine holidays to add as closed days. Regular holidays and special days set by law are
+ * ticked; days from the online list (e.g. Chinese New Year) are left for staff to confirm.
+ */
+function HolidaysModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+  const thisYear = new Date().getFullYear()
+  const [year, setYear] = useState(thisYear)
+  const toast = useToast()
+  const { data, error } = useAsync(() => api<Holiday[]>(`/api/calendar/ph-holidays?year=${year}`), [year])
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (data) setPicked(new Set(data.filter((h) => !h.added && h.kind !== 'ONLINE').map((h) => h.day)))
+  }, [data])
+  const toggle = (d: string) => setPicked((p) => { const n = new Set(p); if (n.has(d)) n.delete(d); else n.add(d); return n })
+
+  async function add() {
+    const days = (data ?? []).filter((h) => picked.has(h.day)).map((h) => ({ day: h.day, reason: h.name }))
+    try {
+      const r = await api<{ added: number }>('/api/calendar/ph-holidays', { body: days })
+      toast(`${r.added} holiday${r.added === 1 ? '' : 's'} added as closed days`)
+      onAdded()
+    } catch (e) { toast(errorText(e), 'error') }
+  }
+
+  return (
+    <Modal title="Add Philippine holidays" onClose={onClose} footer={<>
+      <button className="btn" onClick={onClose}>Cancel</button>
+      <button className="btn primary" disabled={!picked.size} onClick={add}>Add {picked.size} as closed day{picked.size === 1 ? '' : 's'}</button>
+    </>}>
+      <div className="stack">
+        <Field label="Year">
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
+            {[thisYear, thisYear + 1].map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </Field>
+        <ErrorAlert error={error} />
+        <Table rows={data} rowKey={(h) => h.day} empty="No holidays found" columns={[
+          { header: 'Add', render: (h) => h.added ? <span className="muted small">Already closed</span>
+            : <input type="checkbox" aria-label={`Add ${h.name}`} checked={picked.has(h.day)} onChange={() => toggle(h.day)} /> },
+          { header: 'Date', render: (h) => <strong>{fmtDate(h.day)}</strong> },
+          { header: 'Holiday', render: (h) => h.name },
+          { header: 'Type', render: (h) => <span className={KIND[h.kind].badge}>{KIND[h.kind].text}</span> },
+        ]} />
+        <p className="muted small" style={{ margin: 0 }}>Regular holidays and special non-working days set by law are worked out for any year.
+          <strong> Eid'l Fitr</strong> and <strong>Eid'l Adha</strong> are regular holidays too, but their dates are proclaimed each year:
+          add them with <em>Add closed day</em> once announced, along with local holidays and school events.</p>
+      </div>
+    </Modal>
   )
 }
