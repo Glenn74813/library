@@ -255,7 +255,7 @@ function SelfCheckScreen() {
                   <div key={l.id} className="row loan-row">
                     <div style={{ flex: 1, minWidth: 0 }}><strong>{l.title}</strong>
                       <div className={l.overdue ? 'overdue' : 'muted'}>Due {fmtDate(l.dueAt)}{l.overdue && ' — overdue'}</div></div>
-                    {!l.overdue && l.renewals < l.maxRenewals && <button className="btn" onClick={() => renew(l)}>Renew</button>}
+                    {!l.overdue && l.renewals < l.maxRenewals && <button className="btn" onClick={() => renew(l)}><Icon name="refresh-cw" />Renew</button>}
                   </div>
                 ))}
               </div>

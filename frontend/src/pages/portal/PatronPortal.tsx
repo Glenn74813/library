@@ -109,7 +109,7 @@ export function PatronPortal() {
                 { header: 'Renewals', render: (l) => `${l.renewals} of ${l.maxRenewals}` },
                 { header: '', render: (l) => pendingLoans.has(l.id)
                   ? <span className="badge info">Renewal requested</span>
-                  : <button className="btn small primary" disabled={l.overdue || l.renewals >= l.maxRenewals} onClick={() => renew(l.id)}>Renew</button> },
+                  : <button className="btn small primary" disabled={l.overdue || l.renewals >= l.maxRenewals} onClick={() => renew(l.id)}><Icon name="refresh-cw" />Renew</button> },
               ]} />
             </div>
             {renewals && renewals.length > 0 && <div className="card">

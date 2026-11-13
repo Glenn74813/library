@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, download, openPdf, qs, releaseHold } from '../../api/client'
-import type { BibRecord, Fine, Hold, Loan, Page, Patron, PatronSummary, Receipt } from '../../api/types'
+import type { BibRecord, CheckinResult, Fine, Hold, Loan, Page, Patron, PatronSummary, Receipt } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { PatronFormModal } from '../../components/PatronForm'
 import { BookModal } from '../../components/BookModal'
@@ -15,7 +15,7 @@ import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
 import { useLibrary } from '../../api/library'
-import { ClearanceSlip, confirmReprint, PatronSlip, printRecorded, type PrintEntry } from '../../print/slips'
+import { ClearanceSlip, confirmReprint, HoldShelfSlip, PatronSlip, printRecorded, ReturnSlip, type PrintEntry } from '../../print/slips'
 
 type Tab = 'loans' | 'history' | 'holds' | 'fines' | 'attendance' | 'printed'
 
@@ -37,6 +37,8 @@ export function PatronDetailPage() {
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [selected, setSelected] = useState<number[]>([])
   const [released, setReleased] = useState<Loan | null>(null)
+  const [returned, setReturned] = useState<CheckinResult | null>(null)
+  const lib = useLibrary()
   const [histPage, setHistPage] = useState(0)
   const { data: s, error, reload } = useAsync(() => api<PatronSummary>(`/api/circulation/patrons/${id}/summary`), [id])
   const { data: fines, reload: reloadFines } = useAsync(() => api<Fine[]>(`/api/fines/patron/${id}`), [id])
@@ -97,6 +99,29 @@ export function PatronDetailPage() {
     const amount = Number(prompt('Amount in PHP:'))
     if (!amount || amount <= 0) return
     await act(() => api('/api/fines', { body: { patronId: Number(id), amount, reason } }), 'Charge added')
+  }
+
+  /**
+   * Checks a loan in from the patron's page. A return is never held up by fines: the overdue fine is only
+   * worked out when the book comes back, and unpaid fines already stop further borrowing.
+   */
+  async function returnLoan(l: Loan) {
+    const late = l.overdue && l.accruedFine > 0 ? `\n\nIt is ${l.overdueDays} day(s) late: an overdue fine of ${fmtMoney(l.accruedFine)} will be charged.` : ''
+    if (!confirm(`Return "${l.title}" (copy ${l.barcode})?${late}`)) return
+    try {
+      const r = await api<CheckinResult>('/api/circulation/checkin', { body: { item: l.barcode } })
+      setReturned(r)
+      refreshAll()
+    } catch (e) {
+      toast(errorText(e), 'error')
+    }
+  }
+
+  function printReturnReceipt(r: CheckinResult) {
+    if (!r.loan) return
+    void printRecorded({ kind: 'RETURN_SLIP', patronId: r.loan.patronId, details: r.loan.barcode },
+      <ReturnSlip lib={lib} items={[{ title: r.loan.title, barcode: r.loan.barcode, patronName: r.loan.patronName,
+        cardNumber: r.loan.cardNumber, returnedAt: r.loan.returnedAt ?? new Date().toISOString(), fine: r.fineAmount }]} />)
   }
 
   async function markLost(l: Loan) {
@@ -175,6 +200,19 @@ export function PatronDetailPage() {
         </div>
       </div>
       {released && <ReleasedReceipt loan={released} onClose={() => setReleased(null)} />}
+      {returned?.loan && <div className={`alert ${returned.fineAmount > 0 ? 'warn' : 'success'} row`} style={{ marginBottom: 16, justifyContent: 'space-between' }}>
+        <span><strong>Returned:</strong> “{returned.loan.title}” (copy <span className="mono">{returned.loan.barcode}</span>). {returned.message.replace(/([^.!?])$/, '$1.')}
+          {returned.fineAmount > 0 && <> Overdue fine of <strong>{fmtMoney(returned.fineAmount)}</strong> charged.</>}</span>
+        <span className="row-actions">
+          {returned.fineAmount > 0 && <button className="btn small primary" onClick={() => { setTab('fines'); setReturned(null) }}>
+            <Icon name="credit-card" />Collect payment</button>}
+          <button className="btn small" onClick={() => printReturnReceipt(returned)}><Icon name="printer" />Print receipt</button>
+          {returned.holdSlip && <button className="btn small" onClick={() => void printRecorded({ kind: 'HOLD_SLIP', cardNumber: returned.holdSlip!.cardNumber,
+            reference: `HOLD-${returned.holdSlip!.holdId}`, details: returned.holdSlip!.barcode }, <HoldShelfSlip lib={lib} hold={returned.holdSlip!} />)}>
+            <Icon name="printer" />Print hold slip</button>}
+          <button className="btn small" onClick={() => setReturned(null)}>Done</button>
+        </span>
+      </div>}
       {justRegistered && <div className="alert success row" style={{ marginBottom: 16, justifyContent: 'space-between' }}>
         <span><strong>Patron registered.</strong> Print their library ID
           {p.hasPin ? '' : ', and set a PIN so they can sign in'}.</span>
@@ -206,8 +244,9 @@ export function PatronDetailPage() {
           { header: 'Due', render: (l) => <span className="nowrap">{fmtDate(l.dueAt)} {l.overdue && <span className="badge bad">{l.overdueDays}d late</span>}</span> },
           { header: 'Renewed', render: (l) => `${l.renewals}/${l.maxRenewals}` },
           { header: '', render: (l) => <div className="row-actions">
-            <button className="btn small" onClick={() => act(() => api(`/api/circulation/loans/${l.id}/renew`, { method: 'POST' }), 'Renewed')}>Renew</button>
-            {isLibrarian && <button className="btn small danger" onClick={() => markLost(l)}>Lost</button>}
+            <button className="btn small primary" onClick={() => void returnLoan(l)}><Icon name="corner-down-left" />Return</button>
+            <button className="btn small" onClick={() => act(() => api(`/api/circulation/loans/${l.id}/renew`, { method: 'POST' }), 'Renewed')}><Icon name="refresh-cw" />Renew</button>
+            {isLibrarian && <button className="btn small danger" onClick={() => markLost(l)}><Icon name="help-circle" />Lost</button>}
           </div> },
         ]} />}
 
