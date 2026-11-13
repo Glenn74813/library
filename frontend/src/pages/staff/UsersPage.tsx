@@ -352,9 +352,13 @@ function GateConnectSteps({ token }: { token: string | null }) {
     'gate.id=GATE-1',
     `lms.url=${window.location.origin}`,
     `lms.deviceKey=${token ?? '<paste the device token here>'}`,
-    'reader=tcp            # or serial / exec / push / simulator (see step 2)',
-    'tcp.host=192.168.1.60',
-    'tcp.port=6000',
+    '# Tries every reader type at once and uses whichever sends tags.',
+    '# Fill in only what the gate vendor gave you (step 2).',
+    'reader=auto',
+    '#serial.device=COM4',
+    '#tcp.host=192.168.1.60',
+    '#tcp.port=6000',
+    '#exec.inventory="C:/Program Files/Vendor/gate-cli.exe" stream',
     '#gate.alarm="C:/Program Files/Vendor/gate-cli.exe" alarm --seconds 5',
   ].join('\n')
   return (
@@ -366,11 +370,10 @@ function GateConnectSteps({ token }: { token: string | null }) {
           library if each item is borrowed, and sounds the alarm if not.</span>
         <ol style={{ margin: 0, paddingLeft: 20 }}>
           <li><strong>Token:</strong> press <em>Issue new device token</em> above and copy it. One device per gate.</li>
-          <li><strong>Ask the gate vendor</strong> how the gate sends the tags it reads, and pick the matching setting:
-            USB/COM port → <span className="mono">reader=serial</span>, <span className="mono">serial.device=COM4</span>;
-            network IP and port → <span className="mono">reader=tcp</span>; a command-line tool or SDK sample →
-            <span className="mono"> reader=exec</span>; their software can post to a web address → <span className="mono">reader=push</span>.
-            Also ask for a command that sounds the alarm (<span className="mono">gate.alarm</span>).</li>
+          <li><strong>Reader:</strong> leave <span className="mono">reader=auto</span>. The bridge tries every serial/USB-COM
+            port, reads pushed by the vendor's software, and the network reader or vendor tool if you fill them in, all at once,
+            and uses whichever sends tags. From the gate vendor you only need: its IP and port if it is a network gate, or its
+            command-line tool if it has one, and a command that sounds the alarm (<span className="mono">gate.alarm</span>).</li>
           <li><strong>On the gate PC:</strong> install Java 21 or newer, copy the <span className="mono">rfid-bridge</span> folder,
             and save these settings as <span className="mono">rfid-bridge.properties</span> (paths with forward slashes):</li>
         </ol>

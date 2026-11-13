@@ -10,16 +10,17 @@ gate.id=GATE-1
 lms.url=https://zscmst-library.pg1992-gp.workers.dev
 lms.deviceKey=paste_the_gate_device_token_here
 
-# ---- Reading the gate antennas: pick ONE (same choices as a station) -------------------------------------
-reader=simulator
-#reader=tcp
+# ---- Reading the gate antennas ---------------------------------------------------------------------------
+# auto: tries every kind of reader at once and uses whichever sends tags: all serial/USB-COM ports, the
+# network reader and the vendor command below if they are filled in, and reads pushed to POST /push.
+# Fill in only what the vendor gave you; leave the rest commented out.
+reader=auto
+# Only to pin one serial port (otherwise all are tried):
+#serial.device=COM4
 #tcp.host=192.168.1.60
 #tcp.port=6000
-#reader=serial
-#serial.device=COM4
-#reader=exec
 #exec.inventory="C:/Program Files/GateVendor/gate-cli.exe" stream
-#reader=push
+# Or force one: reader=serial, tcp, exec, push, or simulator (testing without hardware)
 
 # The same tag is checked again only after this many seconds
 gate.dedupSeconds=5

@@ -30,6 +30,7 @@ Start it automatically with Windows (Task Scheduler, "At log on", or a shortcut 
 | **Vendor command-line tool / SDK sample** | `reader=exec`, `exec.inventory=...` | any reader with a vendor SDK |
 | **Push** (the reader's own software sends reads) | `reader=push`; it POSTs to `/push` | reader software with an HTTP "webhook" |
 | **Simulator** (no hardware) | `reader=simulator` | testing and training |
+| **Not sure / any of the above** | `reader=auto` | tries every serial/USB-COM port, the network reader and vendor command if set, and push, all at once; uses whichever sends tags |
 
 Tag numbers are picked out of each line the reader sends with `epc.pattern` (hex EPCs of 16–32 digits by
 default), so the reader's output format doesn't matter.
@@ -75,7 +76,7 @@ The bridge only listens on `127.0.0.1` (this PC) unless `bind=` is changed.
 
 | Request | Body | Answer |
 |---|---|---|
-| `GET /status` | | `{"ok":true,"mode","reader","writer","tags":N}` |
+| `GET /status` | | `{"ok":true,"mode","reader","writer","connected":[...],"tags":N}` |
 | `GET /tags` | | `{"tags":["EPC", ...]}` tags on the pad now |
 | `POST /write` | `{"barcode":"LRC-000123"}` | `{"epc":"4C52432D..."}` |
 | `POST /security` | `{"epc":"...","secure":true\|false}` | `{"ok":true}` |
@@ -88,7 +89,7 @@ Errors answer HTTP 409 with `{"error":"..."}`.
 
 1. **Administration → Users & devices → Add device → Security gate**, and copy its **device token**.
 2. On the gate PC: copy `gate.properties.example` to `rfid-bridge.properties`, set `lms.url`,
-   `lms.deviceKey` (the token), `gate.id` and the reader, and optionally `gate.alarm` (the command that sounds the gate's
+   `lms.deviceKey` (the token), `gate.id` and the reader (`reader=auto` tries them all), and optionally `gate.alarm` (the command that sounds the gate's
    alarm or relay).
 3. Run the bridge.
 

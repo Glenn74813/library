@@ -6,7 +6,7 @@ port=8765
 # Library pages allowed to use this bridge (comma-separated), or * for any
 origins=*
 
-# ---- Reading tags: pick ONE reader type ------------------------------------------------------------
+# ---- Reading tags: pick ONE reader type, or reader=auto to try all of them at once -----------------
 # Testing without hardware: type "place EPC" in the bridge window
 reader=simulator
 

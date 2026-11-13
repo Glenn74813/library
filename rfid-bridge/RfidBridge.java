@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -39,6 +40,9 @@ import java.util.regex.Pattern;
  *   tcp         a network reader that sends tag numbers as text (tcp.host=, tcp.port=)
  *   exec        any vendor command-line tool that prints tag numbers (exec.inventory=)
  *   push        any reader software that sends reads to this bridge: POST /push {"epcs":["..."]}
+ *   auto        all of the above that are available, at once: every serial/USB-COM port found (or serial.device),
+ *               tcp.host if set, exec.inventory if set, and push. Whichever sends tags is used. Several can also be
+ *               listed, e.g. reader=serial,tcp
  * Tag numbers are taken from each line with epc.pattern (hex EPCs by default). Keyboard-wedge readers need no
  * bridge at all: they type into the library pages directly.
  *
@@ -89,42 +93,82 @@ public final class RfidBridge {
 
     // ------------------------------------------------------------------ reading
 
+    /** Reader connections that are delivering data now (for /status and the log). */
+    static final Set<String> connected = ConcurrentHashMap.newKeySet();
+
     static void startReader(String reader) {
+        if (reader.contains(",")) {
+            for (String r : reader.split(",")) startReader(r.trim());
+            return;
+        }
         switch (reader) {
             case "simulator" -> daemon(RfidBridge::simulatorConsole);
-            case "serial" -> daemon(() -> reconnecting("serial " + get("serial.device", "COM3"),
-                    () -> new FileInputStream(serialPath(get("serial.device", "COM3")))));
-            case "tcp" -> daemon(() -> reconnecting("tcp " + get("tcp.host", "") + ":" + get("tcp.port", "6000"), () -> {
-                Socket s = new Socket();
-                s.connect(new InetSocketAddress(get("tcp.host", ""), Integer.parseInt(get("tcp.port", "6000"))), 5000);
-                String hello = get("tcp.start", "");
-                if (!hello.isEmpty()) s.getOutputStream().write((unescape(hello)).getBytes(StandardCharsets.UTF_8));
-                return s.getInputStream();
-            }));
-            case "exec" -> daemon(() -> reconnecting("command " + get("exec.inventory", ""), () -> {
-                Process p = new ProcessBuilder(split(get("exec.inventory", ""))).redirectErrorStream(true).start();
-                return p.getInputStream();
-            }));
+            case "serial" -> serial(get("serial.device", "COM3"), false);
+            case "tcp" -> daemon(() -> reconnecting("tcp " + get("tcp.host", "") + ":" + get("tcp.port", "6000"), false, RfidBridge::openTcp));
+            case "exec" -> daemon(() -> reconnecting("command " + get("exec.inventory", ""), false, RfidBridge::openExec));
             case "push" -> log("Waiting for reads on POST /push");
+            case "auto" -> {
+                // Try every kind of reader at once and keep whichever answers; missing ones are retried quietly.
+                String dev = get("serial.device", "");
+                List<String> ports = dev.isEmpty() ? serialPorts() : List.of(dev);
+                for (String port : ports) serial(port, dev.isEmpty());
+                if (!get("tcp.host", "").isEmpty()) daemon(() -> reconnecting("tcp " + get("tcp.host", "") + ":" + get("tcp.port", "6000"), true, RfidBridge::openTcp));
+                if (!get("exec.inventory", "").isEmpty()) daemon(() -> reconnecting("command " + get("exec.inventory", ""), true, RfidBridge::openExec));
+                log("Auto reader: watching " + (dev.isEmpty() ? "serial ports " + String.join(" ", ports) : "serial " + dev)
+                        + (get("tcp.host", "").isEmpty() ? "" : ", tcp " + get("tcp.host", ""))
+                        + (get("exec.inventory", "").isEmpty() ? "" : ", command") + ", and POST /push");
+            }
             default -> throw new IllegalArgumentException("Unknown reader=" + reader);
         }
+    }
+
+    static void serial(String dev, boolean quiet) {
+        daemon(() -> reconnecting("serial " + dev, quiet, () -> new FileInputStream(serialPath(dev))));
+    }
+
+    /** Serial / USB-COM ports a reader may be on: COM1-COM32 on Windows, USB serial devices elsewhere. */
+    static List<String> serialPorts() {
+        List<String> ports = new ArrayList<>();
+        if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
+            for (int i = 1; i <= 32; i++) ports.add("COM" + i);
+        } else {
+            for (String prefix : List.of("/dev/ttyUSB", "/dev/ttyACM")) for (int i = 0; i < 8; i++) ports.add(prefix + i);
+        }
+        return ports;
+    }
+
+    static InputStream openTcp() throws IOException {
+        Socket s = new Socket();
+        s.connect(new InetSocketAddress(get("tcp.host", ""), Integer.parseInt(get("tcp.port", "6000"))), 5000);
+        String hello = get("tcp.start", "");
+        if (!hello.isEmpty()) s.getOutputStream().write((unescape(hello)).getBytes(StandardCharsets.UTF_8));
+        return s.getInputStream();
+    }
+
+    static InputStream openExec() throws IOException {
+        return new ProcessBuilder(split(get("exec.inventory", ""))).redirectErrorStream(true).start().getInputStream();
     }
 
     interface Opener {
         InputStream open() throws IOException;
     }
 
-    /** Reads lines from a reader connection, extracting tag numbers; reconnects when the connection drops. */
-    static void reconnecting(String name, Opener opener) {
+    /**
+     * Reads lines from a reader connection, extracting tag numbers; reconnects when the connection drops.
+     * Quiet (auto reader): a source that isn't there is retried without filling the log.
+     */
+    static void reconnecting(String name, boolean quiet, Opener opener) {
         while (true) {
             try (InputStream in = opener.open(); var r = new BufferedReader(new InputStreamReader(in, StandardCharsets.US_ASCII))) {
                 log("Connected to " + name);
+                connected.add(name);
                 for (String line; (line = r.readLine()) != null; ) seen(line);
                 log("Disconnected from " + name);
             } catch (Exception e) {
-                log("Cannot read " + name + ": " + e.getMessage());
+                if (!quiet || connected.contains(name)) log("Cannot read " + name + ": " + e.getMessage());
             }
-            sleep(3000);
+            connected.remove(name);
+            sleep(quiet ? 10000 : 3000);
         }
     }
 
@@ -267,7 +311,7 @@ public final class RfidBridge {
             String path = x.getRequestURI().getPath();
             switch (path) {
                 case "/status" -> reply(x, 200, "{\"ok\":true,\"mode\":" + q(get("mode", "station")) + ",\"reader\":" + q(get("reader", "simulator"))
-                        + ",\"writer\":" + q(writer()) + ",\"tags\":" + inField().size() + "}");
+                        + ",\"writer\":" + q(writer()) + ",\"connected\":" + arr(new ArrayList<>(connected)) + ",\"tags\":" + inField().size() + "}");
                 case "/tags" -> {
                     List<String> tags = new ArrayList<>(inField());
                     if (get("reader", "simulator").equals("simulator")) tags = simulatorPad();
