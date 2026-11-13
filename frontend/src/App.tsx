@@ -55,6 +55,7 @@ export default function App() {
         <Route path="catalog" element={<CatalogPage />} />
         <Route path="catalog/new" element={<RecordPage />} />
         <Route path="catalog/:id" element={<RecordPage />} />
+        <Route path="catalog/:id/edit" element={<RecordPage edit />} />
         <Route path="patrons" element={<PatronsPage />} />
         <Route path="patrons/:id" element={<PatronDetailPage />} />
         <Route path="attendance" element={<AttendancePage />} />

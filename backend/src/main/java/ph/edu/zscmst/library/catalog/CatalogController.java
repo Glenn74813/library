@@ -1,5 +1,7 @@
 package ph.edu.zscmst.library.catalog;
 
+import java.util.List;
+
 import jakarta.validation.Valid;
 
 import org.springframework.data.domain.PageRequest;
@@ -93,6 +95,15 @@ public class CatalogController {
     @GetMapping("/items/lookup")
     public ItemDto lookupItem(@RequestParam String code) {
         return service.lookupItem(code);
+    }
+
+    /**
+     * Catalog records that already have this ISBN (its 10- and 13-digit forms count as the same), so the
+     * record form can warn before a second record is made for one edition.
+     */
+    @GetMapping("/records/same-isbn")
+    public List<CatalogService.SameIsbn> sameIsbn(@RequestParam String isbn, @RequestParam(required = false) Long exclude) {
+        return service.sameIsbn(isbn, exclude);
     }
 
     @GetMapping("/isbn/{isbn}")

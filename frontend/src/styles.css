@@ -215,10 +215,11 @@ button.section:focus-visible { outline: 2px solid var(--accent); outline-offset:
 
 .content { min-width: 0; }
 
+/* Staff pages use the full width of any screen; only the padding changes with size. */
 .main {
   padding: 16px;
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
 }
 
 @media (min-width: 960px) {
@@ -226,6 +227,9 @@ button.section:focus-visible { outline: 2px solid var(--accent); outline-offset:
   .sidebar { position: sticky; top: 0; height: 100vh; height: 100dvh; transform: none; width: var(--sidebar-w); }
   .scrim, .topbar .menu-btn { display: none; }
   .main { padding: 24px; }
+}
+@media (min-width: 1800px) {
+  .main { padding: 24px 32px; }
 }
 
 .page-head {
@@ -594,7 +598,7 @@ table.data .empty { text-align: center; color: var(--muted); padding: 24px; }
 .public-bar .btn { background: transparent; color: #fff; border-color: rgb(255 255 255 / 45%); }
 .public-bar a, .public-bar button.link { color: inherit; }
 .public-bar .title { font-weight: 700; font-size: clamp(1rem, 2.4vw, 1.4rem); flex: 1; min-width: 0; }
-.public-main { flex: 1; width: 100%; max-width: 1200px; margin: 0 auto; padding: 16px; }
+.public-main { flex: 1; width: 100%; max-width: 1600px; margin: 0 auto; padding: 16px; }
 
 .opac-search { display: grid; gap: 8px; grid-template-columns: 1fr; }
 @media (min-width: 640px) { .opac-search { grid-template-columns: 1fr 160px 160px auto; } }
@@ -866,3 +870,13 @@ button.card.choice.selected { border-color: var(--primary); box-shadow: 0 0 0 2p
 .id-preview .id-body { display: flex; gap: 12px; padding: 10px 12px; flex: 1; align-items: flex-start; font-size: 0.85rem; }
 .id-preview .id-body img, .id-preview .id-photo-empty { width: 30%; aspect-ratio: 5 / 6; object-fit: cover; border-radius: 6px; flex: none; background: var(--surface-2); display: grid; place-items: center; color: var(--muted); }
 .id-preview .id-name { font-size: 1rem; overflow-wrap: anywhere; }
+
+/* Catalog record details (read-only view). */
+.record-details { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 20px; margin: 0; }
+.record-details dt { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.record-details dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+
+/* Icon-only action buttons in table rows (title and aria-label carry the name). */
+.btn.small.icon { min-width: 34px; padding: 4px 8px; justify-content: center; }
+.row-actions.icon-actions { flex-wrap: nowrap; }
+.row-actions.icon-actions > .btn { flex: none; }

@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, openPdf, qs } from '../../api/client'
 import { ITEM_STATUSES, MATERIAL_TYPES, type BibRecord, type CustomFieldDef, type IsbnResult, type Item, type LibrarySection, type Loan, type Page, type RecordDetail } from '../../api/types'
 import { HeadingInput } from '../../components/HeadingInput'
 import { useAsync } from '../../hooks/useAsync'
+import { useDebounced } from '../../hooks/useDebounced'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Pager, StatusBadge, Table } from '../../components/ui'
@@ -20,9 +21,15 @@ const EMPTY: RecordForm = {
   callNumber: '', materialType: 'BOOK', language: 'English', summary: '', customFields: {},
 }
 
-export function RecordPage() {
+/**
+ * A catalog title. Opened from the catalog list it shows the record's details, its copies and who borrowed
+ * them; editing the bibliographic data is its own page (/edit), as is a new record.
+ */
+export function RecordPage({ edit = false }: { edit?: boolean }) {
   const { id } = useParams()
   const isNew = !id
+  const editing = isNew || edit
+  const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const toast = useToast()
   const canDelete = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
@@ -50,6 +57,14 @@ export function RecordPage() {
   }
   useEffect(() => { void load() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // "Add copy" from the catalog list, or right after creating a record: open the copy form.
+  useEffect(() => {
+    if (!editing && params.get('addCopy')) {
+      setEditingItem(NEW_COPY)
+      setParams({}, { replace: true })
+    }
+  }, [editing, params, setParams])
+
   const set = <K extends keyof RecordForm>(k: K, v: RecordForm[K]) => setForm((f) => ({ ...f, [k]: v }))
 
   async function lookupIsbn() {
@@ -72,18 +87,28 @@ export function RecordPage() {
     }
   }
 
+  // Another record with this ISBN (the same edition): copies belong there, under one call number.
+  const isbnTyped = useDebounced((form.isbn ?? '').replace(/[^0-9Xx]/g, ''))
+  const { data: sameIsbn } = useAsync(() => isbnTyped.length === 10 || isbnTyped.length === 13
+    ? api<{ id: number; title: string; isbn: string; callNumber: string | null; copies: number }[]>(
+      `/api/catalog/records/same-isbn${qs({ isbn: isbnTyped, exclude: isNew ? undefined : id })}`)
+    : Promise.resolve([]), [isbnTyped, id])
+
   async function save(e: FormEvent) {
     e.preventDefault()
+    if (isNew && sameIsbn?.length && !confirm(`The ISBN ${form.isbn} is already in the catalog as "${sameIsbn[0].title}". `
+      + 'For another copy of the same book, cancel and press Add copy on that record.\n\nCreate a separate record anyway?')) return
     setBusy(true)
     setError(null)
     try {
       if (isNew) {
         const r = await api<BibRecord>('/api/catalog/records', { body: form })
-        toast('Record created — now add copies')
-        navigate(`/staff/catalog/${r.id}`, { replace: true })
+        toast('Record created — now add its copies')
+        navigate(`/staff/catalog/${r.id}?addCopy=1`, { replace: true })
       } else {
         await api(`/api/catalog/records/${id}`, { method: 'PUT', body: form })
         toast('Record saved')
+        navigate(`/staff/catalog/${id}`)
       }
     } catch (err) {
       setError(errorText(err))
@@ -106,13 +131,16 @@ export function RecordPage() {
   return (
     <>
       <div className="page-head">
-        <h1>{isNew ? 'New catalog record' : form.title || 'Record'}</h1>
+        <h1>{isNew ? 'New catalog record' : edit ? `Edit: ${form.title || 'record'}` : form.title || 'Record'}</h1>
         <div className="row">
-          <button className="btn" onClick={() => navigate('/staff/catalog')}><Icon name="chevron-left" />Back</button>
-          {!isNew && canDelete && <button className="btn danger" onClick={remove}>Delete</button>}
+          <button className="btn" onClick={() => navigate(edit ? `/staff/catalog/${id}` : '/staff/catalog')}><Icon name="chevron-left" />Back</button>
+          {!editing && <button className="btn" onClick={() => setEditingItem(NEW_COPY)}><Icon name="plus" />Add copy</button>}
+          {!editing && <button className="btn" onClick={() => navigate(`/staff/catalog/${id}/edit`)}><Icon name="edit-2" />Edit</button>}
+          {!isNew && canDelete && <button className="btn danger" onClick={remove}><Icon name="trash-2" />Delete</button>}
         </div>
       </div>
-      <form className="card stack" onSubmit={save}>
+      {!editing && <RecordSummary form={form} fieldDefs={fieldDefs ?? []} error={error} />}
+      {editing && <form className="card stack" onSubmit={save}>
         <ErrorAlert error={error} />
         <div className="form-grid">
           <Field label="ISBN" className="span-all" hint="Scan or type, then press Lookup (Open Library) or Copy-catalog (Library of Congress or National Library of the Philippines)">
@@ -123,6 +151,13 @@ export function RecordPage() {
               <button type="button" className="btn" onClick={() => setCopycat(true)} title="Search the Library of Congress or the National Library of the Philippines">Copy-catalog</button>
             </div>
           </Field>
+          {sameIsbn && sameIsbn.length > 0 && <div className="alert warn span-all">
+            <strong>This ISBN is already in the catalog.</strong> For another copy of the same book, open it and press <strong>Add copy</strong>, so
+            all copies share one record and one call number.
+            <ul style={{ margin: '6px 0 0' }}>{sameIsbn.map((r) => <li key={r.id}>
+              <Link to={`/staff/catalog/${r.id}`}>{r.title}</Link> · ISBN {r.isbn}{r.callNumber && <> · call no. <span className="mono">{r.callNumber}</span></>}
+              {' '}· {r.copies} cop{r.copies === 1 ? 'y' : 'ies'}</li>)}</ul>
+          </div>}
           <Field label="Material type">
             <select value={form.materialType} onChange={(e) => set('materialType', e.target.value as RecordForm['materialType'])}>
               {MATERIAL_TYPES.map((t) => <option key={t} value={t}>{label(t)}</option>)}
@@ -154,11 +189,11 @@ export function RecordPage() {
           <Field label="Summary / abstract" className="span-all"><textarea value={form.summary ?? ''} onChange={(e) => set('summary', e.target.value)} /></Field>
         </div>
         <div className="row end actions-stretch"><button className="btn primary" disabled={busy}>{isNew ? 'Create record' : 'Save changes'}</button></div>
-      </form>
+      </form>}
 
-      {!isNew && <DigitalPanel recordId={Number(id)} />}
+      {edit && <DigitalPanel recordId={Number(id)} />}
 
-      {!isNew && (
+      {!editing && (
         <div className="card">
           <div className="page-head" style={{ marginBottom: 8 }}>
             <h2 style={{ margin: 0 }}>Copies ({items.length})</h2>
@@ -171,7 +206,7 @@ export function RecordPage() {
                 <option value="barcode">Barcode labels (all copies)</option>
                 <option value="spine">Spine labels with shelf address (all copies)</option>
               </select>}
-              <button className="btn primary" onClick={() => setEditingItem({ status: 'AVAILABLE', location: 'General Circulation' })}><Icon name="plus" />Add copy</button>
+              <button className="btn primary" onClick={() => setEditingItem(NEW_COPY)}><Icon name="plus" />Add copy</button>
             </div>
           </div>
           <Table rows={items} rowKey={(i) => i.id} onRowClick={setEditingItem} empty="No copies yet" columns={[
@@ -188,7 +223,7 @@ export function RecordPage() {
         </div>
       )}
 
-      {!isNew && <BorrowerHistory recordId={Number(id)} />}
+      {!editing && <BorrowerHistory recordId={Number(id)} />}
       {copycat && <CopyCatalogModal initialIsbn={form.isbn ?? ''} initialTitle={form.title} onClose={() => setCopycat(false)}
         onUse={(c) => {
           // The ISBN already typed or scanned is the book in hand; a record found by title may be another
@@ -209,6 +244,31 @@ export function RecordPage() {
       {editingItem && <ItemModal recordId={Number(id)} item={editingItem} canDelete={canDelete} others={items.filter((x) => x.id !== editingItem.id)}
         onClose={() => setEditingItem(null)} onSaved={() => { setEditingItem(null); void load() }} />}
     </>
+  )
+}
+
+const NEW_COPY: Partial<Item> = { status: 'AVAILABLE' }
+
+/** The record's details, read-only (Edit opens the form). */
+function RecordSummary({ form, fieldDefs, error }: { form: RecordForm; fieldDefs: CustomFieldDef[]; error: string | null }) {
+  const rows: [string, React.ReactNode][] = [
+    ['Authors', form.authors], ['ISBN', form.isbn && <span className="mono">{form.isbn}</span>],
+    ['Call number', form.callNumber && <span className="mono">{form.callNumber}</span>], ['Material type', label(form.materialType)],
+    ['Publisher', form.publisher], ['Year', form.publicationYear], ['Edition', form.edition], ['Language', form.language],
+    ['Subjects', form.subjects],
+    ...fieldDefs.map((d): [string, React.ReactNode] => [d.label, form.customFields?.[d.key]]),
+  ]
+  return (
+    <div className="card stack">
+      <ErrorAlert error={error} />
+      {form.subtitle && <div className="muted" style={{ marginTop: -4 }}>{form.subtitle}</div>}
+      <dl className="record-details">
+        {rows.filter(([, v]) => v !== null && v !== undefined && v !== '').map(([k, v]) => (
+          <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
+        ))}
+      </dl>
+      {form.summary && <p style={{ margin: 0, whiteSpace: 'pre-line' }}>{form.summary}</p>}
+    </div>
   )
 }
 

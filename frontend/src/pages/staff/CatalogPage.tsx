@@ -6,6 +6,7 @@ import { api, download, qs } from '../../api/client'
 import { MATERIAL_TYPES, type BibRecord, type Page } from '../../api/types'
 import { EbookBadge, ErrorAlert, Pager, Table } from '../../components/ui'
 import { label } from '../../format'
+import { errorText, useToast } from '../../components/Toast'
 import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
@@ -20,8 +21,20 @@ export function CatalogPage() {
   const navigate = useNavigate()
   const canImport = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
   const [importing, setImporting] = useState(false)
-  const { data, error } = useAsync(
+  const toast = useToast()
+  const { data, error, reload } = useAsync(
     () => api<Page<BibRecord>>(`/api/catalog/records${qs({ q: dq, field, type, page })}`), [dq, field, type, page])
+
+  async function remove(r: BibRecord) {
+    if (!confirm(`Delete "${r.title}" and all ${r.totalCopies} of its copies? This cannot be undone.`)) return
+    try {
+      await api(`/api/catalog/records/${r.id}`, { method: 'DELETE' })
+      toast('Record deleted')
+      void reload()
+    } catch (e) {
+      toast(errorText(e), 'error')
+    }
+  }
 
   return (
     <>
@@ -72,6 +85,15 @@ export function CatalogPage() {
             { header: 'Year', render: (r) => r.publicationYear ?? '—' },
             { header: 'Available', render: (r) => <span className={`badge ${r.availableCopies ? 'ok' : r.totalCopies ? 'warn' : ''}`}>
               {r.availableCopies} / {r.totalCopies}</span> },
+            // Row click opens the title (copies and borrowing history); these act on it directly.
+            { header: 'Actions', render: (r) => <span className="row-actions icon-actions" onClick={(e) => e.stopPropagation()}>
+              <button className="btn small icon" title="Add copy" aria-label={`Add a copy of ${r.title}`}
+                onClick={() => navigate(`/staff/catalog/${r.id}?addCopy=1`)}><Icon name="plus" /></button>
+              <button className="btn small icon" title="Edit record" aria-label={`Edit ${r.title}`}
+                onClick={() => navigate(`/staff/catalog/${r.id}/edit`)}><Icon name="edit-2" /></button>
+              {canImport && <button className="btn small icon danger" title="Delete record" aria-label={`Delete ${r.title}`}
+                onClick={() => void remove(r)}><Icon name="trash-2" /></button>}
+            </span> },
           ]} />
         <Pager page={data} onPage={setPage} />
       </div>

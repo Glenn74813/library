@@ -232,6 +232,48 @@ public class CatalogService {
         audit.record("ITEM_DELETE", i.getBarcode());
     }
 
+    public record SameIsbn(Long id, String title, String isbn, String callNumber, long copies) {
+    }
+
+    @Transactional(readOnly = true)
+    public List<SameIsbn> sameIsbn(String isbn, Long exclude) {
+        List<String> forms = isbnForms(isbn);
+        if (forms.isEmpty()) return List.of();
+        return jdbc.query("""
+                select r.id, r.title, r.isbn, r.call_number, (select count(*) from item i where i.record_id = r.id) as copies
+                from bib_record r
+                where regexp_replace(upper(coalesce(r.isbn, '')), '[^0-9X]', '', 'g') in (?, ?)
+                  and r.id <> ?
+                order by r.id""",
+                (rs, n) -> new SameIsbn(rs.getLong("id"), rs.getString("title"), rs.getString("isbn"),
+                        rs.getString("call_number"), rs.getLong("copies")),
+                forms.get(0), forms.get(forms.size() - 1), exclude == null ? -1L : exclude);
+    }
+
+    /** An ISBN in both its forms: ISBN-10 and the 978 ISBN-13 are the same book. */
+    static List<String> isbnForms(String raw) {
+        String v = raw == null ? "" : raw.replaceAll("[^0-9Xx]", "").toUpperCase();
+        if (v.length() == 10) {
+            String body = "978" + v.substring(0, 9);
+            return List.of(v, body + isbn13Check(body));
+        }
+        if (v.length() == 13) {
+            if (!v.startsWith("978")) return List.of(v);
+            String body = v.substring(3, 12);
+            int sum = 0;
+            for (int i = 0; i < 9; i++) sum += (body.charAt(i) - '0') * (10 - i);
+            int c = (11 - sum % 11) % 11;
+            return List.of(v, body + (c == 10 ? "X" : String.valueOf(c)));
+        }
+        return List.of();
+    }
+
+    private static int isbn13Check(String twelve) {
+        int sum = 0;
+        for (int i = 0; i < 12; i++) sum += (twelve.charAt(i) - '0') * (i % 2 == 0 ? 1 : 3);
+        return (10 - sum % 10) % 10;
+    }
+
     /**
      * The next library barcode (LRC- and six digits) for a copy added without one. Skips any number someone
      * already typed in by hand, so the assigned label is always unique.
