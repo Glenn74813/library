@@ -442,11 +442,8 @@ label.check { display: inline-flex; align-items: center; gap: 8px; cursor: point
 /* ---------------------------------------------------------------- tables -> cards on phones */
 
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-/*
- * Tables are as wide as their content (at least the card's width on smaller screens, up to all of it), so
- * on wide screens the columns stay together and row buttons sit right after the data, not at the far edge.
- */
-table.data { width: auto; min-width: min(100%, 900px); max-width: 100%; border-collapse: collapse; }
+/* Tables fill the full width of their card on every screen size. */
+table.data { width: 100%; border-collapse: collapse; }
 table.data th:last-child, table.data td:last-child { padding-right: 16px; }
 table.data th, table.data td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
 table.data th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
