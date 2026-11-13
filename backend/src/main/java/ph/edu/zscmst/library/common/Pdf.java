@@ -126,11 +126,11 @@ public final class Pdf {
         return c;
     }
 
-    /** CSV (Excel) or PDF of the same table, chosen by {@code format}. */
+    /** The same table as CSV, Excel (.xlsx) or PDF, chosen by {@code format}. */
     public static ResponseEntity<byte[]> export(String format, String baseName, String title, String subtitle,
                                                 List<String> header, List<List<?>> rows) {
-        return "pdf".equalsIgnoreCase(format)
-                ? download(baseName + ".pdf", title, subtitle, header, rows)
-                : Csv.download(baseName + ".csv", header, rows);
+        if ("pdf".equalsIgnoreCase(format)) return download(baseName + ".pdf", title, subtitle, header, rows);
+        if ("xlsx".equalsIgnoreCase(format)) return Xlsx.download(baseName + ".xlsx", title, subtitle, header, rows);
+        return Csv.download(baseName + ".csv", header, rows);
     }
 }

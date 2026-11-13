@@ -57,7 +57,11 @@ export function GatePage() {
     <>
       <div className="page-head">
         <h1>Security gate</h1>
-        <ExportMenu path={`/api/gate/export${qs({ from, to })}`} name="gate-events" label="Export log…" />
+        <div className="row">
+          <ExportMenu path={`/api/gate/export${qs({ from, to })}`} name="gate-events" label="Alarm / event log…" />
+          <ExportMenu path={`/api/reports/export/loans${qs({ from, to })}`} name="circulation" label="Circulation report…" />
+          <ExportMenu path="/api/reports/export/tagging" name="tagging" label="Tagging report…" />
+        </div>
       </div>
       {summary?.emergencyMode && <div className="alert error" style={{ marginBottom: 16 }}><strong>EMERGENCY MODE IS ON</strong> — gate alarms are suppressed and the gate never blocks people.</div>}
       {summary && (

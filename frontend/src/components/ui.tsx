@@ -196,18 +196,21 @@ export function EbookBadge({ ebook }: { ebook: DigitalSummary }) {
     : <span className="badge warn ebook-badge"><Icon name="link" size={12} />E-book · {ebook.provider ?? 'vendor'}</span>
 }
 
-/** Adds format=csv|pdf to an export URL that may already carry a query string. */
-export const withFormat = (path: string, format: 'csv' | 'pdf') => `${path}${path.includes('?') ? '&' : '?'}format=${format}`
+export type ExportFormat = 'xlsx' | 'csv' | 'pdf'
 
-/** "Export…" picker that downloads the same report as Excel (CSV) or a printable PDF. */
+/** Adds format=xlsx|csv|pdf to an export URL that may already carry a query string. */
+export const withFormat = (path: string, format: ExportFormat) => `${path}${path.includes('?') ? '&' : '?'}format=${format}`
+
+/** "Export…" picker that downloads the same report as Excel (.xlsx), CSV or a printable PDF. */
 export function ExportMenu({ path, name, label = 'Export…' }: { path: string; name: string; label?: string }) {
   return (
     <select className="btn" style={{ width: 'auto' }} value="" aria-label={label} onChange={(e) => {
-      const f = e.target.value as 'csv' | 'pdf'
+      const f = e.target.value as ExportFormat
       void download(withFormat(path, f), `${name}.${f}`)
     }}>
       <option value="" disabled>{label}</option>
-      <option value="csv">Excel (CSV)</option>
+      <option value="xlsx">Excel (.xlsx)</option>
+      <option value="csv">CSV</option>
       <option value="pdf">PDF</option>
     </select>
   )

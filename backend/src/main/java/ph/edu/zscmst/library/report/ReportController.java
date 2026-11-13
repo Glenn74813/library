@@ -133,6 +133,7 @@ public class ReportController {
                     List.of("Barcode", "RFID EPC", "Title", "Authors", "ISBN", "Call Number", "Type", "Location",
                             "Aisle", "Shelf", "Status", "Acquired", "Price"),
                     items.findAll().stream().map(this::itemRow).toList());
+            case "tagging" -> tagging(format);
             case "patrons" -> Pdf.export(format, "patrons-" + clock.today(), "Patrons", null,
                     List.of("ID Number", "Last Name", "First Name", "Category", "Course", "Email", "Phone",
                             "Expiry", "Blocked"),
@@ -154,6 +155,29 @@ public class ReportController {
     private List<?> fineRow(Fine x) {
         return Arrays.asList(date(x.getCreatedAt()), x.getPatron().getCardNumber(), x.getPatron().getFullName(),
                 x.getAmount(), x.getReason(), x.getStatus(), x.getReceiptNumber(), x.getSettledBy());
+    }
+
+    /**
+     * Tagging report: every copy (withdrawn ones left out) in shelf order, whether it has an RFID tag yet,
+     * with the tagged / untagged counts in the subtitle, so tagging can be planned aisle by aisle.
+     */
+    private ResponseEntity<byte[]> tagging(String format) {
+        List<Item> list = items.findAll().stream().filter(i -> i.getStatus() != ItemStatus.WITHDRAWN)
+                .sorted(java.util.Comparator.comparing((Item i) -> i.getLocation() == null ? "~" : i.getLocation())
+                        .thenComparing(i -> i.getAisle() == null ? "" : i.getAisle())
+                        .thenComparing(i -> i.getShelf() == null ? "" : i.getShelf())
+                        .thenComparing(i -> i.getRecord().getCallNumber() == null ? "" : i.getRecord().getCallNumber())
+                        .thenComparing(Item::getBarcode))
+                .toList();
+        long tagged = list.stream().filter(i -> i.getRfidEpc() != null && !i.getRfidEpc().isBlank()).count();
+        String summary = tagged + " of " + list.size() + " copies tagged"
+                + (list.isEmpty() ? "" : " (" + Math.round(100.0 * tagged / list.size()) + "%)") + ", "
+                + (list.size() - tagged) + " not tagged yet · as of " + clock.today();
+        return Pdf.export(format, "tagging-" + clock.today(), "RFID Tagging Report", summary,
+                List.of("Section", "Aisle", "Shelf", "Call Number", "Title", "Barcode", "RFID EPC", "Tagged", "Status"),
+                list.stream().<List<?>>map(i -> Arrays.<Object>asList(i.getLocation(), i.getAisle(), i.getShelf(), i.getRecord().getCallNumber(),
+                        i.getRecord().getTitle(), i.getBarcode(), i.getRfidEpc(),
+                        i.getRfidEpc() != null && !i.getRfidEpc().isBlank() ? "Yes" : "No", i.getStatus())).toList());
     }
 
     private List<?> itemRow(Item i) {

@@ -13,13 +13,14 @@ const EXPORTS = [
   { type: 'overdue', label: 'Overdue items (now)' },
   { type: 'fines', label: 'All fines & payments' },
   { type: 'collection', label: 'Collection / shelf list' },
+  { type: 'tagging', label: 'RFID tagging report' },
   { type: 'patrons', label: 'Patron list' },
 ]
 
 export function ReportsPage() {
   const [from, setFrom] = useState(daysAgo(29))
   const [to, setTo] = useState(isoDate())
-  const [format, setFormat] = useState<'csv' | 'pdf'>('csv')
+  const [format, setFormat] = useState<'xlsx' | 'csv' | 'pdf'>('xlsx')
   const { data, error } = useAsync(() => api<CirculationStats>(`/api/reports/circulation${qs({ from, to })}`), [from, to])
 
   return (
@@ -54,8 +55,9 @@ export function ReportsPage() {
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <h2>Export reports</h2>
           <select className="btn" style={{ width: 'auto' }} value={format} aria-label="Export format"
-            onChange={(e) => setFormat(e.target.value as 'csv' | 'pdf')}>
-            <option value="csv">Excel (CSV)</option>
+            onChange={(e) => setFormat(e.target.value as 'xlsx' | 'csv' | 'pdf')}>
+            <option value="xlsx">Excel (.xlsx)</option>
+            <option value="csv">CSV</option>
             <option value="pdf">PDF</option>
           </select>
         </div>

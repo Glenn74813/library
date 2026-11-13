@@ -119,9 +119,14 @@ The `backup` service saves the database and uploaded files daily into `backups/`
 **Copy `backups/` to another drive or PC every week**, and test a restore each term:
 
 ```bash
-docker compose exec backup /bin/sh /backup.sh once
-scripts/restore.sh backups/db-<stamp>.dump backups/files-<stamp>.tar.gz
+docker compose exec backup /bin/sh /backup.sh once        # take a backup now
+scripts/restore-test.sh                                     # safe test: restores into a scratch copy and compares
+scripts/restore.sh backups/db-<stamp>.dump backups/files-<stamp>.tar.gz   # real restore: REPLACES the live data
 ```
+
+`restore-test.sh` never touches the live library: it restores the newest backup into a scratch database,
+compares every table's row count and the uploaded files with the live system, prints **RESULT: PASSED**,
+and deletes the scratch copy. Keep the output with the signed record (`docs/restore-test-record.md`).
 
 ## 10. SIP2 self-check and RFID stations
 The API listens for SIP2 on TCP port **6001** (to change it, add `APP_SIP2_PORT` to the `api` service's environment and the port mapping in `docker-compose.yml`; `APP_SIP2_ENABLED=false` turns it off).

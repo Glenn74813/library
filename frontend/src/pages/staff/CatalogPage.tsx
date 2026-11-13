@@ -48,13 +48,15 @@ export function CatalogPage() {
           {canImport && <button className="btn" onClick={() => setImporting(true)}><Icon name="upload" />Import</button>}
           <select className="btn" style={{ width: 'auto' }} value="" aria-label="Export catalog" onChange={(e) => {
             const v = e.target.value
+            if (v === 'xlsx') void download('/api/reports/export/collection?format=xlsx', 'collection.xlsx')
             if (v === 'csv') void download('/api/reports/export/collection', 'collection.csv')
             if (v === 'pdf') void download('/api/reports/export/collection?format=pdf', 'collection.pdf')
             if (v === 'mrc') void download('/api/catalog/export/marc?format=mrc', 'catalog.mrc')
             if (v === 'xml') void download('/api/catalog/export/marc?format=xml', 'catalog.xml')
           }}>
             <option value="" disabled>Export…</option>
-            <option value="csv">Excel / CSV (copies)</option>
+            <option value="xlsx">Excel (.xlsx, copies)</option>
+            <option value="csv">CSV (copies)</option>
             <option value="pdf">PDF (copies)</option>
             {canImport && <option value="mrc">MARC21 (.mrc)</option>}
             {canImport && <option value="xml">MARCXML (.xml)</option>}
