@@ -293,7 +293,7 @@ button.section:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .stat { border-top: 3px solid var(--primary); }
 .stat.warn { border-top-color: var(--accent); }
 .stat.bad { border-top-color: var(--danger); }
-.stat .label { font-size: 0.8rem; color: var(--muted); }
+.stat .label { font-size: 0.8rem; color: var(--muted); font-weight: 700; }
 .stat .value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stat.warn .value { color: var(--warning); }
 .stat.bad .value { color: var(--danger); }
@@ -443,7 +443,7 @@ label.check { display: inline-flex; align-items: center; gap: 8px; cursor: point
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table.data { width: 100%; border-collapse: collapse; }
 table.data th, table.data td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
-table.data th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+table.data th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
 table.data tr.clickable { cursor: pointer; }
 table.data tr.clickable:hover td { background: var(--surface-2); }
 table.data .cell { min-width: 0; }
@@ -473,6 +473,7 @@ table.data .empty { text-align: center; color: var(--muted); padding: 24px; }
     flex: 0 0 auto;
     max-width: 45%;
     color: var(--muted);
+    font-weight: 700;
     font-size: 0.82rem;
     text-align: left;
   }
@@ -873,10 +874,13 @@ button.card.choice.selected { border-color: var(--primary); box-shadow: 0 0 0 2p
 
 /* Catalog record details (read-only view). */
 .record-details { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 20px; margin: 0; }
-.record-details dt { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.record-details dt { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700; }
 .record-details dd { margin: 2px 0 0; overflow-wrap: anywhere; }
 
 /* Icon-only action buttons in table rows (title and aria-label carry the name). */
 .btn.small.icon { min-width: 34px; padding: 4px 8px; justify-content: center; }
 .row-actions.icon-actions { flex-wrap: nowrap; }
 .row-actions.icon-actions > .btn { flex: none; }
+
+/* Detail labels (dt) are bold everywhere so label and value are easy to tell apart. */
+dt { font-weight: 700; }

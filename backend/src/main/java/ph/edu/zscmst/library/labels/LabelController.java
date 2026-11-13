@@ -259,24 +259,52 @@ public class LabelController {
         return s.length() <= max ? s : s.substring(0, max - 1) + "…";
     }
 
+    /**
+     * Barcode label: library name, title and call number stacked tightly above the barcode and its number,
+     * all centred, with the whole group centred on the label.
+     */
     private void barcodeLabel(PdfContentByte cb, PdfWriter w, Item item, float x, float y) {
         float lw = Sheet.L7160.w() * MM;
         float lh = Sheet.L7160.h() * MM;
-        float pad = 3 * MM;
+        float inner = lw - 6 * MM;
         Font small = font(FontFactory.HELVETICA, 6.5f, Color.DARK_GRAY);
         Font title = font(FontFactory.HELVETICA_BOLD, 7.5f, Color.BLACK);
         Font code = font(FontFactory.COURIER_BOLD, 9, Color.BLACK);
-        text(cb, system.profile().name(), small, x + pad, y + lh - pad - 5, Element.ALIGN_LEFT);
-        box(cb, clip(item.getRecord().getTitle(), 70), title, x + pad, y + lh - pad - 8, lw - 2 * pad, 18, Element.ALIGN_LEFT);
-        text(cb, item.getRecord().getCallNumber(), small, x + pad, y + lh - pad - 31, Element.ALIGN_LEFT);
-        Image img = barcode(cb, item.getBarcode(), 12 * MM, lw - 2 * pad);
-        img.setAbsolutePosition(x + (lw - img.getScaledWidth()) / 2, y + pad + 9);
+        String name = clip(item.getRecord().getTitle(), 70);
+        String call = item.getRecord().getCallNumber();
+        float titleLead = 8.6f;
+        int titleLines = widthOf(name, title) > inner ? 2 : 1;
+        float barH = 11 * MM;
+        // Heights of the stacked parts, top to bottom, so the group can be centred.
+        float total = 7.5f + titleLines * titleLead + (call == null || call.isBlank() ? 0 : 8) + 1.5f + barH + 1.5f + 8;
+        float top = y + (lh + total) / 2;
+        text(cb, system.profile().name(), small, x + lw / 2, top - 5.5f, Element.ALIGN_CENTER);
+        top -= 7.5f;
+        box(cb, name, title, x + 3 * MM, top + 1.5f, inner, titleLines * titleLead + 1, Element.ALIGN_CENTER);
+        top -= titleLines * titleLead;
+        if (call != null && !call.isBlank()) {
+            text(cb, call, small, x + lw / 2, top - 6, Element.ALIGN_CENTER);
+            top -= 8;
+        }
+        top -= 1.5f;
+        Image img = barcode(cb, item.getBarcode(), barH, inner);
+        img.setAbsolutePosition(x + (lw - img.getScaledWidth()) / 2, top - barH);
         try {
             cb.addImage(img);
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
-        text(cb, item.getBarcode(), code, x + lw / 2, y + pad, Element.ALIGN_CENTER);
+        top -= barH + 1.5f;
+        text(cb, item.getBarcode(), code, x + lw / 2, top - 7, Element.ALIGN_CENTER);
+    }
+
+    /** Printed width of a line of text, for deciding whether a title wraps. */
+    private static float widthOf(String s, Font f) {
+        try {
+            return f.getCalculatedBaseFont(false).getWidthPoint(s, f.getSize());
+        } catch (RuntimeException e) {
+            return s.length() * f.getSize() * 0.55f; // rough average for sans-serif text
+        }
     }
 
     /**
