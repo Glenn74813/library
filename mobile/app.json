@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "ZSCMST My Library",
+    "slug": "zscmst-my-library",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ph.edu.zscmst.library"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0E0E78",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "ph.edu.zscmst.library"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0E0E78"
+        }
+      ]
+    ],
+    "scheme": "zscmstlibrary"
+  }
+}

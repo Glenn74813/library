@@ -9,6 +9,7 @@ and a patron self-service app.
 | Backend  | Java 25, Spring Boot 4.1, Spring Security (JWT resource server), Spring Data JPA, Flyway |
 | Database | PostgreSQL 18 |
 | Frontend | React 19 + TypeScript, Vite, React Router — responsive from phones to 27" kiosks |
+| Patron app | React Native + TypeScript (Expo): one codebase for the iOS and Android apps (`mobile/`) |
 | Icons    | Feather SVGs from `feather/` (bundled at build time via `frontend/src/components/Icon.tsx`) |
 | Deploy   | Docker Compose: `db`, `api`, `web` (nginx) as separate, independently scalable services |
 
@@ -16,6 +17,7 @@ and a patron self-service app.
 smart-library/
 ├── backend/     Spring Boot REST API (stateless, horizontally scalable)
 ├── frontend/    React SPA (static files, served by nginx or any CDN)
+├── mobile/      Patron app for iOS and Android (Expo / React Native); see mobile/README.md
 ├── docs/        User manual, admin manual, UAT checklist, kiosk lockdown guide
 ├── scripts/     mvn.sh, seed_demo.py, backup.sh, restore.sh
 └── docker-compose.yml
@@ -75,7 +77,7 @@ every push and pull request.
 | `/kiosk/attendance` | KIOSK device | Time-in/out by RFID, barcode or virtual keyboard; stand-by info board/video; offline queue |
 | `/kiosk/selfcheck` | KIOSK device | Self-checkout: card + PIN, borrow and renew by RFID pad or scanner, returns, printable slip |
 | `/my/forgot-pin` | Patrons | Reset a forgotten PIN with a code e-mailed to the address on record |
-| `/my` | Patrons | Loans, renewals, reservations, fines, PIN change, download own data (the "mobile app" as a responsive web app) |
+| `/my` | Patrons | Loans, renewals, reservations, fines, PIN change, download own data (also as the iOS / Android app in `mobile/`) |
 | `/privacy` | Public | Privacy notice (Data Privacy Act, RA 10173) |
 
 ## Administration (staff app → Administration)
