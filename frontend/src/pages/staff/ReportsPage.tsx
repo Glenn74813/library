@@ -1,27 +1,52 @@
 import { useState } from 'react'
 import { api, download, qs } from '../../api/client'
 import { ITEM_STATUSES, MATERIAL_TYPES, type Category, type CirculationStats, type Course, type LibrarySection } from '../../api/types'
-import { BarList, ErrorAlert, Field, Stat, withFormat } from '../../components/ui'
+import { BarList, ErrorAlert, Field, Stat, Tabs, withFormat } from '../../components/ui'
 import { ChartHead, ColumnChart, PieChart, dayLabel, dayTick, fillDays } from '../../components/charts'
 import { daysAgo, fmtMoney, isoDate, label } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { hasRole, useSession } from '../../auth/AuthContext'
-import { Icon } from '../../components/Icon'
+import { Icon, type IconName } from '../../components/Icon'
 
-const EXPORTS = [
-  { type: 'loans', label: 'Loans in period', ranged: true },
-  { type: 'ebooks', label: 'E-book usage in period', ranged: true },
-  { type: 'overdue', label: 'Overdue items (now)' },
-  { type: 'fines', label: 'All fines & payments' },
-  { type: 'collection', label: 'Collection / shelf list' },
-  { type: 'tagging', label: 'RFID tagging report' },
-  { type: 'patrons', label: 'Patron list' },
-]
+type Tab = 'circulation' | 'collection' | 'fines' | 'patrons' | 'gate' | 'ebooks' | 'migration'
+type Format = 'xlsx' | 'csv' | 'pdf'
+interface Export { label: string; path: string; ranged?: boolean; filtered?: boolean; file: string; icon?: IconName; title?: string }
+
+/** Each sub-module's exports. Ranged ones take the period; filtered ones take the filters above. */
+const EXPORTS: Record<Tab, Export[]> = {
+  circulation: [
+    { label: 'Loans in period', path: '/api/reports/export/loans', ranged: true, filtered: true, file: 'loans' },
+    { label: 'Overdue items (now)', path: '/api/reports/export/overdue', filtered: true, file: 'overdue' },
+  ],
+  collection: [
+    { label: 'Collection / shelf list', path: '/api/reports/export/collection', filtered: true, file: 'collection' },
+    { label: 'RFID tagging report', path: '/api/reports/export/tagging', filtered: true, file: 'tagging' },
+  ],
+  fines: [{ label: 'All fines & payments', path: '/api/reports/export/fines', filtered: true, file: 'fines' }],
+  patrons: [
+    { label: 'Patron list', path: '/api/reports/export/patrons', filtered: true, file: 'patrons' },
+    { label: 'Attendance in period', path: '/api/attendance/export', ranged: true, file: 'attendance' },
+  ],
+  gate: [{ label: 'Gate events in period', path: '/api/gate/export', ranged: true, file: 'gate' }],
+  ebooks: [{ label: 'E-book usage in period', path: '/api/reports/export/ebooks', ranged: true, filtered: true, file: 'ebooks' }],
+  migration: [{ label: 'Data migration validation report', path: '/api/reports/migration', file: 'migration-validation', icon: 'file-text',
+    title: 'Imports, rejected rows, totals, privacy note and sign-off lines' }],
+}
+
+const NOTES: Partial<Record<Tab, string>> = {
+  collection: 'Every copy with its section, shelf, status and RFID tag. Uses the material type, section and copy status filters.',
+  fines: 'Every fine with its payment or waiver. Uses the patron and fine status filters.',
+  patrons: 'Registered patrons, and who came into the library in the period.',
+  gate: 'Alarms, visitor counts, tamper and power events from the security gates in the period.',
+  migration: 'Every import of the library\'s existing records, rejected rows and why, totals now in the system, and sign-off lines.',
+}
+
 
 export function ReportsPage() {
   const [from, setFrom] = useState(daysAgo(29))
   const [to, setTo] = useState(isoDate())
-  const [format, setFormat] = useState<'xlsx' | 'csv' | 'pdf'>('xlsx')
+  const [format, setFormat] = useState<Format>('xlsx')
+  const [tab, setTab] = useState<Tab>('circulation')
   const canMigrate = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
   // Optional filters: who (category, course), what (material type, section) and status. They narrow the
   // figures below and every export; each report applies the ones that fit it.
@@ -59,50 +84,71 @@ export function ReportsPage() {
           <button className="btn small" onClick={() => setFlt({ categoryId: '', courseId: '', materialType: '', section: '', itemStatus: '', fineStatus: '' })}>Clear filters</button>
         </div>}
       </div>
-      <ErrorAlert error={error} />
-      {data && (
-        <div className="stack" style={{ marginBottom: 16 }}>
-          <div className="stats">
-            <Stat label="Check-outs" value={data.checkouts} />
-            <Stat label="Returns" value={data.returns} />
-            <Stat label="Fines collected" value={fmtMoney(data.finesCollected)} />
-          </div>
-          <div className="grid cols-2">
-            <div className="card chart">
-              <ChartHead title="Top borrowers" subtitle={`Check-outs · ${dayLabel(from)} – ${dayLabel(to)}`} />
-              <BarList data={data.topBorrowers.map((b) => ({ label: b.label, count: b.count }))} />
+      <Tabs value={tab} onChange={setTab} tabs={[
+        { id: 'circulation', label: 'Circulation' },
+        { id: 'collection', label: 'Collection' },
+        { id: 'fines', label: 'Fines & payments' },
+        { id: 'patrons', label: 'Patrons & attendance' },
+        { id: 'gate', label: 'Security gate' },
+        { id: 'ebooks', label: 'E-book usage' },
+        ...(canMigrate ? [{ id: 'migration' as const, label: 'Data migration' }] : []),
+      ]} />
+      <ExportCard exports={EXPORTS[tab]} note={NOTES[tab]} format={format} setFormat={setFormat} from={from} to={to} params={params} />
+      {tab === 'circulation' && <>
+        <ErrorAlert error={error} />
+        {data && (
+          <div className="stack" style={{ marginBottom: 16 }}>
+            <div className="stats">
+              <Stat label="Check-outs" value={data.checkouts} />
+              <Stat label="Returns" value={data.returns} />
+              <Stat label="Fines collected" value={fmtMoney(data.finesCollected)} />
             </div>
-            <div className="card chart">
-              <ChartHead title="Most borrowed titles" subtitle={`Check-outs · ${dayLabel(from)} – ${dayLabel(to)}`} />
-              <BarList data={data.topTitles.map((t) => ({ label: t.label, count: t.count }))} />
+            <div className="grid cols-2">
+              <div className="card chart">
+                <ChartHead title="Top borrowers" subtitle={`Check-outs · ${dayLabel(from)} – ${dayLabel(to)}`} />
+                <BarList data={data.topBorrowers.map((b) => ({ label: b.label, count: b.count }))} />
+              </div>
+              <div className="card chart">
+                <ChartHead title="Most borrowed titles" subtitle={`Check-outs · ${dayLabel(from)} – ${dayLabel(to)}`} />
+                <BarList data={data.topTitles.map((t) => ({ label: t.label, count: t.count }))} />
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      <EbookUsageSection from={from} to={to} />
-      <div className="card">
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <h2>Export reports</h2>
-          <select className="btn" style={{ width: 'auto' }} value={format} aria-label="Export format"
-            onChange={(e) => setFormat(e.target.value as 'xlsx' | 'csv' | 'pdf')}>
-            <option value="xlsx">Excel (.xlsx)</option>
-            <option value="csv">CSV</option>
-            <option value="pdf">PDF</option>
-          </select>
-        </div>
-        <div className="grid cols-3">
-          {EXPORTS.map((x) => (
-            <button key={x.type} className="btn" onClick={() => download(withFormat(`/api/reports/export/${x.type}${qs({ ...(x.ranged ? { from, to } : {}), ...params })}`, format), `${x.type}.${format}`)}>
-              <Icon name="download" />{x.label}</button>
-          ))}
-          <button className="btn" onClick={() => download(withFormat(`/api/attendance/export${qs({ from, to })}`, format), `attendance.${format}`)}><Icon name="download" />Attendance in period</button>
-          <button className="btn" onClick={() => download(withFormat(`/api/gate/export${qs({ from, to })}`, format), `gate.${format}`)}><Icon name="download" />Gate events in period</button>
-          {canMigrate && <button className="btn" title="Imports, rejected rows, totals, privacy note and sign-off lines"
-            onClick={() => download(withFormat('/api/reports/migration', format), `migration-validation.${format}`)}>
-            <Icon name="file-text" />Data migration validation report</button>}
-        </div>
-      </div>
+        )}
+      </>}
+      {tab === 'fines' && data && <div className="stats" style={{ marginBottom: 16 }}>
+        <Stat label={`Fines collected · ${dayLabel(from)} – ${dayLabel(to)}`} value={fmtMoney(data.finesCollected)} />
+      </div>}
+      {tab === 'ebooks' && <EbookUsageSection from={from} to={to} />}
     </>
+  )
+}
+
+/** The current sub-module's downloads, above its figures. */
+function ExportCard({ exports, note, format, setFormat, from, to, params }: {
+  exports: Export[]; note?: string; format: Format; setFormat: (f: Format) => void
+  from: string; to: string; params: Record<string, string>
+}) {
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <h2>Export reports</h2>
+        <select className="btn" style={{ width: 'auto' }} value={format} aria-label="Export format"
+          onChange={(e) => setFormat(e.target.value as Format)}>
+          <option value="xlsx">Excel (.xlsx)</option>
+          <option value="csv">CSV</option>
+          <option value="pdf">PDF</option>
+        </select>
+      </div>
+      {note && <p className="muted small">{note}</p>}
+      <div className="grid cols-3">
+        {exports.map((x) => (
+          <button key={x.file} className="btn" title={x.title}
+            onClick={() => download(withFormat(`${x.path}${qs({ ...(x.ranged ? { from, to } : {}), ...(x.filtered ? params : {}) })}`, format), `${x.file}.${format}`)}>
+            <Icon name={x.icon ?? 'download'} />{x.label}</button>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -120,7 +166,6 @@ function EbookUsageSection({ from, to }: { from: string; to: string }) {
   if (!data) return null
   return (
     <div className="stack" style={{ marginBottom: 16 }}>
-      <h2 style={{ margin: '8px 0 0' }}>E-book usage</h2>
       <div className="stats">
         <Stat label="Openings" value={data.views} />
         <Stat label="Readers" value={data.readers} />
