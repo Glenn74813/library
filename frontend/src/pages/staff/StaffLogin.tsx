@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { login, logout } from '../../api/client'
-import { STAFF_ROLES } from '../../auth/AuthContext'
+import { DESK_ROLES } from '../../auth/AuthContext'
 import { ErrorAlert, Field, PasswordInput } from '../../components/ui'
 import { errorText } from '../../components/Toast'
 import { Logo } from '../../components/Logo'
@@ -22,7 +22,7 @@ export function StaffLogin() {
     setError(null)
     try {
       const user = await login(username, password)
-      if (!user.roles.some((r) => STAFF_ROLES.includes(r))) {
+      if (!user.roles.some((r) => DESK_ROLES.includes(r))) {
         await logout()
         setError('This account is not a staff account. Kiosk accounts sign in from the kiosk screen.')
         return

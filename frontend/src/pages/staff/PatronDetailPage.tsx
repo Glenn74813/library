@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, download, openPdf, qs, releaseHold } from '../../api/client'
 import type { BibRecord, CheckinPreview, CheckinResult, Fine, Hold, Loan, Page, Patron, PatronSummary, Receipt } from '../../api/types'
-import { hasRole, useSession } from '../../auth/AuthContext'
+import { hasRole, PAYMENT_ROLES, useSession } from '../../auth/AuthContext'
 import { PatronFormModal } from '../../components/PatronForm'
 import { BookModal } from '../../components/BookModal'
 import { PatronPhotoModal } from '../../components/PatronPhotoModal'
@@ -25,6 +25,7 @@ export function PatronDetailPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const isLibrarian = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
+  const canPay = hasRole(useSession(), ...PAYMENT_ROLES)
   const [tab, setTab] = useState<Tab>('loans')
   const [editing, setEditing] = useState(false)
   const [pinOpen, setPinOpen] = useState(false)
@@ -299,15 +300,17 @@ export function PatronDetailPage() {
 
         {tab === 'fines' && <div className="stack">
           <div className="row">
-            <button className="btn primary" disabled={!selected.length} onClick={paySelected}>
-              Receive {selected.length ? fmtMoney(selectedTotal) : 'payment'}</button>
-            {unpaid.length > 0 && <button className="btn" onClick={() => setSelected(unpaid.map((f) => f.id))}>Select all unpaid</button>}
+            {canPay ? <>
+              <button className="btn primary" disabled={!selected.length} onClick={paySelected}>
+                Receive {selected.length ? fmtMoney(selectedTotal) : 'payment'}</button>
+              {unpaid.length > 0 && <button className="btn" onClick={() => setSelected(unpaid.map((f) => f.id))}>Select all unpaid</button>}
+            </> : unpaid.length > 0 && <span className="muted small">Unpaid fines are paid at the cashier.</span>}
             <span className="spacer" />
             {isLibrarian && <button className="btn" onClick={() => setCharging(true)}><Icon name="plus" />Add charge</button>}
           </div>
           <Table rows={fines} rowKey={(f) => f.id} empty="No fines" columns={[
-            { header: '', render: (f) => f.status === 'UNPAID' && <input type="checkbox" aria-label="Select fine" checked={selected.includes(f.id)}
-              onChange={(e) => setSelected((sel) => e.target.checked ? [...sel, f.id] : sel.filter((x) => x !== f.id))} /> },
+            ...(canPay ? [{ header: '', render: (f: Fine) => f.status === 'UNPAID' && <input type="checkbox" aria-label="Select fine" checked={selected.includes(f.id)}
+              onChange={(e) => setSelected((sel) => e.target.checked ? [...sel, f.id] : sel.filter((x) => x !== f.id))} /> }] : []),
             { header: 'Date', render: (f) => fmtDate(f.createdAt) },
             { header: 'Reason', render: (f) => f.reason },
             { header: 'Amount', render: (f) => fmtMoney(f.amount) },

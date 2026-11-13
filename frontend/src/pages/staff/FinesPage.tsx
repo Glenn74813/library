@@ -2,30 +2,51 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, qs } from '../../api/client'
 import type { Fine, FineStatus, Page, Receipt } from '../../api/types'
-import { hasRole, useSession } from '../../auth/AuthContext'
+import { hasRole, isCashierOnly, PAYMENT_ROLES, useSession } from '../../auth/AuthContext'
 import { ReceiptModal } from '../../components/ReceiptModal'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Pager, StatusBadge, Table, Tabs, ExportMenu } from '../../components/ui'
 import { fmtDate, fmtMoney, isoDate } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
+import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
 import { useLibrary } from '../../api/library'
 import { CashReportSlip, printRecorded, SlipPreview, type CashReportData } from '../../print/slips'
 
+/**
+ * Fines & payments. The cashier receives payments here: find the patron, tick their unpaid fines and
+ * receive them on one receipt. Library staff see the same lists; charges and waivers stay with librarians.
+ */
 export function FinesPage() {
   const [status, setStatus] = useState<FineStatus | 'ALL'>('UNPAID')
   const [page, setPage] = useState(0)
+  const [q, setQ] = useState('')
+  const dq = useDebounced(q)
+  const [selected, setSelected] = useState<Fine[]>([])
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [reportOpen, setReportOpen] = useState(false)
-  const canWaive = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
+  const session = useSession()
+  const canWaive = hasRole(session, 'ADMIN', 'LIBRARIAN')
+  const canPay = hasRole(session, ...PAYMENT_ROLES)
+  const cashierOnly = isCashierOnly(session)
   const toast = useToast()
   const { data, error, reload } = useAsync(
-    () => api<Page<Fine>>(`/api/fines${qs({ status: status === 'ALL' ? undefined : status, page })}`), [status, page])
+    () => api<Page<Fine>>(`/api/fines${qs({ status: status === 'ALL' ? undefined : status, q: dq.trim() || undefined, page })}`), [status, dq, page])
+  const total = selected.reduce((t, f) => t + f.amount, 0)
 
-  async function pay(f: Fine) {
-    if (!confirm(`Receive ${fmtMoney(f.amount)} from ${f.patronName}?`)) return
+  function toggle(f: Fine, on: boolean) {
+    if (on && selected.length && selected[0].patronId !== f.patronId) {
+      return toast(`One receipt is for one patron: ${selected[0].patronName}'s fines are selected`, 'warn')
+    }
+    setSelected((list) => on ? [...list, f] : list.filter((x) => x.id !== f.id))
+  }
+
+  async function receive(list: Fine[]) {
+    const sum = list.reduce((t, f) => t + f.amount, 0)
+    if (!confirm(`Receive ${fmtMoney(sum)} from ${list[0].patronName} for ${list.length} fine(s)?`)) return
     try {
-      setReceipt(await api<Receipt>('/api/fines/pay', { body: { fineIds: [f.id] } }))
+      setReceipt(await api<Receipt>('/api/fines/pay', { body: { fineIds: list.map((f) => f.id) } }))
+      setSelected([])
       void reload()
     } catch (e) {
       toast(errorText(e), 'error')
@@ -61,20 +82,35 @@ export function FinesPage() {
           <ExportMenu path="/api/reports/export/fines" name="fines" />
         </div>
       </div>
-      <p className="muted small">To pay several fines on one receipt, open the patron's record.</p>
-      <Tabs value={status} onChange={(s) => { setStatus(s); setPage(0) }} tabs={[
+      <p className="muted small">{canPay
+        ? 'Search for the patron, tick their unpaid fines and receive them on one receipt.'
+        : 'Payments are received by the cashier. Charges are added and waived from the patron\'s page.'}</p>
+      <Tabs value={status} onChange={(s) => { setStatus(s); setPage(0); setSelected([]) }} tabs={[
         { id: 'UNPAID', label: 'Unpaid' }, { id: 'PAID', label: 'Paid' }, { id: 'WAIVED', label: 'Waived' }, { id: 'ALL', label: 'All' }]} />
       <ErrorAlert error={error} />
-      <div className="card">
+      <div className="card stack">
+        <div className="row">
+          <input type="search" value={q} onChange={(e) => { setQ(e.target.value); setPage(0) }} style={{ flex: 1, minWidth: 220 }}
+            placeholder="Search by patron name or ID number…" aria-label="Search fines by patron" />
+          {canPay && selected.length > 0 && <>
+            <button className="btn primary" onClick={() => void receive(selected)}><Icon name="credit-card" />
+              Receive {fmtMoney(total)} ({selected.length})</button>
+            <button className="btn" onClick={() => setSelected([])}>Clear</button>
+          </>}
+        </div>
         <Table rows={data?.content} rowKey={(f) => f.id} empty="No fines" columns={[
+          ...(canPay ? [{ header: '', render: (f: Fine) => f.status === 'UNPAID' && <input type="checkbox" aria-label={`Select fine of ${f.patronName}`}
+            checked={selected.some((x) => x.id === f.id)} onChange={(e) => toggle(f, e.target.checked)} /> }] : []),
           { header: 'Date', render: (f) => fmtDate(f.createdAt) },
-          { header: 'Patron', render: (f) => <Link to={`/staff/patrons/${f.patronId}`}>{f.patronName}</Link> },
+          { header: 'Patron', render: (f) => <>{cashierOnly ? <strong>{f.patronName}</strong>
+            : <Link to={`/staff/patrons/${f.patronId}`}>{f.patronName}</Link>}<div className="muted small mono">{f.cardNumber}</div></> },
           { header: 'Reason', render: (f) => f.reason },
           { header: 'Amount', render: (f) => <strong>{fmtMoney(f.amount)}</strong> },
           { header: 'Status', render: (f) => <StatusBadge status={f.status} /> },
           { header: 'Actions', render: (f) => f.status === 'UNPAID' ? (
             <div className="row-actions">
-              <button className="btn small primary" onClick={() => pay(f)}>Receive payment</button>
+              {canPay ? <button className="btn small primary" onClick={() => void receive([f])}>Receive payment</button>
+                : <span className="muted small">Pay at the cashier</span>}
               {canWaive && <button className="btn small" onClick={() => waive(f)}>Waive</button>}
             </div>
           ) : f.receiptNumber ? <button className="btn small" onClick={() => showReceipt(f.receiptNumber!)}>Receipt</button>

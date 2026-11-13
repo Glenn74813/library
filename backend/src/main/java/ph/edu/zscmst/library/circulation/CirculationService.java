@@ -211,7 +211,7 @@ public class CirculationService {
     public CheckinPreview previewCheckin(String itemCode) {
         Item item = items.findByIdentifier(itemCode.trim()).orElseThrow(() -> ApiException.notFound("Item"));
         return loans.findByItemIdAndReturnedAtIsNull(item.getId()).map(l -> {
-            BigDecimal overdue = overdueFine(l.getPatron().getCategory(), overdueDays(l, Instant.now()));
+            BigDecimal overdue = uncharged(l, Instant.now());
             List<FineDto> charges = fines.findByLoanIdAndStatusOrderByIdAsc(l.getId(), FineStatus.UNPAID).stream().map(FineDto::of).toList();
             BigDecimal total = charges.stream().map(FineDto::amount).reduce(overdue, BigDecimal::add);
             return new CheckinPreview(toDto(l), overdue, charges, total);
@@ -375,14 +375,39 @@ public class CirculationService {
         return toDto(loan);
     }
 
-    private BigDecimal assessOverdueFine(Loan loan, Instant returnedAt) {
-        long days = overdueDays(loan, returnedAt);
-        BigDecimal amount = overdueFine(loan.getPatron().getCategory(), days);
+    /**
+     * Charges the overdue fine up to {@code at}, less what was already charged for this loan (e.g. when the
+     * patron paid at the cashier before returning), so no late day is charged twice.
+     */
+    private BigDecimal assessOverdueFine(Loan loan, Instant at) {
+        BigDecimal amount = uncharged(loan, at);
         if (amount.signum() > 0) {
-            fines.save(new Fine(loan.getPatron(), loan, amount,
-                    "Overdue " + days + " day(s): " + loan.getItem().getRecord().getTitle()));
+            long days = overdueDays(loan, at);
+            boolean more = overdueCharged(loan).signum() > 0;
+            fines.save(new Fine(loan.getPatron(), loan, amount, "Overdue " + days + " day(s)" + (more ? ", remaining days" : "")
+                    + ": " + loan.getItem().getRecord().getTitle()));
         }
         return amount;
+    }
+
+    private BigDecimal overdueCharged(Loan loan) {
+        return fines.overdueChargedForLoan(loan.getId());
+    }
+
+    /** Overdue fine for the loan up to {@code at} that has not been charged yet. */
+    private BigDecimal uncharged(Loan loan, Instant at) {
+        BigDecimal total = overdueFine(loan.getPatron().getCategory(), overdueDays(loan, at));
+        return total.subtract(overdueCharged(loan)).max(BigDecimal.ZERO);
+    }
+
+    /** "Send to cashier": charge the overdue fine up to now without returning the book. */
+    @Transactional
+    public CheckinPreview assessOverdueNow(String itemCode) {
+        Item item = items.findByIdentifier(itemCode.trim()).orElseThrow(() -> ApiException.notFound("Item"));
+        Loan loan = loans.findByItemIdAndReturnedAtIsNull(item.getId()).orElseThrow(() -> ApiException.badRequest("Item is not checked out"));
+        BigDecimal charged = assessOverdueFine(loan, Instant.now());
+        if (charged.signum() > 0) audit.record("FINE_OVERDUE_ASSESSED", item.getBarcode() + " PHP " + charged + " (sent to cashier)");
+        return previewCheckin(itemCode);
     }
 
     /** Fine for {@code days} late open days: the category's grace days are free and the total is capped per item. */
@@ -736,8 +761,10 @@ public class CirculationService {
     // ---------------------------------------------------------------- fines
 
     @Transactional(readOnly = true)
-    public Page<FineDto> listFines(FineStatus status, Pageable pageable) {
-        Page<Fine> page = status == null ? fines.findAllByOrderByCreatedAtDesc(pageable)
+    public Page<FineDto> listFines(FineStatus status, String q, Pageable pageable) {
+        String term = q == null ? "" : q.trim().toLowerCase(java.util.Locale.ROOT);
+        Page<Fine> page = !term.isEmpty() ? fines.searchByPatron(status, "%" + term + "%", pageable)
+                : status == null ? fines.findAllByOrderByCreatedAtDesc(pageable)
                 : fines.findByStatusOrderByCreatedAtDesc(status, pageable);
         return page.map(FineDto::of);
     }

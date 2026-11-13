@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { logout } from '../api/client'
-import { hasRole, STAFF_ROLES, useSession } from '../auth/AuthContext'
+import { DESK_ROLES, hasRole, isCashierOnly, STAFF_ROLES, useSession } from '../auth/AuthContext'
 import { Icon, type IconName } from './Icon'
 import { Logo } from './Logo'
 import { NotificationBell } from './NotificationBell'
@@ -20,7 +20,7 @@ const NAV: { section: string; icon: IconName; items: NavItem[] }[] = [
       { to: '/staff/loans', label: 'Loans & overdue' },
       { to: '/staff/renewals', label: 'Renewal requests' },
       { to: '/staff/holds', label: 'Holds' },
-      { to: '/staff/fines', label: 'Fines & payments' },
+      { to: '/staff/fines', label: 'Fines & payments', roles: DESK_ROLES },
     ],
   },
   {
@@ -109,8 +109,12 @@ export function StaffLayout() {
     )
   }
 
-  if (!hasRole(session, ...STAFF_ROLES)) {
+  if (!hasRole(session, ...DESK_ROLES)) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  }
+  // The cashier only works on fines and payments (and their own account).
+  if (isCashierOnly(session) && !location.pathname.startsWith('/staff/fines') && location.pathname !== '/staff/account') {
+    return <Navigate to="/staff/fines" replace />
   }
   if (session?.user.mustChangePassword && location.pathname !== '/staff/account') {
     return <Navigate to="/staff/account" replace />
@@ -129,7 +133,8 @@ export function StaffLayout() {
         </div>
         <nav className="nav">
           {NAV.map((group) => {
-            const items = group.items.filter((i) => !i.roles || hasRole(session, ...i.roles))
+            // Items without roles are for library staff (not the cashier).
+            const items = group.items.filter((i) => hasRole(session, ...(i.roles ?? STAFF_ROLES)))
             if (!items.length) return null
             return (
               <div key={group.section} style={{ display: 'contents' }}>
@@ -140,11 +145,13 @@ export function StaffLayout() {
               </div>
             )
           })}
-          {sectionHead(PUBLIC_SECTION, 'monitor')}
-          {!collapsed.includes(PUBLIC_SECTION) && <>
-            <NavLink to="/opac" target="_blank">OPAC kiosk</NavLink>
-            <NavLink to="/kiosk/attendance" target="_blank">Attendance kiosk</NavLink>
-            <NavLink to="/kiosk/selfcheck" target="_blank">Self-checkout kiosk</NavLink>
+          {!isCashierOnly(session) && <>
+            {sectionHead(PUBLIC_SECTION, 'monitor')}
+            {!collapsed.includes(PUBLIC_SECTION) && <>
+              <NavLink to="/opac" target="_blank">OPAC kiosk</NavLink>
+              <NavLink to="/kiosk/attendance" target="_blank">Attendance kiosk</NavLink>
+              <NavLink to="/kiosk/selfcheck" target="_blank">Self-checkout kiosk</NavLink>
+            </>}
           </>}
         </nav>
         <div className="user-block">
@@ -160,7 +167,7 @@ export function StaffLayout() {
         <header className="topbar">
           <button className="icon-btn menu-btn" aria-label="Open menu" onClick={() => setOpen(true)}><Icon name="menu" /></button>
           <Logo /><span className="brand">{lib.systemName}</span>
-          <NotificationBell />
+          {!isCashierOnly(session) && <NotificationBell />}
         </header>
         <main className="main">
           <Outlet />

@@ -31,3 +31,9 @@ export function hasRole(session: Session | null, ...roles: string[]) {
 }
 
 export const STAFF_ROLES = ['ADMIN', 'LIBRARIAN', 'STAFF']
+/** Everyone who signs in to the staff side: library staff plus the cashier (who only sees fines and payments). */
+export const DESK_ROLES = [...STAFF_ROLES, 'CASHIER']
+/** Who receives payments: the cashier, with the administrator as a fallback. */
+export const PAYMENT_ROLES = ['CASHIER', 'ADMIN']
+/** A cashier-only account: limited to the payment screens. */
+export const isCashierOnly = (s: Session | null) => hasRole(s, 'CASHIER') && !hasRole(s, ...STAFF_ROLES)

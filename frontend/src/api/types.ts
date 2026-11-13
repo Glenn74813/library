@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'LIBRARIAN' | 'STAFF' | 'KIOSK' | 'GATE'
+export type Role = 'ADMIN' | 'LIBRARIAN' | 'STAFF' | 'CASHIER' | 'KIOSK' | 'GATE'
 
 export interface Principal {
   subject: string

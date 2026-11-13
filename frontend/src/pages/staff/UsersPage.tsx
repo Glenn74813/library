@@ -11,6 +11,7 @@ const STAFF_ROLES: { id: Role; text: string }[] = [
   { id: 'ADMIN', text: 'Administrator — everything incl. users & audit' },
   { id: 'LIBRARIAN', text: 'Librarian — overrides, waivers, settings' },
   { id: 'STAFF', text: 'Staff / student assistant — circulation & cataloging' },
+  { id: 'CASHIER', text: 'Cashier — receives fine payments; sees only Fines & payments' },
 ]
 
 const DEVICE_TYPES: { id: Role; title: string; text: string }[] = [

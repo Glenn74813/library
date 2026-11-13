@@ -47,8 +47,10 @@ No scanner? Click the **camera** button next to any scan box to use the PC's or 
 *Return to Fiction Section · Aisle 3 · Shelf 2*, or *Place on hold shelf for (name)*.
 **A book with fines is only taken back once they are cleared.** If the item is overdue, or has a charge
 linked to that borrowing (e.g. damage), a window lists them with the total: **Receive and return** pays
-them on one receipt and completes the return; **Waive…** (librarian or admin, with a reason) clears them;
-**Cancel** leaves the book on loan. Overdue fines count only days the library was open. The patron's page
+them on one receipt and completes the return (cashier or admin only); other staff press **Send to cashier**,
+which charges the overdue fine up to today while the book stays on loan: the patron pays at the cashier,
+then scan the book again and the return completes (late days already charged are never charged again).
+**Waive…** (librarian or admin, with a reason) clears them; **Cancel** leaves the book on loan. Overdue fines count only days the library was open. The patron's page
 (Loans → **Return**) works the same way. Returns saved while the desk is offline are not held up.
 
 ### 1.5 When the network or server is down (offline desk)
@@ -112,7 +114,13 @@ bookings; a red note means it can't be renewed any more (e.g. someone reserved t
 - A request made before the due date can still be approved after it.
 
 ### 1.7 Fines and payments
-**Circulation → Fines & payments**: select unpaid fines and **Pay** to print a payment receipt (the library issues the official receipt)
+**Payments are received by the cashier** (a user with the **Cashier** role; the administrator can too).
+The cashier signs in at the staff login and sees only **Fines & payments**: search for the patron by name
+or ID number, tick their unpaid fines and **Receive** them on one receipt, reprint receipts, and print the
+**End-of-day report**. Other staff see the fines but not the payment buttons ("Pay at the cashier").
+Adding charges and waiving stay with the library (librarians and admins).
+
+**Circulation → Fines & payments**: select unpaid fines and **Receive** to print a payment receipt (the library issues the official receipt)
 (reprint any time), or **Waive** with a reason (librarian). **Add charge** on the patron's Fines tab opens
 a form: choose the borrowing it is for (a book on loan now or one already returned) or a general charge,
 the reason (damaged book, water damage, missing barcode, replacement library ID, other) and the amount. A

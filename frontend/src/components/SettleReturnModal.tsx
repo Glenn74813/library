@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 import type { CheckinPreview, CheckinResult } from '../api/types'
-import { hasRole, useSession } from '../auth/AuthContext'
+import { hasRole, PAYMENT_ROLES, useSession } from '../auth/AuthContext'
 import { fmtDate, fmtMoney } from '../format'
 import { Icon } from './Icon'
 import { errorText } from './Toast'
@@ -9,18 +9,34 @@ import { ErrorAlert, Field, Modal } from './ui'
 
 /**
  * A return that has fines tied to the borrowing (the overdue fine it charges now, plus charges such as
- * damage already linked to it). The return completes only when they are paid, on one receipt, or waived
- * by a librarian or administrator; cancelling leaves the book on loan.
+ * damage already linked to it). The return completes only when they are cleared. The cashier (or admin)
+ * receives them here on one receipt; other staff "send to cashier", which charges the overdue fine up to
+ * today, and scan the book again once it is paid. Librarians and admins can waive; cancel keeps it on loan.
  */
 export function SettleReturnModal({ item, preview, onDone, onCancel }: {
   item: string; preview: CheckinPreview; onDone: (r: CheckinResult) => void; onCancel: () => void
 }) {
-  const canWaive = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
+  const session = useSession()
+  const canWaive = hasRole(session, 'ADMIN', 'LIBRARIAN')
+  const canPay = hasRole(session, ...PAYMENT_ROLES)
+  const [sent, setSent] = useState<CheckinPreview | null>(null)
   const [waiving, setWaiving] = useState(false)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const l = preview.loan
+
+  async function sendToCashier() {
+    setBusy(true)
+    setError(null)
+    try {
+      setSent(await api<CheckinPreview>('/api/circulation/checkin/assess', { body: { item } }))
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function settle(how: 'PAY' | 'WAIVE') {
     setBusy(true)
@@ -41,7 +57,9 @@ export function SettleReturnModal({ item, preview, onDone, onCancel }: {
       {canWaive && !waiving && <button className="btn" disabled={busy} onClick={() => setWaiving(true)}>Waive…</button>}
       {waiving
         ? <button className="btn danger" disabled={busy || !reason.trim()} onClick={() => void settle('WAIVE')}>Waive and return</button>
-        : <button className="btn primary" disabled={busy} onClick={() => void settle('PAY')}><Icon name="credit-card" />Receive {fmtMoney(preview.total)} and return</button>}
+        : canPay ? <button className="btn primary" disabled={busy} onClick={() => void settle('PAY')}><Icon name="credit-card" />Receive {fmtMoney(preview.total)} and return</button>
+        : sent ? <button className="btn primary" onClick={onCancel}>Done</button>
+        : <button className="btn primary" disabled={busy} onClick={() => void sendToCashier()}><Icon name="credit-card" />Send to cashier</button>}
     </>}>
       <div className="stack">
         <ErrorAlert error={error} />
@@ -57,6 +75,10 @@ export function SettleReturnModal({ item, preview, onDone, onCancel }: {
             <tr><td><strong>Total to settle</strong></td><td className="nowrap" style={{ textAlign: 'right' }}><strong>{fmtMoney(preview.total)}</strong></td></tr>
           </tbody>
         </table>
+        {sent && <div className="alert success">
+          <strong>Sent to the cashier.</strong> Ask {l?.patronName ?? 'the patron'} to pay <strong>{fmtMoney(sent.charges.reduce((t, c) => t + c.amount, 0))}</strong> at
+          the cashier (ID number {l?.cardNumber}). The book stays on loan; once it is paid, scan it again to complete the return.
+        </div>}
         {waiving && <Field label="Reason for waiving *"><input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} autoFocus /></Field>}
       </div>
     </Modal>

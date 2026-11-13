@@ -61,6 +61,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/gate/device/**").hasAnyRole("GATE", "ADMIN")
                         .requestMatchers("/api/me/**").hasRole("PATRON")
                         .requestMatchers("/api/users/**", "/api/audit/**").hasRole("ADMIN")
+                        // Payments are received by the cashier (admin as a fallback); the cashier sees only fines,
+                        // receipts and the end-of-day report, and logs the receipts it prints.
+                        .requestMatchers(HttpMethod.POST, "/api/fines/pay").hasAnyRole("CASHIER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/fines", "/api/fines/receipts/**", "/api/fines/cash-report",
+                                "/api/fines/patron/**", "/api/reports/export/fines").hasAnyRole("CASHIER", "ADMIN", "LIBRARIAN", "STAFF")
+                        .requestMatchers(HttpMethod.POST, "/api/print-log").hasAnyRole("CASHIER", "ADMIN", "LIBRARIAN", "STAFF")
+                        .requestMatchers(HttpMethod.GET, "/api/print-log/document").hasAnyRole("CASHIER", "ADMIN", "LIBRARIAN", "STAFF")
                         .requestMatchers("/api/**").hasAnyRole(STAFF)
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(o -> o.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));

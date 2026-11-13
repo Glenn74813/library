@@ -61,8 +61,11 @@ public class CirculationController {
     /** Overdue returns must be settled: see {@link CirculationService#checkinSettled}. Waiving needs a librarian or admin. */
     @PostMapping("/circulation/checkin")
     public CheckinResult checkin(@Valid @RequestBody CheckinRequest req) {
-        if (req.settle() == Settle.WAIVE && !canWaive()) {
+        if (req.settle() == Settle.WAIVE && !hasAny("ROLE_ADMIN", "ROLE_LIBRARIAN")) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only a librarian or administrator can waive a fine");
+        }
+        if (req.settle() == Settle.PAY && !hasAny("ROLE_CASHIER", "ROLE_ADMIN")) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Payments are received by the cashier. Use Send to cashier.");
         }
         return service.checkinSettled(req.item(), req.settle(), req.waiveReason());
     }
@@ -73,10 +76,18 @@ public class CirculationController {
         return service.previewCheckin(item);
     }
 
-    private static boolean canWaive() {
+    /**
+     * Charges the overdue fine up to today without returning the book, so the patron can pay it at the
+     * cashier; after payment the return completes (days already charged are never charged again).
+     */
+    @PostMapping("/circulation/checkin/assess")
+    public CheckinPreview assessForCashier(@Valid @RequestBody CheckinRequest req) {
+        return service.assessOverdueNow(req.item());
+    }
+
+    private static boolean hasAny(String... roles) {
         var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        return auth != null && auth.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_LIBRARIAN"));
+        return auth != null && auth.getAuthorities().stream().anyMatch(a -> java.util.Arrays.asList(roles).contains(a.getAuthority()));
     }
 
     @PostMapping("/circulation/loans/{id}/renew")
@@ -144,9 +155,10 @@ public class CirculationController {
 
     @GetMapping("/fines")
     public PageResponse<FineDto> fines(@RequestParam(required = false) FineStatus status,
+                                       @RequestParam(defaultValue = "") String q,
                                        @RequestParam(defaultValue = "0") int page,
                                        @RequestParam(defaultValue = "20") int size) {
-        return PageResponse.of(service.listFines(status, PageRequest.of(page, Math.min(size, 100))), f -> f);
+        return PageResponse.of(service.listFines(status, q, PageRequest.of(page, Math.min(size, 100))), f -> f);
     }
 
     @GetMapping("/fines/patron/{patronId}")
