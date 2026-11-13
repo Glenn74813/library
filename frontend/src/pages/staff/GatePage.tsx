@@ -17,7 +17,7 @@ const TYPES: GateEventType[] = ['ALARM', 'TAMPER', 'POWER_LOSS', 'POWER_RESTORED
 
 export function GatePage() {
   const canEdit = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
-  const [tab, setTab] = useState<'control' | 'broadcast' | 'voice' | 'events'>('control')
+  const [tab, setTab] = useState<'control' | 'voice' | 'events'>('control')
   const [type, setType] = useState('')
   const [from, setFrom] = useState(daysAgo(6))
   const [to, setTo] = useState(isoDate())
@@ -74,13 +74,12 @@ export function GatePage() {
         </div>
       )}
       <Tabs value={tab} onChange={setTab} tabs={[
-        { id: 'control', label: 'Gate control & device health' },
-        { id: 'broadcast', label: 'Announcement broadcast' },
+        { id: 'control', label: 'Gate control & broadcast' },
         { id: 'voice', label: 'Announcement voice' },
         { id: 'events', label: 'Event log' },
       ]} />
-      {tab === 'control' && (
-        <div className="card stack" style={{ marginBottom: 16 }}>
+      {tab === 'control' && <div className="grid cols-2" style={{ marginBottom: 16 }}>
+        <div className="card stack">
           <h2>Gate control & device health</h2>
           {summary && <AlarmSchedule config={summary.config} canEdit={canEdit} onSaved={() => void reloadSummary()} />}
           {summary?.gates.length ? summary.gates.map((g) => (
@@ -96,9 +95,7 @@ export function GatePage() {
             </div>
           )}
         </div>
-      )}
-      {tab === 'broadcast' && (
-        <div className="card stack" style={{ marginBottom: 16 }}>
+        <div className="card stack">
           <h2>Announcement broadcast</h2>
           <p className="muted small">Shows on every library kiosk/display and is read aloud (text-to-speech).</p>
           <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="e.g. Earthquake drill: please proceed calmly to the nearest exit." />
@@ -119,7 +116,7 @@ export function GatePage() {
             </div>
           ) : <p className="muted small" style={{ margin: 0 }}>No presets yet.</p>}
         </div>
-      )}
+      </div>}
       {tab === 'voice' && <VoiceCard canEdit={canEdit} />}
       {managing && presets && <PresetsModal value={presets} onClose={() => { setManaging(false); void reloadPresets() }}
         onSaved={(p) => { setPresets(p); setManaging(false) }} />}
