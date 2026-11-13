@@ -28,7 +28,8 @@ public final class PatronDtos {
         }
     }
 
-    public record PatronRequest(@NotBlank @Size(max = 40) String cardNumber,
+    /** {@code cardNumber}: blank on a new patron means "assign the next library ID number" (e.g. 2026-0002). */
+    public record PatronRequest(@Size(max = 40) String cardNumber,
                                 @Size(max = 64) String rfidUid,
                                 @NotBlank @Size(max = 80) String firstName,
                                 @NotBlank @Size(max = 80) String lastName,

@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.common.Csv;
+import ph.edu.zscmst.library.common.LibraryClock;
 import ph.edu.zscmst.library.patron.PatronDtos.ImportResult;
 import ph.edu.zscmst.library.patron.PatronDtos.PatronRequest;
 import ph.edu.zscmst.library.privacy.PrivacyService;
@@ -30,9 +32,14 @@ public class PatronService {
     private final PasswordEncoder passwordEncoder;
     private final AuditService audit;
     private final TokenService tokens;
+    private final JdbcTemplate jdbc;
+    private final LibraryClock clock;
 
     public PatronService(PatronRepository patrons, PatronCategoryRepository categories, CourseRepository courses,
-                         PasswordEncoder passwordEncoder, AuditService audit, TokenService tokens) {
+                         PasswordEncoder passwordEncoder, AuditService audit, TokenService tokens,
+                         JdbcTemplate jdbc, LibraryClock clock) {
+        this.jdbc = jdbc;
+        this.clock = clock;
         this.tokens = tokens;
         this.patrons = patrons;
         this.categories = categories;
@@ -67,7 +74,8 @@ public class PatronService {
 
     @Transactional
     public Patron create(PatronRequest req) {
-        Patron p = new Patron(req.cardNumber().trim());
+        String card = req.cardNumber() == null || req.cardNumber().isBlank() ? nextCardNumber() : req.cardNumber().trim();
+        Patron p = new Patron(card);
         apply(p, req);
         checkCodesFree(p);
         Patron saved = patrons.save(p);
@@ -78,7 +86,8 @@ public class PatronService {
     @Transactional
     public Patron update(Long id, PatronRequest req) {
         Patron p = editable(id);
-        p.setCardNumber(req.cardNumber().trim());
+        // The ID number is printed on the patron's library ID: it only changes when a new one is given.
+        if (req.cardNumber() != null && !req.cardNumber().isBlank()) p.setCardNumber(req.cardNumber().trim());
         apply(p, req);
         checkCodesFree(p);
         audit.record("PATRON_UPDATE", p.getCardNumber() + " blocked=" + p.isBlocked());
@@ -93,6 +102,23 @@ public class PatronService {
         // A new PIN from the desk (e.g. the old one was shared) ends the patron's existing sessions.
         tokens.revokeAll(TokenService.SubjectType.PATRON, p.getId());
         audit.record("PATRON_PIN_SET", p.getCardNumber());
+    }
+
+    /**
+     * The next library ID number for a patron registered without one: this year and the next free number
+     * (2026-0001, 2026-0002, ...), following the numbers already used this year. Two desks registering at
+     * the same moment take turns, so they never get the same number.
+     */
+    private String nextCardNumber() {
+        jdbc.queryForObject("select pg_advisory_xact_lock(hashtext('patron-card-number'))::text", String.class);
+        String year = String.valueOf(clock.today().getYear());
+        Integer max = jdbc.queryForObject("""
+                select coalesce(max(substring(card_number from 6)::int), 0) from patron
+                where card_number ~ ('^' || ? || '-[0-9]{1,8}$')""", Integer.class, year);
+        for (int n = (max == null ? 0 : max) + 1; ; n++) {
+            String card = year + "-" + String.format("%04d", n);
+            if (patrons.idsUsingCode(card).isEmpty()) return card;
+        }
     }
 
     /** A card number or RFID UID may not match (in any case) another patron's card or RFID: scans must find one patron. */

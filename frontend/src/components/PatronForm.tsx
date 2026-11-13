@@ -32,7 +32,7 @@ export function PatronFormModal({ patron, onClose, onSaved }: {
       const saved = patron
         ? await api<Patron>(`/api/patrons/${patron.id}`, { method: 'PUT', body })
         : await api<Patron>('/api/patrons', { body })
-      toast('Patron saved')
+      toast(!patron && !f.cardNumber.trim() ? `Patron registered with library ID number ${saved.cardNumber}` : 'Patron saved')
       onSaved(saved)
     } catch (e) {
       setError(errorText(e))
@@ -45,7 +45,9 @@ export function PatronFormModal({ patron, onClose, onSaved }: {
       <div className="stack">
         <ErrorAlert error={error} />
         <div className="form-grid">
-          <Field label="Library ID number *"><input className="mono" value={f.cardNumber} onChange={(e) => set('cardNumber', e.target.value)} autoFocus /></Field>
+          <Field label={patron ? 'Library ID number *' : 'Library ID number'} hint={patron ? undefined : 'Leave empty to assign the next number'}>
+            <input className="mono" value={f.cardNumber} onChange={(e) => set('cardNumber', e.target.value)} autoFocus
+              placeholder={patron ? undefined : 'Assigned when saved'} /></Field>
           <Field label="RFID tag UID" hint="Tap the library ID on the reader"><input className="mono" value={f.rfidUid} onChange={(e) => set('rfidUid', e.target.value)} /></Field>
           <Field label="First name *"><input value={f.firstName} onChange={(e) => set('firstName', e.target.value)} /></Field>
           <Field label="Last name *"><input value={f.lastName} onChange={(e) => set('lastName', e.target.value)} /></Field>
