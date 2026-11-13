@@ -19,7 +19,7 @@ public class PrintLogService {
     public enum Kind {
         ID_CARD("Library ID"), CARD_SLIP("Card slip"), PIN_SLIP("PIN slip"), CLEARANCE("Library clearance"),
         CHECKOUT_SLIP("Borrowing slip"), RETURN_SLIP("Return slip"), HOLD_SLIP("Hold shelf slip"),
-        RECEIPT("Official receipt"), CASH_REPORT("End-of-day report");
+        RECEIPT("Payment receipt"), CASH_REPORT("End-of-day report");
 
         public final String label;
 

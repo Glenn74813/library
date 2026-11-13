@@ -70,12 +70,12 @@ The 80 mm receipt printer prints these slips (only the slip prints, sized to its
 | Hold shelf slip (card no. and initials, pickup-by date) | Check in → **Print hold slip** when a returned copy is set aside for a reservation; put it in the book |
 | PIN slip | When staff set or reset a patron's PIN (the library ID is the only card; print it from **Print… → Library ID**) |
 | Library clearance (reference no. + QR) | Patron page → **Print… → Library clearance…** (only with nothing on loan and no unpaid fines). Check one with **Patrons → Verify clearance** |
-| Official receipt | When fines are paid, or **Receipt** on the Fines page |
+| Payment receipt (marked "Not an official receipt") | When fines are paid, or **Receipt** on the Fines page |
 | End-of-day collection report | **Fines & payments → End-of-day report** |
 
 Nothing prints by itself: staff check the details on screen, then press the print button. Releasing a hold shows the loan with a **Print receipt** button.
 
-**Print log.** Every slip, official receipt, clearance and library ID that is printed is recorded with who printed it and when.
+**Print log.** Every slip, payment receipt, clearance and library ID that is printed is recorded with who printed it and when.
 - Each patron's page has a **Printed** tab (also **Print… → Print history**) listing everything printed for them.
 - **Security & reports → Print log** lists all prints, filterable by document, date and **Reprints only**.
 - Printing a library ID that was printed before asks first, showing when and by whom. A clearance shows the clearances already issued.
@@ -108,7 +108,7 @@ bookings; a red note means it can't be renewed any more (e.g. someone reserved t
 - A request made before the due date can still be approved after it.
 
 ### 1.7 Fines and payments
-**Circulation → Fines & payments**: select unpaid fines and **Pay** to issue an official receipt
+**Circulation → Fines & payments**: select unpaid fines and **Pay** to print a payment receipt (the library issues the official receipt)
 (reprint any time), or **Waive** with a reason (librarian). Manual charges (damaged item, lost card)
 can be added from the patron's page.
 

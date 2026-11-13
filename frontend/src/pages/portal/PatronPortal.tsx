@@ -194,7 +194,7 @@ function FinesTab() {
   const { data } = useAsync(() => api<Fine[]>('/api/me/fines'), [])
   return (
     <div className="card">
-      <p className="muted small" style={{ marginTop: 0 }}>Pay fines at the circulation desk; you will receive an official receipt.</p>
+      <p className="muted small" style={{ marginTop: 0 }}>Pay fines at the circulation desk. The printed payment receipt is not an official receipt; ask the library for one.</p>
       <Table rows={data} rowKey={(f) => f.id} empty="No fines" columns={[
         { header: 'Date', render: (f) => fmtDate(f.createdAt) },
         { header: 'Reason', render: (f) => f.reason },

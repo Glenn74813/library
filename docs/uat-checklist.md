@@ -50,7 +50,7 @@ Tester(s): ______________________  Date: ____________  Version / build: ________
 | D5 | Check out a room-use-only item | Refused (override possible) | | |
 | D6 | Renew at desk and in `/my` | New due date; refused when overdue or at limit | | |
 | D7 | Return an overdue item | Fine = open days late × rate; shelf location shown | | |
-| D8 | Pay fines; reprint the receipt | Official receipt number; fines marked paid | | |
+| D8 | Pay fines; reprint the receipt | Payment receipt number, marked "Not an official receipt"; fines marked paid | | |
 | D9 | Waive a fine with reason (librarian) | Fine waived; audit entry | | |
 | D10 | Mark an item lost with a charge | Replacement fine added; item LOST | | |
 

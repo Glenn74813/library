@@ -65,7 +65,7 @@ public class PrintLogController {
         return log.forPatron(id);
     }
 
-    /** Earlier copies of one document, e.g. before reprinting an official receipt. */
+    /** Earlier copies of one document, e.g. before reprinting a payment receipt. */
     @GetMapping("/api/print-log/document")
     public List<Entry> forDocument(@RequestParam Kind kind, @RequestParam String reference) {
         return log.forDocument(kind, reference.trim());

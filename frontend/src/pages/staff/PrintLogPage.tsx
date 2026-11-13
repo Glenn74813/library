@@ -9,7 +9,7 @@ import { useDebounced } from '../../hooks/useDebounced'
 import type { PrintEntry, PrintKind } from '../../print/slips'
 
 const KINDS: [PrintKind, string][] = [
-  ['RECEIPT', 'Official receipts'], ['CLEARANCE', 'Library clearances'], ['ID_CARD', 'Library IDs'],
+  ['RECEIPT', 'Payment receipts'], ['CLEARANCE', 'Library clearances'], ['ID_CARD', 'Library IDs'],
   ['CARD_SLIP', 'Card slips (no longer printed)'], ['PIN_SLIP', 'PIN slips'], ['CHECKOUT_SLIP', 'Borrowing slips'],
   ['RETURN_SLIP', 'Return slips'], ['HOLD_SLIP', 'Hold shelf slips'], ['CASH_REPORT', 'End-of-day reports'],
 ]

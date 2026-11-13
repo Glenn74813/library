@@ -339,13 +339,14 @@ export function CashReportSlip({ lib, r }: { lib: LibraryProfile; r: CashReportD
   )
 }
 
-/** Official receipt for fine payments. */
+/** Payment receipt for fines. It is not the official receipt (that comes from the library), and says so. */
 export function OfficialReceiptSlip({ lib, receipt }: { lib: LibraryProfile; receipt: Receipt }) {
   return (
-    <Slip lib={lib} title="Official receipt" footer={<>
+    <Slip lib={lib} title="Payment receipt" footer={<>
       {lib.receiptFooter && <div className="c small" style={{ whiteSpace: 'pre-line' }}>{lib.receiptFooter}</div>}
       <hr />
     </>}>
+      <div className="box c"><b>Not an official receipt.</b><br />Please ask the library for one.</div>
       {lib.receiptHeader && <div className="c small" style={{ whiteSpace: 'pre-line' }}>{lib.receiptHeader}<hr /></div>}
       <Row label="Receipt no." value={<b className="mono">{receipt.receiptNumber}</b>} />
       <Row label="Date" value={fmtDateTime(receipt.paidAt)} />
