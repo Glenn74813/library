@@ -32,7 +32,11 @@ export function Table<T>({ columns, rows, rowKey, onRowClick, empty = 'Nothing t
           ) : (
             rows.map((row) => (
               <tr key={rowKey(row)} className={onRowClick ? 'clickable' : undefined}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}>
+                onClick={onRowClick ? (e) => {
+                  // Buttons, links and fields inside a row do their own thing; only the rest opens the row.
+                  if ((e.target as HTMLElement).closest('button, a, input, select, textarea, label, .no-row-click')) return
+                  onRowClick(row)
+                } : undefined}>
                 {columns.map((c) => (
                   <td key={c.header} data-label={c.header} className={c.className}><div className="cell">{c.render(row)}</div></td>
                 ))}

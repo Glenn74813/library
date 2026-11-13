@@ -32,7 +32,10 @@ export function RecordPage({ edit = false }: { edit?: boolean }) {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const canDelete = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
+  const session = useSession()
+  const canDelete = hasRole(session, 'ADMIN', 'LIBRARIAN')
+  // Deleting a whole catalog record is for librarians only.
+  const canDeleteRecord = hasRole(session, 'LIBRARIAN')
   const [form, setForm] = useState<RecordForm>(EMPTY)
   const [items, setItems] = useState<Item[]>([])
   const [onLoan, setOnLoan] = useState<Map<number, Loan>>(new Map())
@@ -136,7 +139,7 @@ export function RecordPage({ edit = false }: { edit?: boolean }) {
           <button className="btn" onClick={() => navigate(edit ? `/staff/catalog/${id}` : '/staff/catalog')}><Icon name="chevron-left" />Back</button>
           {!editing && <button className="btn" onClick={() => setEditingItem(NEW_COPY)}><Icon name="plus" />Add copy</button>}
           {!editing && <button className="btn" onClick={() => navigate(`/staff/catalog/${id}/edit`)}><Icon name="edit-2" />Edit</button>}
-          {!isNew && canDelete && <button className="btn danger" onClick={remove}><Icon name="trash-2" />Delete</button>}
+          {!isNew && canDeleteRecord && <button className="btn danger" onClick={remove}><Icon name="trash-2" />Delete</button>}
         </div>
       </div>
       {!editing && <RecordSummary form={form} fieldDefs={fieldDefs ?? []} error={error} />}
@@ -319,8 +322,9 @@ function itemBody(i: Partial<Item>) {
     acquiredDate: i.acquiredDate || null, price: i.price ?? null, notes: i.notes }
 }
 
-function ItemModal({ recordId, item, canDelete, others, onClose, onSaved }: {
-  recordId: number; item: Partial<Item>; canDelete: boolean; others: Item[]; onClose: () => void; onSaved: () => void
+/** Add or edit one copy (also opened from the catalog list's Add copy button, with that title in {@code title}). */
+export function ItemModal({ recordId, item, canDelete, others, title, onClose, onSaved }: {
+  recordId: number; item: Partial<Item>; canDelete: boolean; others: Item[]; title?: string; onClose: () => void; onSaved: () => void
 }) {
   const [f, setF] = useState<Partial<Item>>(item)
   const [applyAll, setApplyAll] = useState(false)
@@ -366,7 +370,7 @@ function ItemModal({ recordId, item, canDelete, others, onClose, onSaved }: {
   }
 
   return (
-    <Modal title={item.id ? `Copy ${item.barcode}` : 'Add copy'} onClose={onClose} footer={<>
+    <Modal title={item.id ? `Copy ${item.barcode}` : title ?? 'Add copy'} onClose={onClose} footer={<>
       {item.id && canDelete && <button className="btn danger" onClick={remove}>Delete</button>}
       <span className="spacer" />
       <button className="btn" onClick={onClose}>Cancel</button>

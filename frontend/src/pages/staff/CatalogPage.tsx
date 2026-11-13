@@ -11,6 +11,7 @@ import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
 import { CameraScanButton } from '../../components/CameraScan'
+import { ItemModal } from './RecordPage'
 
 export function CatalogPage() {
   const [q, setQ] = useState('')
@@ -19,7 +20,10 @@ export function CatalogPage() {
   const [page, setPage] = useState(0)
   const dq = useDebounced(q)
   const navigate = useNavigate()
-  const canImport = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
+  const session = useSession()
+  const canImport = hasRole(session, 'ADMIN', 'LIBRARIAN')
+  const canDeleteRecord = hasRole(session, 'LIBRARIAN')
+  const [addingTo, setAddingTo] = useState<BibRecord | null>(null)
   const [importing, setImporting] = useState(false)
   const toast = useToast()
   const { data, error, reload } = useAsync(
@@ -86,17 +90,20 @@ export function CatalogPage() {
             { header: 'Available', render: (r) => <span className={`badge ${r.availableCopies ? 'ok' : r.totalCopies ? 'warn' : ''}`}>
               {r.availableCopies} / {r.totalCopies}</span> },
             // Row click opens the title (copies and borrowing history); these act on it directly.
-            { header: 'Actions', render: (r) => <span className="row-actions icon-actions" onClick={(e) => e.stopPropagation()}>
+            { header: 'Actions', className: 'no-row-click', render: (r) => <span className="row-actions icon-actions" onClick={(e) => e.stopPropagation()}>
               <button className="btn small icon" title="Add copy" aria-label={`Add a copy of ${r.title}`}
-                onClick={() => navigate(`/staff/catalog/${r.id}?addCopy=1`)}><Icon name="plus" /></button>
+                onClick={() => setAddingTo(r)}><Icon name="plus" /></button>
               <button className="btn small icon" title="Edit record" aria-label={`Edit ${r.title}`}
                 onClick={() => navigate(`/staff/catalog/${r.id}/edit`)}><Icon name="edit-2" /></button>
-              {canImport && <button className="btn small icon danger" title="Delete record" aria-label={`Delete ${r.title}`}
+              {canDeleteRecord && <button className="btn small icon danger" title="Delete record" aria-label={`Delete ${r.title}`}
                 onClick={() => void remove(r)}><Icon name="trash-2" /></button>}
             </span> },
           ]} />
         <Pager page={data} onPage={setPage} />
       </div>
+      {addingTo && <ItemModal recordId={addingTo.id} item={{ status: 'AVAILABLE' }} canDelete={false} others={[]}
+        title={`Add a copy of “${addingTo.title}”`}
+        onClose={() => setAddingTo(null)} onSaved={() => { setAddingTo(null); void reload() }} />}
       {importing && <ImportCatalogModal onClose={() => setImporting(false)} onDone={() => setPage(0)} />}
     </>
   )

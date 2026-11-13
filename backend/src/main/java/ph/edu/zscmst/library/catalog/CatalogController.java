@@ -66,9 +66,10 @@ public class CatalogController {
         return service.updateRecord(id, req);
     }
 
+    /** Only a librarian deletes catalog records (with all their copies). */
     @DeleteMapping("/records/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('ADMIN','LIBRARIAN')")
+    @PreAuthorize("hasRole('LIBRARIAN')")
     public void delete(@PathVariable Long id) {
         service.deleteRecord(id);
     }
