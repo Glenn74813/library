@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
+import ph.edu.zscmst.library.calendar.ClosedDay;
+import ph.edu.zscmst.library.calendar.ClosedDayRepository;
 import ph.edu.zscmst.library.calendar.LibraryCalendar;
 import ph.edu.zscmst.library.catalog.BibRecord;
 import ph.edu.zscmst.library.catalog.BibRecordRepository;
@@ -26,6 +28,7 @@ import ph.edu.zscmst.library.catalog.MaterialType;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckinResult;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckoutResult;
 import ph.edu.zscmst.library.circulation.CirculationDtos.HoldDto;
+import ph.edu.zscmst.library.circulation.CirculationDtos.Settle;
 import ph.edu.zscmst.library.circulation.CirculationService;
 import ph.edu.zscmst.library.circulation.HoldStatus;
 import ph.edu.zscmst.library.common.ApiException;
@@ -46,6 +49,7 @@ class CirculationRulesTest extends IntegrationTest {
     @Autowired ItemRepository items;
     @Autowired LibraryCalendar calendar;
     @Autowired LibraryClock clock;
+    @Autowired ClosedDayRepository closedDays;
 
     PatronCategory category;
 
@@ -170,5 +174,41 @@ class CirculationRulesTest extends IntegrationTest {
         ref.setRoomUseOnly(true);
         ApiException e = assertThrows(ApiException.class, () -> circulation.checkout(p.getCardNumber(), ref.getBarcode(), false));
         assertTrue(e.getMessage().contains("Room use only"));
+    }
+
+    @Test
+    void offlineReturnFromBeforeTheCurrentLoanIsNotApplied() {
+        Patron p = patron();
+        Item i = copy(title(MaterialType.BOOK));
+        circulation.checkout(p.getCardNumber(), i.getBarcode(), false);
+        Instant yesterday = Instant.now().minus(Duration.ofDays(1));
+        ApiException e = assertThrows(ApiException.class, () -> circulation.checkin(i.getBarcode(), yesterday));
+        assertTrue(e.getMessage().contains("lent again"));
+    }
+
+    @Test
+    void returnWithFinesNeedsPayOrWaiveAndPayingIssuesOneReceipt() {
+        Patron p = patron();
+        Item i = copy(title(MaterialType.BOOK));
+        circulation.checkout(p.getCardNumber(), i.getBarcode(), false, Instant.now().minus(Duration.ofDays(20)));
+        assertThrows(ApiException.class, () -> circulation.checkinSettled(i.getBarcode(), null, null));
+        assertThrows(ApiException.class, () -> circulation.checkinSettled(i.getBarcode(), Settle.WAIVE, " "));
+        CheckinResult paid = circulation.checkinSettled(i.getBarcode(), Settle.PAY, null);
+        assertNotNull(paid.receipt(), "paying with the return issues a receipt");
+        assertEquals(ItemStatus.AVAILABLE, items.findById(i.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    void aDueDateLaterDeclaredClosedIsNotFined() {
+        Patron p = patron();
+        Item i = copy(title(MaterialType.BOOK));
+        CheckoutResult out = circulation.checkout(p.getCardNumber(), i.getBarcode(), false, Instant.now().minus(Duration.ofDays(20)));
+        LocalDate due = clock.toDate(out.loan().dueAt());
+        closedDays.save(new ClosedDay(due, "Declared after the loan"));
+        CheckinResult in = circulation.checkin(i.getBarcode());
+        LibraryCalendar.Snapshot cal = calendar.snapshot(due, clock.today());
+        long charged = cal.openDaysAfter(cal.nextOpenOnOrAfter(due), clock.today());
+        assertEquals(0, new BigDecimal("5.00").multiply(BigDecimal.valueOf(charged)).compareTo(in.fineAmount()),
+                "late days count from the next open day after the closed due date");
     }
 }

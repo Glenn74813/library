@@ -1,6 +1,7 @@
 package ph.edu.zscmst.library.circulation;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -12,6 +13,10 @@ import java.util.Set;
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -69,6 +74,20 @@ public class CirculationService {
     private final SettingsService settings;
     private final LoanPolicy policy;
     private final RenewalRequestRepository renewalRequests;
+    @PersistenceContext
+    private EntityManager em;
+
+    /**
+     * Row-locks an entity and reloads it. A lock query alone hands back the copy already loaded in this
+     * transaction with its old values, so checks after the lock would still see stale data.
+     */
+    private <T> T lockFresh(T entity) {
+        em.refresh(entity, LockModeType.PESSIMISTIC_WRITE);
+        return entity;
+    }
+
+    /** Clock difference tolerated between an offline desk or station and the server. */
+    private static final Duration OFFLINE_SLACK = Duration.ofMinutes(5);
 
     public CirculationService(LoanRepository loans, HoldRequestRepository holds, FineRepository fines,
                               ItemRepository items, PatronRepository patrons, BibRecordRepository records,
@@ -106,8 +125,8 @@ public class CirculationService {
         Item scanned = items.findByIdentifier(itemCode.trim()).orElseThrow(() -> ApiException.notFound("Item"));
         // Lock patron then copy: parallel checkouts for one patron can't pass the loan limit together, and
         // two desks lending the same copy get a clear "already checked out".
-        Patron p = patrons.findByIdForUpdate(found.getId()).orElseThrow(() -> ApiException.notFound("Patron"));
-        Item item = items.findByIdForUpdate(scanned.getId()).orElseThrow(() -> ApiException.notFound("Item"));
+        Patron p = lockFresh(found);
+        Item item = lockFresh(scanned);
         PatronCategory cat = p.getCategory();
         List<String> warnings = new ArrayList<>();
 
@@ -241,6 +260,11 @@ public class CirculationService {
             ReceiptDto receipt = pay(open.stream().map(Fine::getId).toList());
             return new CheckinResult(r.loan(), r.fineAmount(), r.holdForPatron(), r.message(), r.holdSlip(), receipt);
         }
+        // A fine can appear between the preview and the return (e.g. past midnight): never waive it unasked.
+        if (settle != Settle.WAIVE || waiveReason == null || waiveReason.isBlank()) {
+            throw ApiException.conflict("Fines of PHP " + open.stream().map(Fine::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add)
+                    + " for this borrowing must be paid (or waived) before the return is completed.");
+        }
         open.forEach(f -> waive(f.getId(), waiveReason.trim()));
         return r;
     }
@@ -248,7 +272,8 @@ public class CirculationService {
     /** Check-in; {@code offlineAt} is the original return time of a check-in recorded offline (fines stop there). */
     @Transactional
     public CheckinResult checkin(String itemCode, Instant offlineAt) {
-        Item item = items.findByIdentifier(itemCode.trim()).orElseThrow(() -> ApiException.notFound("Item"));
+        // Locked: two desks (or a double click) returning the same copy must not both close the loan and fine it.
+        Item item = lockFresh(items.findByIdentifier(itemCode.trim()).orElseThrow(() -> ApiException.notFound("Item")));
         Optional<Loan> activeLoan = loans.findByItemIdAndReturnedAtIsNull(item.getId());
         if (activeLoan.isEmpty()) {
             if (item.getStatus() == ItemStatus.LOST || item.getStatus() == ItemStatus.MISSING) {
@@ -267,6 +292,12 @@ public class CirculationService {
             throw ApiException.badRequest("Item is not checked out");
         }
         Loan loan = activeLoan.get();
+        // An offline return from before this loan began belongs to an earlier loan: applying it would close the
+        // current borrower's loan.
+        if (offlineAt != null && offlineAt.isBefore(loan.getCheckoutAt().minus(OFFLINE_SLACK))) {
+            throw ApiException.conflict("Return not applied: " + item.getBarcode() + " was lent again on "
+                    + clock.format(loan.getCheckoutAt()) + ", after this return. Check the copy and its current loan.");
+        }
         Instant now = offlineAt == null ? Instant.now() : offlineAt;
         if (now.isBefore(loan.getCheckoutAt())) now = loan.getCheckoutAt();
         loan.setReturnedAt(now);
@@ -418,12 +449,16 @@ public class CirculationService {
         return cap != null && cap.signum() > 0 ? amount.min(cap) : amount;
     }
 
-    /** Late days that are charged: only days the library was open after the due date. */
+    /**
+     * Late days that are charged: only days the library was open after the due date. A due date that became a
+     * closed day after the loan was made counts as due on the next open day.
+     */
     long overdueDays(Loan loan, Instant at) {
-        LocalDate due = clock.toDate(loan.getDueAt());
         LocalDate until = clock.toDate(at);
+        LibraryCalendar.Snapshot cal = calendar.snapshot(clock.toDate(loan.getDueAt()), until);
+        LocalDate due = cal.nextOpenOnOrAfter(clock.toDate(loan.getDueAt()));
         if (!until.isAfter(due)) return 0;
-        return calendar.snapshot(due, until).openDaysAfter(due, until);
+        return cal.openDaysAfter(due, until);
     }
 
     /** Sends a returned copy to the next waiting hold, or back to the shelf. */
@@ -778,6 +813,7 @@ public class CirculationService {
     @Transactional
     public ReceiptDto pay(List<Long> fineIds) {
         List<Fine> list = fines.lockByIds(fineIds);
+        list.forEach(em::refresh); // read the settled state another cashier may just have committed
         if (list.size() != fineIds.stream().distinct().count()) throw ApiException.notFound("Fine");
         if (list.stream().anyMatch(f -> f.getStatus() != FineStatus.UNPAID)) {
             throw ApiException.conflict("Some fines are already settled");
@@ -806,7 +842,8 @@ public class CirculationService {
 
     @Transactional
     public FineDto waive(Long fineId, String reason) {
-        Fine f = fines.findById(fineId).orElseThrow(() -> ApiException.notFound("Fine"));
+        // Locked, so a payment made at the same moment is seen instead of overwritten.
+        Fine f = lockFresh(fines.findById(fineId).orElseThrow(() -> ApiException.notFound("Fine")));
         if (f.getStatus() != FineStatus.UNPAID) throw ApiException.conflict("Fine is already settled");
         f.settle(FineStatus.WAIVED, null, AuditService.currentActor(), Instant.now());
         audit.record("FINE_WAIVE", "fine " + fineId + " PHP " + f.getAmount() + ": " + reason);
