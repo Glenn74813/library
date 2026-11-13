@@ -8,6 +8,7 @@ import { BookModal } from '../../components/BookModal'
 import { PatronPhotoModal } from '../../components/PatronPhotoModal'
 import { ReleasedReceipt } from '../../components/ReleasedReceipt'
 import { SettleReturnModal } from '../../components/SettleReturnModal'
+import { switchSecurity } from '../../api/rfidStation'
 import { ReceiptModal } from '../../components/ReceiptModal'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Pager, StatusBadge, Table, Tabs } from '../../components/ui'
@@ -76,6 +77,7 @@ export function PatronDetailPage() {
     try {
       const r = await releaseHold(h)
       toast(`Released "${h.title}" to ${h.patronName} — due ${fmtDate(r.loan.dueAt)}${r.notice ? ` (${r.notice})` : ''}`)
+      void switchSecurity(r.loan.rfidEpc, false, r.loan.barcode).then((w) => { if (w) toast(w, 'warn') })
       refreshAll()
       setReleased(r.loan)
       setTab('loans')
@@ -117,6 +119,7 @@ export function PatronDetailPage() {
   function finishReturn(r: CheckinResult) {
     setSettling(null)
     setReturned(r)
+    if (r.loan) void switchSecurity(r.loan.rfidEpc, true, r.loan.barcode).then((w) => { if (w) toast(w, 'warn') })
     if (r.receipt) setReceipt(r.receipt)
     refreshAll()
   }

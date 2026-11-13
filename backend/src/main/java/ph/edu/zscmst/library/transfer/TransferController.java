@@ -35,14 +35,16 @@ public class TransferController {
 
     /**
      * Copy cataloging by ISBN or title/author: {@code source=loc} (default) searches the Library of Congress,
-     * {@code source=nlp} the National Library of the Philippines.
+     * {@code source=nlp} the National Library of the Philippines, {@code source=loc-z3950} the Library of
+     * Congress over Z39.50, {@code source=z3950&target=host:port/db} any Z39.50 server.
      */
     @GetMapping("/api/catalog/copycat")
     public CopyCatalogService.SearchResult copycat(@RequestParam(defaultValue = "loc") String source,
                                                    @RequestParam(required = false) String isbn,
                                                    @RequestParam(required = false) String title,
-                                                   @RequestParam(required = false) String author) {
-        return copycat.search(source, isbn, title, author);
+                                                   @RequestParam(required = false) String author,
+                                                   @RequestParam(required = false) String target) {
+        return copycat.search(source, isbn, title, author, target);
     }
 
     /** {@code commit=false} only validates and previews; {@code commit=true} saves. */

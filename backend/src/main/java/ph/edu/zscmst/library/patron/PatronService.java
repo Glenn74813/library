@@ -19,6 +19,7 @@ import ph.edu.zscmst.library.patron.PatronDtos.ImportResult;
 import ph.edu.zscmst.library.patron.PatronDtos.PatronRequest;
 import ph.edu.zscmst.library.privacy.PrivacyService;
 import ph.edu.zscmst.library.security.TokenService;
+import ph.edu.zscmst.library.transfer.ImportRunLog;
 
 @Service
 public class PatronService {
@@ -34,10 +35,12 @@ public class PatronService {
     private final TokenService tokens;
     private final JdbcTemplate jdbc;
     private final LibraryClock clock;
+    private final ImportRunLog runs;
 
     public PatronService(PatronRepository patrons, PatronCategoryRepository categories, CourseRepository courses,
                          PasswordEncoder passwordEncoder, AuditService audit, TokenService tokens,
-                         JdbcTemplate jdbc, LibraryClock clock) {
+                         JdbcTemplate jdbc, LibraryClock clock, ImportRunLog runs) {
+        this.runs = runs;
         this.jdbc = jdbc;
         this.clock = clock;
         this.tokens = tokens;
@@ -151,6 +154,11 @@ public class PatronService {
      */
     @Transactional
     public ImportResult importCsv(String text) {
+        return importCsv(null, text);
+    }
+
+    @Transactional
+    public ImportResult importCsv(String filename, String text) {
         List<List<String>> rows = Csv.parse(text);
         int created = 0;
         int updated = 0;
@@ -209,6 +217,7 @@ public class PatronService {
                     "Import rejected, nothing was saved. " + String.join(" | ", errors.stream().limit(20).toList()));
         }
         audit.record("PATRON_IMPORT", "created=" + created + " updated=" + updated);
+        runs.record("PATRONS", filename, rows.size() - 1, created, updated, 0, 0, List.of());
         return new ImportResult(created, updated, errors);
     }
 

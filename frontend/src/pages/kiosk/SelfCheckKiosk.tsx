@@ -10,12 +10,13 @@ import { errorText } from '../../components/Toast'
 import { fmtDate, fmtMoney } from '../../format'
 import { useInactivity } from '../../hooks/useInactivity'
 import { KioskResetZone, KioskSetup } from '../../components/KioskSetup'
+import { switchSecurity } from '../../api/rfidStation'
 import { CheckoutSlip, printRecorded, ReturnSlip, type ReturnedItem, type SlipLoan } from '../../print/slips'
 
 interface Config { requirePin: boolean; allowReturns: boolean; idleSeconds: number }
 interface PatronView { firstName: string; fullName: string; cardNumber: string; loans: Loan[]; maxLoans: number; unpaidTotal: number; blocks: string[] }
-interface Checkout { title: string; barcode: string; dueAt: string; notice: string | null; patron: PatronView }
-interface Returned { title: string | null; barcode: string | null; dueAt: string | null; returnedAt: string | null; fine: number; message: string }
+interface Checkout { title: string; barcode: string; dueAt: string; notice: string | null; patron: PatronView; rfidEpc: string | null }
+interface Returned { title: string | null; barcode: string | null; dueAt: string | null; returnedAt: string | null; fine: number; message: string; rfidEpc: string | null }
 interface Line { id: number; ok: boolean; title: string; detail: string }
 /** An item scan, with the patron session it was made in. */
 interface ScanJob { code: string; step: Step; card: string; pin: string; session: number }
@@ -149,6 +150,9 @@ function SelfCheckScreen() {
         setPatron(r.patron)
         setSlipLoans((s) => [...s, { title: r.title, barcode: r.barcode, dueAt: r.dueAt }])
         add(true, r.title, `Due ${fmtDate(r.dueAt)}${r.notice ? ` — ${r.notice}` : ''}`)
+        // The kiosk's RFID pad switches the tag's security off; if it can't, staff must do it before the patron leaves.
+        const w = await switchSecurity(r.rfidEpc, false, r.barcode)
+        if (w && job.session === session.current) add(false, r.title, 'Please show this item at the circulation desk before you leave (security tag not switched off).')
       } else {
         const r = await api<Returned>('/api/kiosk/selfcheck/return', { ...opts, body: { item: job.code } })
         if (job.session !== session.current) return
@@ -157,6 +161,7 @@ function SelfCheckScreen() {
           setSlipReturns((s) => [...s, back])
         }
         add(true, r.title ?? job.code, r.message + (r.fine > 0 ? ` Overdue fine ${fmtMoney(r.fine)}; please pay at the desk.` : ''))
+        if (r.barcode) void switchSecurity(r.rfidEpc, true, r.barcode)
       }
     } catch (err) {
       if (job.session === session.current) add(false, job.code, errorText(err))

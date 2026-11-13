@@ -510,7 +510,8 @@ public class CirculationService {
         BigDecimal accrued = overdueFine(p.getCategory(), days);
         return new LoanDto(l.getId(), i.getId(), i.getBarcode(), r.getId(), r.getTitle(), r.getCallNumber(),
                 p.getId(), p.getFullName(), p.getCardNumber(), l.getCheckoutAt(), l.getDueAt(), l.getReturnedAt(),
-                l.getRenewals(), p.getCategory().getMaxRenewals(), overdue, days, accrued, l.getCheckedOutBy());
+                l.getRenewals(), p.getCategory().getMaxRenewals(), overdue, days, accrued, l.getCheckedOutBy(),
+                i.getRfidEpc());
     }
 
     // ---------------------------------------------------------------- holds

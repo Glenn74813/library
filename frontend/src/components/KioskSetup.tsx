@@ -4,6 +4,7 @@ import { api, ApiError, fromAuthResponse, logout, setDeviceKey, setSession } fro
 import { ErrorAlert, Field, PasswordInput } from './ui'
 import { errorText } from './Toast'
 import { Logo } from './Logo'
+import { setStation } from '../api/rfidStation'
 
 /** Hold the top-left corner of a kiosk screen this long to disconnect it (staff only). */
 const RESET_HOLD_MS = 5000
@@ -50,6 +51,10 @@ export function KioskSetup({ title }: { title: string }) {
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
     const params = new URLSearchParams(window.location.search)
     const fromLink = hash.get('key') ?? params.get('key')
+    // &rfid=http://127.0.0.1:8765 also turns on this kiosk's RFID station (security off when patrons borrow).
+    const rfid = hash.get('rfid')
+    if (rfid) setStation({ enabled: true, url: rfid })
+    hash.delete('rfid')
     if (!fromLink) return
     hash.delete('key')
     params.delete('key')

@@ -12,6 +12,7 @@ import { fmtDate, fmtDateTime, label, shelvesLabel } from '../../format'
 import { CameraScanButton } from '../../components/CameraScan'
 import { CopyCatalogModal } from '../../components/CopyCatalogModal'
 import { DigitalPanel } from '../../components/DigitalPanel'
+import { getStation, station } from '../../api/rfidStation'
 import { Icon } from '../../components/Icon'
 
 type RecordForm = Omit<BibRecord, 'id' | 'totalCopies' | 'availableCopies' | 'createdAt' | 'updatedAt' | 'ebook'>
@@ -332,6 +333,25 @@ export function ItemModal({ recordId, item, canDelete, others, title, onClose, o
   const toast = useToast()
   const set = <K extends keyof Item>(k: K, v: Item[K] | null) => setF((x) => ({ ...x, [k]: v }))
   const circulating = f.status === 'ON_LOAN' || f.status === 'ON_HOLD'
+  // RFID station on this computer (rfid-bridge): read the tag on the pad, or write the copy's barcode to it.
+  const useStation = getStation().enabled
+  const [tagBusy, setTagBusy] = useState(false)
+  async function readTag() {
+    setTagBusy(true)
+    try {
+      const tags = await station.tags()
+      if (tags.length !== 1) setError(tags.length ? `${tags.length} tags are on the pad: leave only this copy's tag` : 'No tag on the pad')
+      else { set('rfidEpc', tags[0]); setError(null) }
+    } catch (e) { setError(errorText(e)) } finally { setTagBusy(false) }
+  }
+  async function writeTag() {
+    setTagBusy(true)
+    try {
+      set('rfidEpc', await station.write(f.barcode!.trim()))
+      setError(null)
+      toast('Tag written; save the copy to keep its RFID number')
+    } catch (e) { setError(errorText(e)) } finally { setTagBusy(false) }
+  }
   const { data: sections } = useAsync(() => api<LibrarySection[]>('/api/sections'), [])
   const isAdmin = hasRole(useSession(), 'ADMIN')
   // Aisle and shelf choices come from the section's layout (Administration → Sections & Aisles).
@@ -384,7 +404,17 @@ export function ItemModal({ recordId, item, canDelete, others, title, onClose, o
             <input className="mono" value={f.barcode ?? ''} onChange={(e) => set('barcode', e.target.value)} autoFocus
               placeholder={item.id ? undefined : 'Assigned when saved'} />
             <CameraScanButton onScan={(t) => set('barcode', t)} /></div></Field>
-          <Field label="RFID tag EPC" hint="Read with the tagging device"><input className="mono" value={f.rfidEpc ?? ''} onChange={(e) => set('rfidEpc', e.target.value)} /></Field>
+          <Field label="RFID tag EPC" as="div" hint={useStation ? 'Put the tag on the RFID pad, then Read (existing tag) or Write (new tag from the barcode)'
+            : 'Read with the tagging device'}>
+            <div className="input-group">
+              <input className="mono" value={f.rfidEpc ?? ''} onChange={(e) => set('rfidEpc', e.target.value)} />
+              {useStation && <>
+                <button type="button" className="btn" disabled={tagBusy} onClick={() => void readTag()}>Read</button>
+                <button type="button" className="btn" disabled={tagBusy || !f.barcode?.trim()} title={f.barcode?.trim() ? undefined : 'Save the copy first to get its barcode'}
+                  onClick={() => void writeTag()}>Write</button>
+              </>}
+            </div>
+          </Field>
           <Field label="Section / area" as="div" hint={isAdmin ? <>Set up under <Link to="/staff/sections">Sections &amp; Aisles</Link></>
             : 'Sections and aisles are set up by an administrator'}>
             <select value={f.location ?? ''} onChange={(e) => setF((x) => ({ ...x, location: e.target.value || null, aisle: null, shelf: null }))}>

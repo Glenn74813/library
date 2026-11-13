@@ -1,0 +1,34 @@
+# RFID bridge as security-gate middleware. Copy to rfid-bridge.properties and edit.
+# Note: write paths with forward slashes (C:/Program Files/...) and backslashes as \\ (this file format treats \ as an escape).
+# Run:  java RfidBridge.java
+mode=gate
+port=8765
+gate.id=GATE-1
+
+# Library system and the gate's device token (Administration -> Users & devices -> Add device -> Security gate,
+# then "Copy token"). Keep this file private: the token is like a password.
+lms.url=https://zscmst-library.pg1992-gp.workers.dev
+lms.deviceKey=paste_the_gate_device_token_here
+
+# ---- Reading the gate antennas: pick ONE (same choices as a station) -------------------------------------
+reader=simulator
+#reader=tcp
+#tcp.host=192.168.1.60
+#tcp.port=6000
+#reader=serial
+#serial.device=COM4
+#reader=exec
+#exec.inventory="C:/Program Files/GateVendor/gate-cli.exe" stream
+#reader=push
+
+# The same tag is checked again only after this many seconds
+gate.dedupSeconds=5
+
+# Command run when an unborrowed item passes ({epcs} = the tags), e.g. the vendor's alarm/relay tool or a sound
+#gate.alarm="C:/Program Files/GateVendor/gate-cli.exe" alarm --seconds 5
+# Sound the alarm even when the library system can't be reached (true) or stay quiet (false)
+gate.offlineAlarm=false
+
+# Visitor counters, tamper and power events from the gate's own software can be sent to
+#   POST http://127.0.0.1:8765/event {"type":"VISITOR","visitorCount":1}   (types: VISITOR, TAMPER,
+#   POWER_LOSS, POWER_RESTORED, EMERGENCY_ON, EMERGENCY_OFF). A HEARTBEAT is sent every minute automatically.

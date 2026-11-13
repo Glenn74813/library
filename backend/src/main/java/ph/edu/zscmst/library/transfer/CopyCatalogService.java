@@ -68,9 +68,136 @@ public class CopyCatalogService {
     private static final Pattern BIBLIO = Pattern.compile("biblionumber=(\\d+)");
     private static final Pattern TOTAL = Pattern.compile("<opensearch:totalResults>\\s*(\\d+)");
 
-    /** {@code source}: "nlp" for the National Library of the Philippines, otherwise the Library of Congress. */
-    public SearchResult search(String source, String isbn, String title, String author) {
-        return "nlp".equalsIgnoreCase(source) ? searchNlp(isbn, title, author) : search(isbn, title, author);
+    /** The Library of Congress catalog over native Z39.50. */
+    static final String LOC_Z3950 = "lx2.loc.gov:210/LCDB";
+    /** A Z39.50 target as host:port/database (nothing that could reach the YAZ command line as an option). */
+    private static final Pattern TARGET = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9.-]*:[0-9]{1,5}/[A-Za-z0-9_.-]+$");
+    private static final Pattern HITS = Pattern.compile("Number of hits: (\\d+)");
+    private static final int Z3950_MAX = 10;
+
+    /**
+     * {@code source}: "nlp" for the National Library of the Philippines, "loc-z3950" for the Library of Congress
+     * over native Z39.50, "z3950" for any other Z39.50 server ({@code target} = host:port/database), otherwise
+     * the Library of Congress over SRU.
+     */
+    public SearchResult search(String source, String isbn, String title, String author, String target) {
+        if ("nlp".equalsIgnoreCase(source)) return searchNlp(isbn, title, author);
+        if ("loc-z3950".equalsIgnoreCase(source)) return searchZ3950(LOC_Z3950, "Library of Congress (Z39.50)", isbn, title, author);
+        if ("z3950".equalsIgnoreCase(source)) {
+            String t = target == null ? "" : target.trim();
+            if (!TARGET.matcher(t).matches()) throw ApiException.badRequest("Enter the Z39.50 server as host:port/database, e.g. z3950.example.edu:210/books");
+            return searchZ3950(t, "Z39.50 " + t, isbn, title, author);
+        }
+        return search(isbn, title, author);
+    }
+
+    /**
+     * Native Z39.50 search with the YAZ client (installed in the server image): a type-1 (RPN) query by ISBN
+     * (Bib-1 use 7) or title (4) and author (1003), up to ten USMARC records, read with marc4j (MARC-8 or UTF-8).
+     */
+    SearchResult searchZ3950(String target, String name, String isbn, String title, String author) {
+        String rpn;
+        if (isbn != null && !isbn.isBlank()) {
+            rpn = "@attr 1=7 " + rpnTerm(isbn.replaceAll("[^0-9Xx]", ""));
+        } else {
+            List<String> parts = new ArrayList<>();
+            if (title != null && !title.isBlank()) parts.add("@attr 1=4 " + rpnTerm(title));
+            if (author != null && !author.isBlank()) parts.add("@attr 1=1003 " + rpnTerm(author));
+            if (parts.isEmpty()) throw ApiException.badRequest("Enter an ISBN, or a title and/or author");
+            rpn = parts.size() == 1 ? parts.getFirst() : "@and " + parts.get(0) + " " + parts.get(1);
+        }
+        java.nio.file.Path file = null;
+        try {
+            file = java.nio.file.Files.createTempFile("z3950-", ".mrc");
+            Process p = new ProcessBuilder("yaz-client", "-m", file.toString()).redirectErrorStream(true).start();
+            // One command at a time, each after the previous answer (YAZ prints "Elapsed:" when one is done):
+            // piping them all at once lets the client quit before the last records arrive.
+            var lines = new java.util.concurrent.LinkedBlockingQueue<String>();
+            StringBuilder output = new StringBuilder();
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+            try (var exec = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
+                 var in = new java.io.PrintStream(p.getOutputStream(), true, StandardCharsets.UTF_8)) {
+                exec.submit(() -> {
+                    try (var r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                        for (String line; (line = r.readLine()) != null; ) lines.add(line);
+                    }
+                    lines.add("\u0000EOF");
+                    return null;
+                });
+                in.println("format usmarc");
+                boolean ok = send(in, "open tcp:" + target, lines, output, deadline)
+                        && send(in, "find " + rpn, lines, output, deadline) && HITS.matcher(output).find();
+                // The first record, then "show" (the next one): a range beyond the hits makes servers refuse the
+                // whole request, and some refuse positions after the first.
+                for (int i = 1; ok && i <= Z3950_MAX; i++) {
+                    int before = output.length();
+                    ok = send(in, i == 1 ? "show 1" : "show", lines, output, deadline)
+                            && !output.substring(before).contains("Diagnostic");
+                }
+                in.println("quit");
+                if (System.nanoTime() > deadline) {
+                    p.destroyForcibly();
+                    throw ApiException.badRequest(name + " did not answer within 30 seconds. Check the address and the internet connection.");
+                }
+                p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+                p.destroyForcibly();
+            }
+            Matcher hits = HITS.matcher(output.toString());
+            if (!hits.find()) {
+                log.warn("Z39.50 {} gave no result: {}", target, output.length() > 500 ? output.substring(0, 500) : output.toString());
+                throw ApiException.badRequest(name + " could not be searched (connection refused or the server rejected the search).");
+            }
+            int total = Integer.parseInt(hits.group(1));
+            List<Candidate> out = new ArrayList<>();
+            byte[] marc = java.nio.file.Files.readAllBytes(file);
+            var records = new org.marc4j.MarcPermissiveStreamReader(new ByteArrayInputStream(marc), true, true);
+            while (records.hasNext() && out.size() < Z3950_MAX) {
+                ParsedTitle t = MarcMapper.toTitle(records.next());
+                out.add(new Candidate(name, t.title, t.subtitle, t.authors, t.isbn, t.publisher, t.publicationYear,
+                        t.edition, t.subjects, t.callNumber, t.materialType, t.language, t.summary));
+            }
+            return new SearchResult(name, total, out);
+        } catch (java.io.IOException e) {
+            log.warn("Z39.50 search failed: {}", e.getMessage());
+            throw ApiException.badRequest("Z39.50 searching is not available on this server (YAZ client missing).");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw ApiException.badRequest(name + " search was interrupted");
+        } finally {
+            if (file != null) {
+                try {
+                    java.nio.file.Files.deleteIfExists(file);
+                } catch (java.io.IOException ignored) {
+                    // a temp file left behind is harmless
+                }
+            }
+        }
+    }
+
+    /**
+     * Sends one YAZ command and collects its answer up to the "Elapsed:" line YAZ prints when it is done.
+     * False when the client ended or the overall time ran out.
+     */
+    private static boolean send(java.io.PrintStream in, String command, java.util.concurrent.BlockingQueue<String> lines,
+                                StringBuilder output, long deadline) throws InterruptedException {
+        in.println(command);
+        while (true) {
+            long left = deadline - System.nanoTime();
+            if (left <= 0) return false;
+            String line = lines.poll(left, java.util.concurrent.TimeUnit.NANOSECONDS);
+            if (line == null || line.equals("\u0000EOF")) return false;
+            output.append(line).append('\n');
+            if (line.contains("Elapsed:")) return true;
+            // Connection problems end the command without an "Elapsed:" line.
+            String l = line.toLowerCase(java.util.Locale.ROOT);
+            if (l.contains("connection refused") || l.contains("connect failed") || l.contains("unable to resolve")
+                    || l.contains("not connected") || l.contains("connection lost") || l.contains("error =")) return false;
+        }
+    }
+
+    /** A quoted RPN term; quotes, backslashes and line breaks are dropped so the query can't be broken out of. */
+    private static String rpnTerm(String s) {
+        return "\"" + s.replaceAll("[\"\\\\\\r\\n]", " ").trim() + "\"";
     }
 
     /**

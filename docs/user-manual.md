@@ -141,9 +141,10 @@ charge for a book still on loan must be cleared before that book can be returned
 **Collection → Catalog**
 
 - **New record**: type the ISBN and press **Lookup** (Open Library), or **Copy-catalog** to search the
-  **Library of Congress** (foreign books, LC call numbers) or the **National Library of the Philippines**
-  (Philippine books, Dewey call numbers) by ISBN, title or author. The window remembers the last source
-  used. Check the copied data, then save.
+  **Library of Congress** (foreign books, LC call numbers; over SRU or **Z39.50**), the **National Library of
+  the Philippines** (Philippine books, Dewey call numbers), or **another Z39.50 server** (type its
+  host:port/database, e.g. a university library's catalog) by ISBN, title or author. Up to 10 records are
+  shown. The window remembers the last source and server used. Check the copied data, then save.
 - Authors and subjects suggest existing headings as you type, which keeps the catalog consistent.
   Variant names are managed under **Authorities**.
 - Add **copies** (barcode, RFID EPC, section, aisle, shelf, price). Leave **Barcode** empty and the
@@ -201,8 +202,15 @@ fines (overdue, damage...) can't be returned at the kiosk: the patron is told to
 shelve each one, or put it on the hold shelf if a reservation is waiting (the Holds page shows which).
 A printable slip lists the due dates.
 
+### 1.12b Data migration validation report
+Every catalog file and patron list imported is recorded. **Reports → Data migration validation report**
+(librarians and admins) lists each import (file, rows, created, matched, skipped), the records now in the
+system, every rejected row and why, how personal data was handled (Data Privacy Act), and sign-off lines for
+the supplier and the LRC. Print the PDF after migrating, check it against the old system, and sign it.
+
 ### 1.13 Reports
-**Security & reports → Reports**: choose the period, view circulation and visitor charts, top
+**Security & reports → Reports**: choose the period and, optionally, a patron category, course, material
+type, section, copy status or fine status (they narrow the figures and every export), view circulation and visitor charts, top
 borrowers and titles, and export loans, overdue, fines, collection, patrons, attendance and gate
 events. Use the format picker to choose **Excel (CSV)** or **PDF**.
 The **E-book usage** section shows how often school-owned e-books were opened, by how many patrons,

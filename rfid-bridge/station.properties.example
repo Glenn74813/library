@@ -1,0 +1,44 @@
+# RFID bridge for a circulation desk or self-check kiosk. Copy to rfid-bridge.properties and edit.
+# Note: write paths with forward slashes (C:/Program Files/...) and backslashes as \\ (this file format treats \ as an escape).
+# Run:  java RfidBridge.java
+mode=station
+port=8765
+# Library pages allowed to use this bridge (comma-separated), or * for any
+origins=*
+
+# ---- Reading tags: pick ONE reader type ------------------------------------------------------------
+# Testing without hardware: type "place EPC" in the bridge window
+reader=simulator
+
+# Serial / USB-COM reader that sends tag numbers as text (set the baud rate first:
+#   Windows: mode COM3 BAUD=115200 PARITY=n DATA=8   Linux: stty -F /dev/ttyUSB0 115200 raw)
+#reader=serial
+#serial.device=COM3
+
+# Network (TCP/IP) reader in text output mode
+#reader=tcp
+#tcp.host=192.168.1.50
+#tcp.port=6000
+# Optional command sent after connecting (\r\n allowed), e.g. start continuous inventory
+#tcp.start=
+
+# Vendor command-line tool that prints tag numbers (one or more per line, any format)
+#reader=exec
+#exec.inventory="C:/Program Files/Vendor/cli.exe" inventory --continuous
+
+# Reader software that sends reads here: POST http://127.0.0.1:8765/push {"epcs":["E200..."]}
+#reader=push
+
+# Which part of each line is the tag number (hex EPC of 16 to 32 digits by default)
+#epc.pattern=\\b([0-9A-Fa-f]{16,32})\\b
+# A tag counts as "on the pad" for this many seconds after its last read
+#field.seconds=2
+
+# ---- Writing tags and switching security (EAS / AFI) -------------------------------------------------
+# simulator | exec (vendor command-line tool or SDK sample) | none (reading only)
+#writer=exec
+# {epc} = new EPC (the barcode in hex), {barcode} = the copy's barcode
+#exec.write="C:/Program Files/Vendor/cli.exe" write-epc --epc {epc}
+# Security on (copy in the library) / off (borrowed); {epc} {on}=1/0 {secure}=true/false
+#exec.securityOn="C:/Program Files/Vendor/cli.exe" eas --epc {epc} --set 1
+#exec.securityOff="C:/Program Files/Vendor/cli.exe" eas --epc {epc} --set 0

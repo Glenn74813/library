@@ -85,4 +85,8 @@ public interface LoanRepository extends JpaRepository<Loan, Long> {
 
     @EntityGraph(attributePaths = {"item", "item.record", "patron"})
     List<Loan> findByCheckoutAtBetweenOrderByCheckoutAtAsc(Instant from, Instant to);
+
+    /** Loans returned in a period (for filtered circulation reports). */
+    @EntityGraph(attributePaths = {"item", "item.record", "patron", "patron.category", "patron.course"})
+    List<Loan> findByReturnedAtBetween(Instant from, Instant to);
 }

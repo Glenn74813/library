@@ -241,6 +241,8 @@ export interface Loan {
   accruedFine: number
   /** Staff member who checked the item out (released it to the patron). */
   checkedOutBy: string | null
+  /** The copy's RFID tag (EPC), for switching its security at the RFID station. */
+  rfidEpc?: string | null
 }
 
 export type HoldStatus = 'SCHEDULED' | 'PENDING' | 'READY' | 'FULFILLED' | 'CANCELLED' | 'EXPIRED'

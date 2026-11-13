@@ -56,7 +56,8 @@ public class SelfCheckController {
     public record Config(boolean requirePin, boolean allowReturns, int idleSeconds) {
     }
 
-    public record Checkout(String title, String barcode, Instant dueAt, String notice, PatronView patron) {
+    /** {@code rfidEpc}: the copy's tag, so the kiosk's RFID station can switch its security off. */
+    public record Checkout(String title, String barcode, Instant dueAt, String notice, PatronView patron, String rfidEpc) {
     }
 
     /** {@code pending}: the renewal waits for staff approval. */
@@ -70,7 +71,7 @@ public class SelfCheckController {
     public record ScanKind(boolean item) {
     }
 
-    public record Returned(String title, String barcode, Instant dueAt, Instant returnedAt, BigDecimal fine, String message) {
+    public record Returned(String title, String barcode, Instant dueAt, Instant returnedAt, BigDecimal fine, String message, String rfidEpc) {
     }
 
     private final CirculationService circulation;
@@ -127,7 +128,7 @@ public class SelfCheckController {
         Patron p = verify(req.patron());
         // No overrides at the kiosk: anything the rules refuse is sent to the desk.
         CheckoutResult r = circulation.checkout(p.getCardNumber(), req.item(), false);
-        return new Checkout(r.loan().title(), r.loan().barcode(), r.loan().dueAt(), r.notice(), view(p));
+        return new Checkout(r.loan().title(), r.loan().barcode(), r.loan().dueAt(), r.notice(), view(p), r.loan().rfidEpc());
     }
 
     @PostMapping("/api/kiosk/selfcheck/renew")
@@ -150,7 +151,7 @@ public class SelfCheckController {
         String message = r.loan() == null ? r.message() : "Thank you! Please place the item on the return cart.";
         LoanDto l = r.loan();
         return new Returned(l == null ? null : l.title(), l == null ? null : l.barcode(), l == null ? null : l.dueAt(),
-                l == null ? null : l.returnedAt(), r.fineAmount(), message);
+                l == null ? null : l.returnedAt(), r.fineAmount(), message, l == null ? null : l.rfidEpc());
     }
 
     private PatronView view(Patron p) {

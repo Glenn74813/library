@@ -77,7 +77,7 @@ public class PatronController {
 
     @PostMapping(path = "/import", consumes = "multipart/form-data")
     public ImportResult importCsv(@RequestPart("file") MultipartFile file) throws IOException {
-        return service.importCsv(new String(file.getBytes(), StandardCharsets.UTF_8));
+        return service.importCsv(file.getOriginalFilename(), new String(file.getBytes(), StandardCharsets.UTF_8));
     }
 
     @GetMapping("/import-template")

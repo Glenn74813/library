@@ -197,10 +197,11 @@ A title is either **school-owned** or **commercial**, never both:
 
 ## Not included (needs vendor hardware, specs or a school decision)
 
-- NCIP and a native Z39.50 client (copy cataloging uses Open Library, the Library of Congress SRU service and the National Library of the
-  Philippines' public Koha catalog).
-- Writing RFID tags (AFI/EAS security bit) — done by the tagging station's vendor software; the
-  library system only stores each copy's EPC.
+- NCIP (SIP2 is supported). Copy cataloging uses Open Library, the Library of Congress (SRU or native Z39.50),
+  the National Library of the Philippines' public Koha catalog, and any other Z39.50 server (YAZ client in the API image).
+- A driver for one particular RFID model: the RFID bridge (`rfid-bridge/`) connects any reader by serial/USB-COM,
+  TCP/IP, a vendor command-line tool or push, writes tags and switches their security (EAS/AFI) through the
+  vendor's tool, and runs as gate middleware. Setting it up for the delivered hardware is done on site.
 - Native Android/iOS apps (the patron portal is a responsive web app; can be wrapped as a PWA).
 - Choosing and configuring the school's real SMTP mailbox and SMS provider (Administration → Notifications).
 - The retention periods themselves (Administration → Data privacy) are a school policy decision; all default to "keep".

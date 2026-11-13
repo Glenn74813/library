@@ -56,11 +56,13 @@ public class CatalogTransferService {
     private final BibRecordRepository records;
     private final ItemRepository items;
     private final AuditService audit;
+    private final ImportRunLog runs;
     private final CirculationService circulation;
     private final SectionService sections;
 
     public CatalogTransferService(BibRecordRepository records, ItemRepository items, AuditService audit,
-                                  CirculationService circulation, SectionService sections) {
+                                  CirculationService circulation, SectionService sections, ImportRunLog runs) {
+        this.runs = runs;
         this.sections = sections;
         this.circulation = circulation;
         this.records = records;
@@ -139,6 +141,7 @@ public class CatalogTransferService {
         if (commit) {
             audit.record("CATALOG_IMPORT", filename + ": " + created + " new titles, " + matched + " matched, "
                     + copiesCreated + " copies, " + copiesSkipped + " skipped");
+            runs.record("CATALOG", filename, titles.size(), created, matched, copiesCreated, copiesSkipped, problems);
         }
         return new ImportReport(commit, titles.size(), created, matched, copiesCreated, copiesSkipped, problems, sample);
     }

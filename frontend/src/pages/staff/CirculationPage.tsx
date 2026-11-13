@@ -7,6 +7,8 @@ import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
 import { CameraScanButton } from '../../components/CameraScan'
 import { ReceiptModal } from '../../components/ReceiptModal'
+import { RfidStationCard } from '../../components/RfidStationCard'
+import { switchSecurity } from '../../api/rfidStation'
 import { SettleReturnModal } from '../../components/SettleReturnModal'
 import { StatusBadge, Table, Tabs } from '../../components/ui'
 import { Icon } from '../../components/Icon'
@@ -104,6 +106,7 @@ export function CirculationPage() {
         {mode === 'out' ? <Checkout addLog={addLog} off={off} /> : <Checkin addLog={addLog} off={off} />}
         <div className="stack">
         <PrintHelp />
+        <RfidStationCard />
         <div className="card">
           <h2>This session</h2>
           {log.length === 0 ? <p className="muted small">Transactions will appear here.</p> : (
@@ -234,6 +237,8 @@ function Checkout({ addLog, off }: { addLog: (ok: boolean, t: string) => void; o
         + (r.warnings.length ? ` (override: ${r.warnings.join('; ')})` : '')
         + (r.notice ? ` — SHORT LOAN: ${r.notice}` : ''))
       if (r.notice) toast(`Short loan — ${r.notice}. Tell the patron.`, 'warn')
+      // Borrowed: the tag's security goes off so the gate lets it through.
+      void switchSecurity(r.loan.rfidEpc, false, r.loan.barcode).then((w) => { if (w) addLog(false, w) })
       await refresh(job.patronId, job.seq)
       return false
     } catch (err) {
@@ -429,6 +434,8 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
       }
       addLog(true, `IN ${r.loan?.barcode ?? item} ${r.loan ? `"${r.loan.title}" from ${r.loan.patronName}` : ''} — ${r.message}`
         + (r.receipt ? ` · paid ${fmtMoney(r.receipt.total)} (${r.receipt.receiptNumber})` : r.fineAmount > 0 ? ` · fine ${fmtMoney(r.fineAmount)} waived` : ''))
+      // Back in the library: security on again.
+      if (r.loan) void switchSecurity(r.loan.rfidEpc, true, r.loan.barcode).then((w) => { if (w) addLog(false, w) })
       off.markOnline()
       return false
     } catch (err) {

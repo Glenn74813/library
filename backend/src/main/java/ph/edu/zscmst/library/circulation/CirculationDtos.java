@@ -22,7 +22,7 @@ public final class CirculationDtos {
     public record LoanDto(Long id, Long itemId, String barcode, Long recordId, String title, String callNumber,
                           Long patronId, String patronName, String cardNumber, Instant checkoutAt, Instant dueAt,
                           Instant returnedAt, int renewals, int maxRenewals, boolean overdue, long overdueDays,
-                          BigDecimal accruedFine, String checkedOutBy) {
+                          BigDecimal accruedFine, String checkedOutBy, String rfidEpc) {
     }
 
     public record HoldDto(Long id, Long recordId, String title, Long patronId, String patronName, String cardNumber,

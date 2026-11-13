@@ -6,6 +6,7 @@ import { fmtDate, fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { useState } from 'react'
 import { ReleasedReceipt } from '../../components/ReleasedReceipt'
+import { switchSecurity } from '../../api/rfidStation'
 
 export function HoldsPage() {
   const { data, error, reload } = useAsync(() => api<Hold[]>('/api/holds'), [])
@@ -20,6 +21,7 @@ export function HoldsPage() {
     try {
       const r = await releaseHold(h)
       toast(`Released to ${h.patronName} — due ${fmtDate(r.loan.dueAt)}${r.notice ? ` (${r.notice})` : ''}`)
+      void switchSecurity(r.loan.rfidEpc, false, r.loan.barcode).then((w) => { if (w) toast(w, 'warn') })
       void reload()
       setReleased(r.loan)
     } catch (e) {
