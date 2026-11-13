@@ -12,6 +12,7 @@ import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
 import { useLibrary } from '../../api/library'
 import { CashReportSlip, printRecorded, SlipPreview, type CashReportData } from '../../print/slips'
+import { HelpButton } from '../../components/HelpButton'
 
 /**
  * Fines & payments. The cashier receives payments here: find the patron, tick their unpaid fines and
@@ -76,7 +77,7 @@ export function FinesPage() {
   return (
     <>
       <div className="page-head">
-        <h1>Fines & payments</h1>
+        <h1>Fines & payments<HelpButton /></h1>
         <div className="row">
           <button className="btn" onClick={() => setReportOpen(true)}><Icon name="printer" />End-of-day report</button>
           <ExportMenu path="/api/reports/export/fines" name="fines" />

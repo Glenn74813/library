@@ -4,6 +4,7 @@ import { api, logout } from '../../api/client'
 import { useSession } from '../../auth/AuthContext'
 import { Field, PasswordInput } from '../../components/ui'
 import { errorText, useToast } from '../../components/Toast'
+import { HelpButton } from '../../components/HelpButton'
 
 export function AccountPage() {
   const [current, setCurrent] = useState('')
@@ -28,7 +29,7 @@ export function AccountPage() {
 
   return (
     <>
-      <div className="page-head"><h1>My account</h1></div>
+      <div className="page-head"><h1>My account<HelpButton /></h1></div>
       {mustChange && <div className="alert warn" style={{ maxWidth: 480, marginBottom: 16 }}>
         <strong>Choose your own password.</strong> Your password was set by an administrator. Enter it as the current
         password, then choose a new one to continue.</div>}

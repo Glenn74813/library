@@ -7,6 +7,7 @@ import { daysAgo, fmtMoney, isoDate, label } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { Icon } from '../../components/Icon'
+import { HelpButton } from '../../components/HelpButton'
 
 type Tab = 'circulation' | 'collection' | 'fines' | 'patrons' | 'gate' | 'ebooks' | 'migration'
 type Format = 'xlsx' | 'csv' | 'pdf'
@@ -92,7 +93,7 @@ export function ReportsPage() {
 
   return (
     <>
-      <div className="page-head"><h1>Reports & statistics</h1></div>
+      <div className="page-head"><h1>Reports & statistics<HelpButton /></h1></div>
       <Tabs value={tab} onChange={setTab} tabs={[
         ...TABS.map((t) => ({ id: t.id, label: t.label })),
         ...(canMigrate ? [{ id: 'migration' as const, label: 'Data migration' }] : []),

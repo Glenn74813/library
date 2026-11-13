@@ -9,6 +9,7 @@ import { fmtDate, fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
+import { HelpButton } from '../../components/HelpButton'
 
 export function PatronsPage() {
   const [q, setQ] = useState('')
@@ -40,7 +41,7 @@ export function PatronsPage() {
   return (
     <>
       <div className="page-head">
-        <h1>Patrons</h1>
+        <h1>Patrons<HelpButton /></h1>
         <div className="row">
           <button className="btn" onClick={() => download('/api/patrons/import-template', 'patron-import-template.csv')}><Icon name="download" />Template</button>
           <button className="btn" onClick={() => fileRef.current?.click()}><Icon name="upload" />Bulk import CSV</button>

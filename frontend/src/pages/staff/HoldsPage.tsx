@@ -7,6 +7,7 @@ import { useAsync } from '../../hooks/useAsync'
 import { useState } from 'react'
 import { ReleasedReceipt } from '../../components/ReleasedReceipt'
 import { switchSecurity } from '../../api/rfidStation'
+import { HelpButton } from '../../components/HelpButton'
 
 export function HoldsPage() {
   const { data, error, reload } = useAsync(() => api<Hold[]>('/api/holds'), [])
@@ -60,7 +61,7 @@ export function HoldsPage() {
 
   return (
     <>
-      <div className="page-head"><h1>Holds / reservations</h1></div>
+      <div className="page-head"><h1>Holds / reservations<HelpButton /></h1></div>
       <ErrorAlert error={error} />
       {released && <ReleasedReceipt loan={released} onClose={() => setReleased(null)} />}
       <div className="card">

@@ -9,6 +9,7 @@ import { ErrorAlert, Field, Pager, Stat, StatusBadge, Table, Tabs, ExportMenu } 
 import { ColumnChart, PieChart, dayLabel, dayTick, fillDays, fillHours, hourLabel } from '../../components/charts'
 import { daysAgo, fmtDateTime, fmtTime, isoDate } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
+import { HelpButton } from '../../components/HelpButton'
 
 export function AttendancePage() {
   const [tab, setTab] = useState<'stats' | 'logs' | 'settings'>('stats')
@@ -19,7 +20,7 @@ export function AttendancePage() {
   return (
     <>
       <div className="page-head">
-        <h1>Library attendance</h1>
+        <h1>Library attendance<HelpButton /></h1>
         <ExportMenu path={`/api/attendance/export${qs({ from, to })}`} name="attendance" label="Download report…" />
       </div>
       <div className="form-grid card" style={{ marginBottom: 16 }}>

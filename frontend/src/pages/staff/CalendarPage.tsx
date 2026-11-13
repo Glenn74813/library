@@ -6,6 +6,7 @@ import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Table } from '../../components/ui'
 import { fmtDate } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
+import { HelpButton } from '../../components/HelpButton'
 
 interface DayHours { weekday: number; openTime: string | null; closeTime: string | null }
 interface ClosedDay { day: string; reason: string }
@@ -53,7 +54,7 @@ export function CalendarPage() {
 
   return (
     <>
-      <div className="page-head"><h1>Library calendar</h1></div>
+      <div className="page-head"><h1>Library calendar<HelpButton /></h1></div>
       <p className="muted" style={{ marginTop: -8 }}>Due dates and pickup deadlines move to the next open day, overdue fines count only open days,
         closed days can't be booked, and visitors who forget to tap out are timed out at closing time.</p>
       <div className="grid cols-2" style={{ alignItems: 'start' }}>

@@ -7,6 +7,7 @@ import { ErrorAlert, Field, Modal, Table } from '../../components/ui'
 import { fmtMoney, label } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
+import { HelpButton } from '../../components/HelpButton'
 
 export function SettingsPage() {
   const canEdit = hasRole(useSession(), 'ADMIN', 'LIBRARIAN')
@@ -17,7 +18,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <div className="page-head"><h1>Loan rules & courses</h1></div>
+      <div className="page-head"><h1>Loan rules & courses<HelpButton /></h1></div>
       <LibraryRulesCard canEdit={canEdit} />
       <div className="card">
         <div className="page-head" style={{ marginBottom: 8 }}>

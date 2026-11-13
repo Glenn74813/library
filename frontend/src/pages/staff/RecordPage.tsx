@@ -14,6 +14,7 @@ import { CopyCatalogModal } from '../../components/CopyCatalogModal'
 import { DigitalPanel } from '../../components/DigitalPanel'
 import { getStation, station } from '../../api/rfidStation'
 import { Icon } from '../../components/Icon'
+import { HelpButton } from '../../components/HelpButton'
 
 type RecordForm = Omit<BibRecord, 'id' | 'totalCopies' | 'availableCopies' | 'createdAt' | 'updatedAt' | 'ebook'>
 
@@ -135,7 +136,7 @@ export function RecordPage({ edit = false }: { edit?: boolean }) {
   return (
     <>
       <div className="page-head">
-        <h1>{isNew ? 'New catalog record' : edit ? `Edit: ${form.title || 'record'}` : form.title || 'Record'}</h1>
+        <h1>{isNew ? 'New catalog record' : edit ? `Edit: ${form.title || 'record'}` : form.title || 'Record'}<HelpButton /></h1>
         <div className="row">
           <button className="btn" onClick={() => navigate(edit ? `/staff/catalog/${id}` : '/staff/catalog')}><Icon name="chevron-left" />Back</button>
           {!editing && <button className="btn" onClick={() => setEditingItem(NEW_COPY)}><Icon name="plus" />Add copy</button>}

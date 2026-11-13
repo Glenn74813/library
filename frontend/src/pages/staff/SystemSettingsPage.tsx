@@ -4,6 +4,7 @@ import { reloadLibraryConfig, type LibraryProfile } from '../../api/library'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field } from '../../components/ui'
 import { useAsync } from '../../hooks/useAsync'
+import { HelpButton } from '../../components/HelpButton'
 
 interface SystemSettings {
   profile: LibraryProfile
@@ -41,7 +42,7 @@ export function SystemSettingsPage() {
   return (
     <>
       <div className="page-head">
-        <h1>System settings</h1>
+        <h1>System settings<HelpButton /></h1>
         <button className="btn primary" disabled={busy} onClick={save}>Save</button>
       </div>
       <div className="grid cols-2" style={{ alignItems: 'start' }}>

@@ -6,6 +6,7 @@ import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Pager, StatusBadge, Table, Tabs } from '../../components/ui'
 import { fmtDate, fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
+import { HelpButton } from '../../components/HelpButton'
 
 const CHANNEL: Record<RenewalRequest['channel'], string> = { PORTAL: 'My Library', KIOSK: 'Self-checkout', SIP2: 'Self-check station' }
 
@@ -29,7 +30,7 @@ export function RenewalsPage() {
 
   return (
     <>
-      <div className="page-head"><h1>Renewal requests</h1></div>
+      <div className="page-head"><h1>Renewal requests<HelpButton /></h1></div>
       <p className="muted" style={{ marginTop: -8 }}>Renewals that patrons ask for in My Library, at the self-checkout kiosk or a self-check
         station wait here. The proposed due date already accounts for other patrons' reservations and bookings.</p>
       <ErrorAlert error={error} />

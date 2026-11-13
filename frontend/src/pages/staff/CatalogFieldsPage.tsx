@@ -5,6 +5,7 @@ import { Icon } from '../../components/Icon'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Table } from '../../components/ui'
 import { useAsync } from '../../hooks/useAsync'
+import { HelpButton } from '../../components/HelpButton'
 
 const TYPE_LABEL = { TEXT: 'Text', NUMBER: 'Number', DATE: 'Date', SELECT: 'Choice list' }
 
@@ -15,7 +16,7 @@ export function CatalogFieldsPage() {
   return (
     <>
       <div className="page-head">
-        <h1>Catalog fields</h1>
+        <h1>Catalog fields<HelpButton /></h1>
         <button className="btn primary" onClick={() => setEditing({ type: 'TEXT', showInOpac: true, sortOrder: (data?.length ?? 0) + 1, options: [] })}>
           <Icon name="plus" />Add field</button>
       </div>

@@ -15,6 +15,7 @@ import { Icon } from '../../components/Icon'
 import { fmtDate, fmtDateTime, fmtMoney } from '../../format'
 import { useLibrary } from '../../api/library'
 import { CheckoutSlip, HoldShelfSlip, printRecorded, ReturnSlip, type HoldSlipData, type ReturnedItem } from '../../print/slips'
+import { HelpButton } from '../../components/HelpButton'
 
 type Mode = 'out' | 'in'
 
@@ -77,7 +78,7 @@ export function CirculationPage() {
 
   return (
     <>
-      <div className="page-head"><h1>Circulation desk</h1></div>
+      <div className="page-head"><h1>Circulation desk<HelpButton /></h1></div>
       {(offline || queued > 0) && (
         <div className="alert warn row" style={{ marginBottom: 16, justifyContent: 'space-between' }}>
           <span><strong>{offline ? 'Offline mode.' : 'Waiting to upload.'}</strong> {queued} transaction(s) saved on this computer;

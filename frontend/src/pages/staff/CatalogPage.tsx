@@ -12,6 +12,7 @@ import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
 import { CameraScanButton } from '../../components/CameraScan'
 import { ItemModal } from './RecordPage'
+import { HelpButton } from '../../components/HelpButton'
 
 export function CatalogPage() {
   const [q, setQ] = useState('')
@@ -43,7 +44,7 @@ export function CatalogPage() {
   return (
     <>
       <div className="page-head">
-        <h1>Catalog</h1>
+        <h1>Catalog<HelpButton /></h1>
         <div className="row">
           {canImport && <button className="btn" onClick={() => setImporting(true)}><Icon name="upload" />Import</button>}
           <select className="btn" style={{ width: 'auto' }} value="" aria-label="Export catalog" onChange={(e) => {

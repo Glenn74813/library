@@ -74,7 +74,7 @@ export function Pager({ page, onPage }: { page: Page<unknown> | undefined; onPag
  * bar then slide away with the page. Counted, so a dialog opened from another keeps the lock.
  */
 let scrollLocks = 0
-function lockPageScroll() {
+export function lockPageScroll() {
   if (scrollLocks++ === 0) document.documentElement.classList.add('scroll-locked')
   return () => {
     if (--scrollLocks === 0) document.documentElement.classList.remove('scroll-locked')

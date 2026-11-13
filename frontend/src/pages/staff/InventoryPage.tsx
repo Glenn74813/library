@@ -8,6 +8,7 @@ import { ErrorAlert, Field, Modal, Stat, StatusBadge, Table, Tabs, ExportMenu } 
 import { fmtDateTime, shelvesLabel } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
+import { HelpButton } from '../../components/HelpButton'
 
 export function InventoryPage() {
   const { data, error, reload } = useAsync(() => api<StocktakeSession[]>('/api/inventory/sessions'), [])
@@ -19,7 +20,7 @@ export function InventoryPage() {
   return (
     <>
       <div className="page-head">
-        <h1>Stocktake / shelf inventory</h1>
+        <h1>Stocktake / shelf inventory<HelpButton /></h1>
         <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" />Start stocktake</button>
       </div>
       <ErrorAlert error={error} />
@@ -120,7 +121,7 @@ function SessionView({ session, onBack }: { session: StocktakeSession; onBack: (
   return (
     <>
       <div className="page-head">
-        <h1>{session.name}</h1>
+        <h1>{session.name}<HelpButton /></h1>
         <div className="row">
           <button className="btn" onClick={onBack}><Icon name="chevron-left" />Back</button>
           <button className="btn" onClick={loadReport}>Missing/found report</button>

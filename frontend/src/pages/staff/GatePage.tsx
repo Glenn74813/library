@@ -9,6 +9,7 @@ import { daysAgo, fmtDateTime, isoDate, label } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
 import { useLibrary } from '../../api/library'
+import { HelpButton } from '../../components/HelpButton'
 
 /** Announcement preset; a recording (MP3...) is played on kiosks instead of text-to-speech. */
 interface Preset { id?: string; name: string; message: string; hasAudio?: boolean; audioFilename?: string | null }
@@ -57,7 +58,7 @@ export function GatePage() {
   return (
     <>
       <div className="page-head">
-        <h1>Security gate</h1>
+        <h1>Security gate<HelpButton /></h1>
         <div className="row">
           <ExportMenu path={`/api/gate/export${qs({ from, to })}`} name="gate-events" label="Alarm / event log…" />
           <ExportMenu path={`/api/reports/export/loans${qs({ from, to })}`} name="circulation" label="Circulation report…" />

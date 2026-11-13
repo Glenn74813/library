@@ -4,6 +4,7 @@ import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field } from '../../components/ui'
 import { fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
+import { HelpButton } from '../../components/HelpButton'
 
 interface PrivacySettings {
   notice: string
@@ -72,7 +73,7 @@ export function PrivacyPage() {
 
   return (
     <>
-      <div className="page-head"><h1>Data privacy</h1></div>
+      <div className="page-head"><h1>Data privacy<HelpButton /></h1></div>
       <p className="muted" style={{ marginTop: -8 }}>Data Privacy Act of 2012 (RA 10173). The notice is shown to patrons on the OPAC, the patron portal
         and at sign-in. Patrons' data can be downloaded or erased from each patron's page.</p>
       <div className="grid cols-2" style={{ alignItems: 'start' }}>

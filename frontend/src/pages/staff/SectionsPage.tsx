@@ -7,6 +7,7 @@ import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Table } from '../../components/ui'
 import { useAsync } from '../../hooks/useAsync'
 import { shelvesLabel } from '../../format'
+import { HelpButton } from '../../components/HelpButton'
 
 /**
  * Administration → Sections & Aisles: the library's layout. A copy's section, aisle and shelf, and a
@@ -47,7 +48,7 @@ export function SectionsPage() {
 
   return (
     <>
-      <div className="page-head"><h1>Sections &amp; Aisles</h1></div>
+      <div className="page-head"><h1>Sections &amp; Aisles<HelpButton /></h1></div>
       <p className="muted" style={{ marginTop: -8 }}>The library's layout: sections, the aisles in each section and how many shelves each
         aisle has. Copies are placed by picking from this layout, and a stocktake counts a section or one aisle against it.
         {!isAdmin && ' Only an administrator can change it.'}</p>

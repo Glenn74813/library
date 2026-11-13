@@ -6,6 +6,7 @@ import { ErrorAlert, Field, Modal, Table, PasswordInput } from '../../components
 import { fmtDate, fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
+import { HelpButton } from '../../components/HelpButton'
 
 const STAFF_ROLES: { id: Role; text: string }[] = [
   { id: 'ADMIN', text: 'Administrator — everything incl. users & audit' },
@@ -42,7 +43,7 @@ export function UsersPage() {
 
   return (
     <>
-      <div className="page-head"><h1>Users & devices</h1></div>
+      <div className="page-head"><h1>Users & devices<HelpButton /></h1></div>
       <ErrorAlert error={error} />
 
       <div className="card">

@@ -6,6 +6,7 @@ import { ColumnChart, PieChart, dayLabel, dayTick, fillDays } from '../../compon
 import { daysAgo, fmtMoney, isoDate } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
+import { HelpButton } from '../../components/HelpButton'
 
 export function DashboardPage() {
   const { data: d, error } = useAsync(() => api<Dashboard>('/api/reports/dashboard'), [])
@@ -15,7 +16,7 @@ export function DashboardPage() {
   return (
     <>
       <div className="page-head">
-        <h1>Dashboard</h1>
+        <h1>Dashboard<HelpButton /></h1>
         <div className="row">
           <Link className="btn primary" to="/staff/circulation"><Icon name="repeat" />Circulation desk</Link>
           <Link className="btn" to="/staff/catalog/new"><Icon name="plus" />New record</Link>

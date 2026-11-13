@@ -5,6 +5,7 @@ import { ErrorAlert, ExportMenu, Field, Pager, Table } from '../../components/ui
 import { fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
+import { HelpButton } from '../../components/HelpButton'
 
 export function AuditPage() {
   const [page, setPage] = useState(0)
@@ -23,7 +24,7 @@ export function AuditPage() {
   return (
     <>
       <div className="page-head">
-        <h1>Audit trail</h1>
+        <h1>Audit trail<HelpButton /></h1>
         <ExportMenu path={`/api/audit/export${query}`} name="audit-trail" />
       </div>
       <ErrorAlert error={error} />

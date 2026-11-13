@@ -5,6 +5,7 @@ import type { Loan, Page } from '../../api/types'
 import { ErrorAlert, Pager, Table, Tabs, ExportMenu } from '../../components/ui'
 import { fmtDate, fmtMoney } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
+import { HelpButton } from '../../components/HelpButton'
 
 export function LoansPage() {
   const [tab, setTab] = useState<'all' | 'overdue'>('overdue')
@@ -16,7 +17,7 @@ export function LoansPage() {
   return (
     <>
       <div className="page-head">
-        <h1>Loans</h1>
+        <h1>Loans<HelpButton /></h1>
         <ExportMenu path="/api/reports/export/overdue" name="overdue" label="Export overdue…" />
       </div>
       <Tabs value={tab} onChange={(t) => { setTab(t); setPage(0) }}

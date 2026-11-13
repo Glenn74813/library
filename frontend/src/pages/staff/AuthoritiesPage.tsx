@@ -5,6 +5,7 @@ import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Table, Tabs } from '../../components/ui'
 import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
+import { HelpButton } from '../../components/HelpButton'
 
 type AType = 'AUTHOR' | 'SUBJECT'
 interface Row { id: number | null; heading: string; usage: number; variants: string[]; note: string | null }
@@ -23,7 +24,7 @@ export function AuthoritiesPage() {
 
   return (
     <>
-      <div className="page-head"><h1>Authorities</h1></div>
+      <div className="page-head"><h1>Authorities<HelpButton /></h1></div>
       <p className="muted" style={{ marginTop: -8 }}>Keep one form of each name and subject. <strong>Rename / merge</strong> fixes a heading in every
         record at once (e.g. “Sparks, Nick” → “Sparks, Nicholas”); the old form is kept as a variant, so OPAC searches for it still find the titles.</p>
       <Tabs value={type} onChange={(t) => { setType(t); setQ('') }} tabs={[{ id: 'AUTHOR', label: 'Authors' }, { id: 'SUBJECT', label: 'Subjects' }]} />

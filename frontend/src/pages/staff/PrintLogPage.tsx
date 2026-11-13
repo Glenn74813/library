@@ -7,6 +7,7 @@ import { fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { useDebounced } from '../../hooks/useDebounced'
 import type { PrintEntry, PrintKind } from '../../print/slips'
+import { HelpButton } from '../../components/HelpButton'
 
 const KINDS: [PrintKind, string][] = [
   ['RECEIPT', 'Payment receipts'], ['CLEARANCE', 'Library clearances'], ['ID_CARD', 'Library IDs'],
@@ -30,7 +31,7 @@ export function PrintLogPage() {
 
   return (
     <>
-      <div className="page-head"><h1>Print log</h1></div>
+      <div className="page-head"><h1>Print log<HelpButton /></h1></div>
       <ErrorAlert error={error} />
       <div className="card">
         <div className="form-grid" style={{ marginBottom: 8 }}>

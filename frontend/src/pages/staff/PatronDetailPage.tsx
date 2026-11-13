@@ -18,6 +18,7 @@ import { useDebounced } from '../../hooks/useDebounced'
 import { Icon } from '../../components/Icon'
 import { useLibrary } from '../../api/library'
 import { ClearanceSlip, confirmReprint, HoldShelfSlip, PatronSlip, printRecorded, ReturnSlip, type PrintEntry } from '../../print/slips'
+import { HelpButton } from '../../components/HelpButton'
 
 type Tab = 'loans' | 'history' | 'holds' | 'fines' | 'attendance' | 'printed'
 
@@ -173,7 +174,7 @@ export function PatronDetailPage() {
             {p.photoUrl ? <img src={p.photoUrl} alt="" className="avatar" /> : <Icon name="camera" size={22} />}
           </button>
           <div style={{ minWidth: 0 }}>
-            <h1>{p.fullName}</h1>
+            <h1>{p.fullName}<HelpButton /></h1>
             <div className="muted small">
               <span className="mono">{p.cardNumber}</span> · {p.categoryName}{p.courseCode && ` · ${p.courseCode}`}
               {p.expiryDate && ` · expires ${fmtDate(p.expiryDate)}`}

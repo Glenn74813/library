@@ -4,6 +4,7 @@ import { errorText, useToast } from '../../components/Toast'
 import { Field, StatusBadge, Table, PasswordInput } from '../../components/ui'
 import { fmtDateTime } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
+import { HelpButton } from '../../components/HelpButton'
 
 type NoticeType = 'DUE_SOON' | 'OVERDUE' | 'HOLD_READY' | 'RENEWAL_APPROVED' | 'RENEWAL_REJECTED'
 
@@ -54,7 +55,7 @@ export function NotificationsPage() {
   return (
     <>
       <div className="page-head">
-        <h1>Notifications</h1>
+        <h1>Notifications<HelpButton /></h1>
         <button className="btn primary" onClick={save}>Save settings</button>
       </div>
       <div className="grid cols-2" style={{ alignItems: 'start' }}>

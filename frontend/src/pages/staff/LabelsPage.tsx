@@ -5,12 +5,13 @@ import { Icon } from '../../components/Icon'
 import { errorText, useToast } from '../../components/Toast'
 import { Field } from '../../components/ui'
 import { useAsync } from '../../hooks/useAsync'
+import { HelpButton } from '../../components/HelpButton'
 
 /** Print item barcode / spine labels and patron ID cards on A4 label sheets. */
 export function LabelsPage() {
   return (
     <>
-      <div className="page-head"><h1>Labels & library IDs</h1></div>
+      <div className="page-head"><h1>Labels & library IDs<HelpButton /></h1></div>
       <p className="muted" style={{ marginTop: -8 }}>PDFs open in a new tab; print at <strong>100% / Actual size</strong> (not “Fit to page”) so they line up with the label sheet.</p>
       <div className="grid cols-2" style={{ alignItems: 'start' }}>
         <ItemLabels />
