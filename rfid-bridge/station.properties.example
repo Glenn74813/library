@@ -3,8 +3,9 @@
 # Run:  java RfidBridge.java
 mode=station
 port=8765
-# Library pages allowed to use this bridge (comma-separated), or * for any
-origins=*
+# Library pages allowed to use this bridge (comma-separated). Other websites open in the browser are refused.
+# Default: the hosted library site and the local web app. Add the campus address if the library moves there.
+#origins=https://zscmst-library.pg1992-gp.workers.dev,http://localhost:8081
 
 # ---- Reading tags: pick ONE reader type, or reader=auto to try all of them at once -----------------
 # Testing without hardware: type "place EPC" in the bridge window

@@ -71,6 +71,9 @@ Then:
   the desk before leaving.
 
 The bridge only listens on `127.0.0.1` (this PC) unless `bind=` is changed.
+Only the library's own pages may use it: a request from any other website open in the same browser is refused
+(`origins=` lists the allowed sites; by default the hosted library site and the local web app). Tag numbers and
+barcodes are checked before they reach a vendor command, and a command that takes over 15 seconds is stopped.
 
 ### Bridge API (for reader software developers)
 

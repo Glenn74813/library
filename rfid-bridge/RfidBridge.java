@@ -219,6 +219,7 @@ public final class RfidBridge {
 
     /** Writes a copy's tag: the EPC is the barcode in hex (ASCII), padded to 96 or 128 bits. Returns the EPC. */
     static String write(String barcode) throws Exception {
+        if (barcode == null || !BARCODE.matcher(barcode).matches()) throw new IllegalArgumentException("Not a copy barcode: " + barcode);
         String epc = epcFor(barcode);
         switch (writer()) {
             case "simulator" -> {
@@ -237,6 +238,7 @@ public final class RfidBridge {
 
     /** Switches a tag's security (EAS / AFI): on when the copy is on the shelf, off when it is borrowed. */
     static void security(String epc, boolean secure) throws Exception {
+        if (!EPC.matcher(epc).matches()) throw new IllegalArgumentException("Not a tag number: " + epc);
         switch (writer()) {
             case "simulator" -> {
                 String[] t = simTags.get(epc);
@@ -267,16 +269,36 @@ public final class RfidBridge {
         return hex.toString();
     }
 
-    /** Runs a configured command with {placeholders} filled in; fails when it exits with an error. */
+    /** What a tag number and a copy barcode may look like before they go anywhere near a command. */
+    static final Pattern EPC = Pattern.compile("[0-9A-F]{8,64}");
+    static final Pattern BARCODE = Pattern.compile("[A-Za-z0-9._-]{1,16}");
+
+    /**
+     * Runs a configured command with {placeholders} filled in; fails when it exits with an error or takes longer
+     * than 15 seconds. The template is split into arguments first, so a value can never add an argument.
+     */
     static void run(String template, Map<String, String> values) throws Exception {
         if (template.isBlank()) throw new IllegalStateException("No command set up for this action");
-        String cmd = template;
-        for (var e : values.entrySet()) cmd = cmd.replace("{" + e.getKey() + "}", e.getValue());
-        Process p = new ProcessBuilder(split(cmd)).redirectErrorStream(true).start();
-        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-        if (!p.waitFor(15, TimeUnit.SECONDS) || p.exitValue() != 0) {
-            throw new IllegalStateException("The reader command failed" + (out.isEmpty() ? "" : ": " + out));
+        List<String> args = new ArrayList<>();
+        for (String arg : split(template)) {
+            for (var e : values.entrySet()) arg = arg.replace("{" + e.getKey() + "}", e.getValue());
+            args.add(arg);
         }
+        Process p = new ProcessBuilder(args).redirectErrorStream(true).start();
+        StringBuilder out = new StringBuilder();
+        Thread reader = Thread.ofVirtual().start(() -> {
+            try {
+                out.append(new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim());
+            } catch (IOException ignored) {
+                // the process was killed
+            }
+        });
+        if (!p.waitFor(15, TimeUnit.SECONDS)) {
+            p.destroyForcibly();
+            throw new IllegalStateException("The reader command did not finish within 15 seconds");
+        }
+        reader.join(1000);
+        if (p.exitValue() != 0) throw new IllegalStateException("The reader command failed" + (out.isEmpty() ? "" : ": " + out));
     }
 
     // ------------------------------------------------------------------ HTTP (for the library pages)
@@ -290,12 +312,23 @@ public final class RfidBridge {
         log("Listening on http://" + get("bind", "127.0.0.1") + ":" + port);
     }
 
+    /** The library's own pages; other websites open in the same browser must not drive the reader. */
+    static final String DEFAULT_ORIGINS = "https://zscmst-library.pg1992-gp.workers.dev,http://localhost:8081,http://localhost:5173";
+
     static void handle(HttpExchange x) throws IOException {
-        // The library pages are on another origin: allow them, including Chrome's private-network check.
         var h = x.getResponseHeaders();
+        // Browsers always say which page is calling. Only the library's pages may; requests without an Origin
+        // come from programs on this PC (reader software pushing reads, the gate's own software).
         String origin = x.getRequestHeaders().getFirst("Origin");
-        String allowed = get("origins", "*");
-        if (origin != null && (allowed.equals("*") || List.of(allowed.split(",")).contains(origin))) {
+        String allowed = get("origins", DEFAULT_ORIGINS).trim();
+        boolean trusted = origin == null || allowed.equals("*")
+                || List.of(allowed.split("\\s*,\\s*")).contains(origin.replaceAll("/+$", ""));
+        if (!trusted) {
+            log("Refused a request from " + origin + " (not in origins=)");
+            reply(x, 403, "{\"error\":\"This page may not use the RFID station\"}");
+            return;
+        }
+        if (origin != null) {
             h.set("Access-Control-Allow-Origin", origin);
             h.set("Vary", "Origin");
         }
@@ -304,6 +337,12 @@ public final class RfidBridge {
         h.set("Access-Control-Allow-Private-Network", "true");
         if (x.getRequestMethod().equals("OPTIONS")) {
             x.sendResponseHeaders(204, -1);
+            return;
+        }
+        // A web page can only send JSON after the browser's preflight check, which only the library's pages pass.
+        String type = x.getRequestHeaders().getFirst("Content-Type");
+        if (origin != null && x.getRequestMethod().equals("POST") && (type == null || !type.startsWith("application/json"))) {
+            reply(x, 415, "{\"error\":\"Send JSON\"}");
             return;
         }
         String body = new String(x.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
@@ -378,20 +417,31 @@ public final class RfidBridge {
                     String res = lms("/api/gate/device/check", "{\"gateId\":" + q(gateId) + ",\"epcs\":" + arr(fresh) + "}");
                     boolean alarm = res.contains("\"alarm\":true");
                     log((alarm ? "ALARM " : "ok    ") + res);
-                    if (alarm && !get("gate.alarm", "").isBlank()) run(get("gate.alarm", ""), Map.of("epcs", String.join(",", fresh)));
+                    if (alarm) soundAlarm(fresh);
                 } catch (Exception e) {
                     log("Library system not reachable: " + e.getMessage() + " (tags " + fresh + ")");
-                    if (get("gate.offlineAlarm", "false").equals("true") && !get("gate.alarm", "").isBlank()) {
-                        try {
-                            run(get("gate.alarm", ""), Map.of("epcs", String.join(",", fresh)));
-                        } catch (Exception ignored) {
-                            // the alarm command failing too is logged by run()
-                        }
-                    }
+                    if (get("gate.offlineAlarm", "false").equals("true")) soundAlarm(fresh);
                 }
             }
             sleep(300);
         }
+    }
+
+    static final java.util.concurrent.atomic.AtomicBoolean alarming = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** Runs gate.alarm on its own thread, so the gate keeps checking tags while the alarm sounds. */
+    static void soundAlarm(List<String> epcs) {
+        String cmd = get("gate.alarm", "");
+        if (cmd.isBlank() || !alarming.compareAndSet(false, true)) return;
+        Thread.ofVirtual().start(() -> {
+            try {
+                run(cmd, Map.of("epcs", String.join(",", epcs)));
+            } catch (Exception e) {
+                log("Alarm command failed: " + e.getMessage());
+            } finally {
+                alarming.set(false);
+            }
+        });
     }
 
     static void lmsEvent(String type, Integer visitors, String message) {
