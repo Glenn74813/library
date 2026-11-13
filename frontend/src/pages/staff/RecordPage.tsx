@@ -278,15 +278,17 @@ function ItemModal({ recordId, item, canDelete, others, onClose, onSaved }: {
     setError(null)
     const body = itemBody(f)
     try {
-      if (item.id) await api(`/api/catalog/items/${item.id}`, { method: 'PUT', body })
-      else await api(`/api/catalog/records/${recordId}/items`, { body })
+      const saved = item.id ? await api<Item>(`/api/catalog/items/${item.id}`, { method: 'PUT', body })
+        : await api<Item>(`/api/catalog/records/${recordId}/items`, { body })
       if (applyAll) {
         // Same shelf for every copy of this title; other fields of those copies are kept as they are.
         for (const o of others) {
           await api(`/api/catalog/items/${o.id}`, { method: 'PUT', body: { ...itemBody(o), location: f.location, aisle: f.aisle, shelf: f.shelf } })
         }
       }
-      toast(applyAll && others.length ? `Location saved for all ${others.length + 1} copies` : 'Copy saved')
+      toast(!item.id && !f.barcode?.trim()
+        ? `Copy added with barcode ${saved.barcode}. Print its barcode label (Print labels…) and stick it on the book.`
+        : applyAll && others.length ? `Location saved for all ${others.length + 1} copies` : 'Copy saved')
       onSaved()
     } catch (e) {
       setError(errorText(e))
@@ -313,8 +315,10 @@ function ItemModal({ recordId, item, canDelete, others, onClose, onSaved }: {
       <div className="stack">
         <ErrorAlert error={error} />
         <div className="form-grid">
-          <Field label="Barcode *"><div className="input-group">
-            <input className="mono" value={f.barcode ?? ''} onChange={(e) => set('barcode', e.target.value)} autoFocus />
+          <Field label={item.id ? 'Barcode *' : 'Barcode'} as="div" hint={item.id ? 'The library label on this copy'
+            : 'Leave empty to assign the next library barcode, or scan a pre-printed library label'}><div className="input-group">
+            <input className="mono" value={f.barcode ?? ''} onChange={(e) => set('barcode', e.target.value)} autoFocus
+              placeholder={item.id ? undefined : 'Assigned when saved'} />
             <CameraScanButton onScan={(t) => set('barcode', t)} /></div></Field>
           <Field label="RFID tag EPC" hint="Read with the tagging device"><input className="mono" value={f.rfidEpc ?? ''} onChange={(e) => set('rfidEpc', e.target.value)} /></Field>
           <Field label="Section / area" as="div" hint={isAdmin ? <>Set up under <Link to="/staff/sections">Sections &amp; Aisles</Link></>

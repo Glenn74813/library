@@ -132,7 +132,10 @@ can be added from the patron's page.
   used. Check the copied data, then save.
 - Authors and subjects suggest existing headings as you type, which keeps the catalog consistent.
   Variant names are managed under **Authorities**.
-- Add **copies** (barcode, RFID EPC, call number, section, aisle, shelf, price). Mark room-use-only
+- Add **copies** (barcode, RFID EPC, section, aisle, shelf, price). Leave **Barcode** empty and the
+  system assigns the next library barcode (LRC-000003, LRC-000004, ...) when you save; then print its
+  barcode label and stick it on the book. Scan a pre-printed library label instead if you have one.
+  The barcode is the library's own number for that copy, not the ISBN. Mark room-use-only
   material types under Administration.
 - **E-book / digital copy** panel: upload a school-owned PDF/EPUB, or link a commercial e-book.
 - **Import** a CSV or MARC file. A preview runs first; nothing is saved until you confirm.

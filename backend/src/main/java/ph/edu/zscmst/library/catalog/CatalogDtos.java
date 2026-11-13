@@ -98,7 +98,8 @@ public final class CatalogDtos {
         }
     }
 
-    public record ItemRequest(@NotBlank @Size(max = 50) String barcode,
+    /** {@code barcode}: blank on a new copy means "assign the next library barcode" (LRC-000123). */
+    public record ItemRequest(@Size(max = 50) String barcode,
                               @Size(max = 64) String rfidEpc,
                               @Size(max = 100) String location,
                               @Size(max = 20) String aisle,

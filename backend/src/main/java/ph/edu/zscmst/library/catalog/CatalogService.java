@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,12 +51,14 @@ public class CatalogService {
     /** Lazy: circulation needs the catalog only indirectly, but keep the two from depending on start order. */
     private final CirculationService circulation;
     private final SectionService sections;
+    private final JdbcTemplate jdbc;
 
     public CatalogService(BibRecordRepository records, ItemRepository items, LoanRepository loans,
                           AuditService audit, DigitalService digital, LoanPolicy policy, AuthorityService authorities,
                           CustomFieldRepository customFields, @Lazy CirculationService circulation,
-                          SectionService sections) {
+                          SectionService sections, JdbcTemplate jdbc) {
         this.sections = sections;
+        this.jdbc = jdbc;
         this.circulation = circulation;
         this.authorities = authorities;
         this.customFields = customFields;
@@ -190,7 +193,8 @@ public class CatalogService {
 
     @Transactional
     public ItemDto addItem(Long recordId, ItemRequest req) {
-        Item i = new Item(getRecord(recordId), req.barcode().trim());
+        String code = req.barcode() == null || req.barcode().isBlank() ? nextBarcode() : req.barcode().trim();
+        Item i = new Item(getRecord(recordId), code);
         applyItem(i, req, true);
         checkCodesFree(i);
         i = items.save(i);
@@ -204,7 +208,8 @@ public class CatalogService {
     public ItemDto updateItem(Long itemId, ItemRequest req) {
         Item i = items.findById(itemId).orElseThrow(() -> ApiException.notFound("Item"));
         ItemStatus before = i.getStatus();
-        i.setBarcode(req.barcode().trim());
+        // A copy keeps its barcode unless a new one is given: its label is already on the book.
+        if (req.barcode() != null && !req.barcode().isBlank()) i.setBarcode(req.barcode().trim());
         applyItem(i, req, false);
         checkCodesFree(i);
         // A copy that is back (found, repaired) goes to the next waiting hold before the shelf.
@@ -225,6 +230,18 @@ public class CatalogService {
         }
         items.delete(i);
         audit.record("ITEM_DELETE", i.getBarcode());
+    }
+
+    /**
+     * The next library barcode (LRC- and six digits) for a copy added without one. Skips any number someone
+     * already typed in by hand, so the assigned label is always unique.
+     */
+    private String nextBarcode() {
+        while (true) {
+            Long n = jdbc.queryForObject("select nextval('item_barcode_seq')", Long.class);
+            String code = String.format("LRC-%06d", n);
+            if (items.idsUsingCode(code).isEmpty()) return code;
+        }
     }
 
     /** A barcode or EPC may not match (in any case) another copy's barcode or EPC: scans must find one copy. */
