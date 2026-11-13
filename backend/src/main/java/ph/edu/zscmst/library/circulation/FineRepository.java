@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
 
@@ -21,6 +22,10 @@ public interface FineRepository extends JpaRepository<Fine, Long> {
 
     @EntityGraph(attributePaths = {"patron", "loan", "loan.item", "loan.item.record"})
     List<Fine> findByPatronIdOrderByCreatedAtDesc(Long patronId);
+
+    Optional<Fine> findFirstByLoanIdAndStatusOrderByIdDesc(Long loanId, FineStatus status);
+
+    List<Fine> findByLoanIdAndStatusOrderByIdAsc(Long loanId, FineStatus status);
 
     @EntityGraph(attributePaths = {"patron"})
     Page<Fine> findByStatusOrderByCreatedAtDesc(FineStatus status, Pageable pageable);

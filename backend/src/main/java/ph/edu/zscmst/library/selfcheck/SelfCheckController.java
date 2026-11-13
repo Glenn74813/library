@@ -141,6 +141,10 @@ public class SelfCheckController {
     @PostMapping("/api/kiosk/selfcheck/return")
     public Returned giveBack(@Valid @RequestBody ReturnRequest req) {
         if (!config().allowReturns()) throw ApiException.badRequest("Please return items at the circulation desk");
+        // Fines tied to this borrowing (overdue, damage...) are paid at the desk before the return is completed.
+        if (circulation.previewCheckin(req.item()).total().signum() > 0) {
+            throw ApiException.conflict("This item has fines to settle. Please return it at the circulation desk.");
+        }
         CheckinResult r = circulation.checkin(req.item());
         // Patrons put the item on the return cart; staff route it to the hold shelf or the shelves.
         String message = r.loan() == null ? r.message() : "Thank you! Please place the item on the return cart.";

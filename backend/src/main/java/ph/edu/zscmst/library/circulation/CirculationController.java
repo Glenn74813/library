@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import ph.edu.zscmst.library.circulation.CirculationDtos.BookingCalendar;
+import ph.edu.zscmst.library.circulation.CirculationDtos.CheckinPreview;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckinRequest;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckinResult;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckoutRequest;
@@ -32,6 +33,7 @@ import ph.edu.zscmst.library.circulation.CirculationDtos.ManualFineRequest;
 import ph.edu.zscmst.library.circulation.CirculationDtos.PatronSummary;
 import ph.edu.zscmst.library.circulation.CirculationDtos.PayRequest;
 import ph.edu.zscmst.library.circulation.CirculationDtos.ReceiptDto;
+import ph.edu.zscmst.library.circulation.CirculationDtos.Settle;
 import ph.edu.zscmst.library.circulation.CirculationDtos.WaiveRequest;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.PageResponse;
@@ -56,9 +58,25 @@ public class CirculationController {
         return service.checkout(req.patron(), req.item(), req.override());
     }
 
+    /** Overdue returns must be settled: see {@link CirculationService#checkinSettled}. Waiving needs a librarian or admin. */
     @PostMapping("/circulation/checkin")
     public CheckinResult checkin(@Valid @RequestBody CheckinRequest req) {
-        return service.checkin(req.item());
+        if (req.settle() == Settle.WAIVE && !canWaive()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only a librarian or administrator can waive a fine");
+        }
+        return service.checkinSettled(req.item(), req.settle(), req.waiveReason());
+    }
+
+    /** What returning a copy now would charge (for the desk to ask for payment first). */
+    @GetMapping("/circulation/checkin/preview")
+    public CheckinPreview previewCheckin(@RequestParam String item) {
+        return service.previewCheckin(item);
+    }
+
+    private static boolean canWaive() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_LIBRARIAN"));
     }
 
     @PostMapping("/circulation/loans/{id}/renew")
@@ -156,6 +174,6 @@ public class CirculationController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMIN','LIBRARIAN')")
     public FineDto addFine(@Valid @RequestBody ManualFineRequest req) {
-        return service.addManualFine(req.patronId(), req.amount(), req.reason());
+        return service.addManualFine(req.patronId(), req.amount(), req.reason(), req.loanId());
     }
 }

@@ -69,13 +69,34 @@ public final class CirculationDtos {
     public record CheckoutResult(LoanDto loan, List<String> warnings, String notice) {
     }
 
-    public record CheckinRequest(@NotBlank String item) {
+    /**
+     * {@code settle}: for an overdue return, how its fine is settled before the return completes (PAY, or
+     * WAIVE with {@code waiveReason} by a librarian or administrator). Without it an overdue return is refused.
+     */
+    public record CheckinRequest(@NotBlank String item, Settle settle, @Size(max = 200) String waiveReason) {
+        public CheckinRequest(String item) {
+            this(item, null, null);
+        }
     }
 
+    public enum Settle { PAY, WAIVE }
+
+    /**
+     * What must be cleared before this copy's return completes: the overdue fine returning it now would
+     * charge, plus unpaid charges already linked to the borrowing (e.g. damage); {@code total} is their sum.
+     */
+    public record CheckinPreview(LoanDto loan, BigDecimal overdueFine, List<FineDto> charges, BigDecimal total) {
+    }
+
+    /** {@code receipt}: the payment receipt when an overdue fine was paid as part of the return. */
     public record CheckinResult(LoanDto loan, BigDecimal fineAmount, String holdForPatron, String message,
-                                HoldSlip holdSlip) {
+                                HoldSlip holdSlip, ReceiptDto receipt) {
+        public CheckinResult(LoanDto loan, BigDecimal fineAmount, String holdForPatron, String message, HoldSlip holdSlip) {
+            this(loan, fineAmount, holdForPatron, message, holdSlip, null);
+        }
+
         public CheckinResult(LoanDto loan, BigDecimal fineAmount, String holdForPatron, String message) {
-            this(loan, fineAmount, holdForPatron, message, null);
+            this(loan, fineAmount, holdForPatron, message, null, null);
         }
     }
 
@@ -107,7 +128,8 @@ public final class CirculationDtos {
     public record WaiveRequest(@NotBlank @Size(max = 200) String reason) {
     }
 
+    /** {@code loanId}: the borrowing the charge is for (e.g. damage to that book), or null for a general charge. */
     public record ManualFineRequest(@NotNull Long patronId, @NotNull @DecimalMin("0.01") BigDecimal amount,
-                                    @NotBlank @Size(max = 200) String reason) {
+                                    @NotBlank @Size(max = 200) String reason, Long loanId) {
     }
 }

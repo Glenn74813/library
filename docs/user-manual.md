@@ -44,8 +44,12 @@ No scanner? Click the **camera** button next to any scan box to use the PC's or 
 
 ### 1.4 Checking items in
 **Check in (return)** tab: scan each returned item. The large message tells you what to do:
-*Return to Fiction Section · Aisle 3 · Shelf 2*, or *Place on hold shelf for (name)*. Overdue fines
-are added automatically (only days the library was open are counted).
+*Return to Fiction Section · Aisle 3 · Shelf 2*, or *Place on hold shelf for (name)*.
+**A book with fines is only taken back once they are cleared.** If the item is overdue, or has a charge
+linked to that borrowing (e.g. damage), a window lists them with the total: **Receive and return** pays
+them on one receipt and completes the return; **Waive…** (librarian or admin, with a reason) clears them;
+**Cancel** leaves the book on loan. Overdue fines count only days the library was open. The patron's page
+(Loans → **Return**) works the same way. Returns saved while the desk is offline are not held up.
 
 ### 1.5 When the network or server is down (offline desk)
 If the server cannot be reached, the desk switches to **Offline mode** by itself:
@@ -109,8 +113,10 @@ bookings; a red note means it can't be renewed any more (e.g. someone reserved t
 
 ### 1.7 Fines and payments
 **Circulation → Fines & payments**: select unpaid fines and **Pay** to print a payment receipt (the library issues the official receipt)
-(reprint any time), or **Waive** with a reason (librarian). Manual charges (damaged item, lost card)
-can be added from the patron's page.
+(reprint any time), or **Waive** with a reason (librarian). **Add charge** on the patron's Fines tab opens
+a form: choose the borrowing it is for (a book on loan now or one already returned) or a general charge,
+the reason (damaged book, water damage, missing barcode, replacement library ID, other) and the amount. A
+charge for a book still on loan must be cleared before that book can be returned.
 
 ### 1.7a Labels and library IDs
 **Collection → Labels & library IDs**
@@ -182,7 +188,8 @@ Closing the session can mark unscanned items MISSING; scanned LOST/MISSING items
 Patrons borrow on their own at `/kiosk/selfcheck`: tap or scan the card, enter the PIN, then place
 each item on the RFID pad or scan it. The same loan rules apply as at the desk, but nothing can be
 overridden: anything refused is sent to the desk. Patrons can also renew there, and return items if
-that is allowed: the kiosk checks the item in, and the patron leaves it on the return cart. Staff then
+that is allowed: the kiosk checks the item in, and the patron leaves it on the return cart. An item with
+fines (overdue, damage...) can't be returned at the kiosk: the patron is told to see a staff member at the desk. Staff then
 shelve each one, or put it on the hold shelf if a reservation is waiting (the Holds page shows which).
 A printable slip lists the due dates.
 

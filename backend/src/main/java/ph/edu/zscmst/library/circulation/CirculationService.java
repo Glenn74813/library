@@ -28,6 +28,7 @@ import ph.edu.zscmst.library.catalog.ItemRepository;
 import ph.edu.zscmst.library.catalog.ItemStatus;
 import ph.edu.zscmst.library.catalog.LoanPolicy;
 import ph.edu.zscmst.library.circulation.CirculationDtos.BookingCalendar;
+import ph.edu.zscmst.library.circulation.CirculationDtos.CheckinPreview;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckinResult;
 import ph.edu.zscmst.library.circulation.CirculationDtos.CheckoutResult;
 import ph.edu.zscmst.library.circulation.CirculationDtos.FineDto;
@@ -36,6 +37,7 @@ import ph.edu.zscmst.library.circulation.CirculationDtos.HoldSlip;
 import ph.edu.zscmst.library.circulation.CirculationDtos.LoanDto;
 import ph.edu.zscmst.library.circulation.CirculationDtos.PatronSummary;
 import ph.edu.zscmst.library.circulation.CirculationDtos.ReceiptDto;
+import ph.edu.zscmst.library.circulation.CirculationDtos.Settle;
 import ph.edu.zscmst.library.common.ApiException;
 import ph.edu.zscmst.library.common.AuditService;
 import ph.edu.zscmst.library.common.LibraryClock;
@@ -202,6 +204,45 @@ public class CirculationService {
     @Transactional
     public CheckinResult checkin(String itemCode) {
         return checkin(itemCode, null);
+    }
+
+    /** What returning this copy now would require to be cleared (overdue fine + linked charges); nothing is changed. */
+    @Transactional(readOnly = true)
+    public CheckinPreview previewCheckin(String itemCode) {
+        Item item = items.findByIdentifier(itemCode.trim()).orElseThrow(() -> ApiException.notFound("Item"));
+        return loans.findByItemIdAndReturnedAtIsNull(item.getId()).map(l -> {
+            BigDecimal overdue = overdueFine(l.getPatron().getCategory(), overdueDays(l, Instant.now()));
+            List<FineDto> charges = fines.findByLoanIdAndStatusOrderByIdAsc(l.getId(), FineStatus.UNPAID).stream().map(FineDto::of).toList();
+            BigDecimal total = charges.stream().map(FineDto::amount).reduce(overdue, BigDecimal::add);
+            return new CheckinPreview(toDto(l), overdue, charges, total);
+        }).orElse(new CheckinPreview(null, BigDecimal.ZERO, List.of(), BigDecimal.ZERO));
+    }
+
+    /**
+     * A return at the desk or from the patron's page. It completes only once every unpaid fine tied to that
+     * borrowing is cleared: the overdue fine it would now charge and any charge already linked to it (e.g.
+     * damage). They are paid together on one receipt, or waived, in the same transaction as the return.
+     */
+    @Transactional
+    public CheckinResult checkinSettled(String itemCode, Settle settle, String waiveReason) {
+        BigDecimal due = previewCheckin(itemCode).total();
+        if (due.signum() > 0 && settle == null) {
+            throw ApiException.conflict("Fines of PHP " + due + " for this borrowing must be paid (or waived) "
+                    + "before the return is completed.");
+        }
+        if (due.signum() > 0 && settle == Settle.WAIVE && (waiveReason == null || waiveReason.isBlank())) {
+            throw ApiException.badRequest("Give a reason for waiving the fines");
+        }
+        CheckinResult r = checkin(itemCode, null);
+        if (r.loan() == null) return r;
+        List<Fine> open = fines.findByLoanIdAndStatusOrderByIdAsc(r.loan().id(), FineStatus.UNPAID);
+        if (open.isEmpty()) return r;
+        if (settle == Settle.PAY) {
+            ReceiptDto receipt = pay(open.stream().map(Fine::getId).toList());
+            return new CheckinResult(r.loan(), r.fineAmount(), r.holdForPatron(), r.message(), r.holdSlip(), receipt);
+        }
+        open.forEach(f -> waive(f.getId(), waiveReason.trim()));
+        return r;
     }
 
     /** Check-in; {@code offlineAt} is the original return time of a check-in recorded offline (fines stop there). */
@@ -744,11 +785,23 @@ public class CirculationService {
         return FineDto.of(f);
     }
 
+    /**
+     * A charge added by staff: general (no loan), or for one of the patron's own borrowings, in which case
+     * the book and copy are named in the reason so the charge shows what it is for.
+     */
     @Transactional
-    public FineDto addManualFine(Long patronId, BigDecimal amount, String reason) {
+    public FineDto addManualFine(Long patronId, BigDecimal amount, String reason, Long loanId) {
         Patron p = patrons.findById(patronId).orElseThrow(() -> ApiException.notFound("Patron"));
-        Fine f = fines.save(new Fine(p, null, amount, reason));
-        audit.record("FINE_ADD", p.getCardNumber() + " PHP " + amount + ": " + reason);
+        Loan loan = null;
+        String text = reason.trim();
+        if (loanId != null) {
+            loan = loans.findWithDetailsById(loanId).orElseThrow(() -> ApiException.notFound("Loan"));
+            if (!loan.getPatron().getId().equals(patronId)) throw ApiException.badRequest("That borrowing belongs to another patron");
+            text = text + ": " + loan.getItem().getRecord().getTitle() + " (" + loan.getItem().getBarcode() + ")";
+            if (text.length() > 255) text = text.substring(0, 255);
+        }
+        Fine f = fines.save(new Fine(p, loan, amount, text));
+        audit.record("FINE_ADD", p.getCardNumber() + " PHP " + amount + ": " + text);
         return FineDto.of(f);
     }
 }

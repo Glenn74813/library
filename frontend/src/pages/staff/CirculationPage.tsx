@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api, qs } from '../../api/client'
 import { clearFailed, enqueue, failedSyncs, isOffline, offlineQueue, syncOffline } from '../../api/offlineCirculation'
-import type { CheckinResult, CheckoutResult, Loan, Patron, PatronSummary } from '../../api/types'
+import type { CheckinPreview, CheckinResult, CheckoutResult, Loan, Patron, PatronSummary, Receipt } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { errorText, useToast } from '../../components/Toast'
 import { CameraScanButton } from '../../components/CameraScan'
+import { ReceiptModal } from '../../components/ReceiptModal'
+import { SettleReturnModal } from '../../components/SettleReturnModal'
 import { StatusBadge, Table, Tabs } from '../../components/ui'
 import { Icon } from '../../components/Icon'
 import { fmtDate, fmtDateTime, fmtMoney } from '../../format'
@@ -354,6 +356,9 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
   /** Returns waiting for the server, sent one at a time so a fast scanner never loses one. */
   const pending = useRef<string[]>([])
   const running = useRef(false)
+  /** A return waiting for its fines to be settled; the scan queue waits until staff decide. */
+  const [settling, setSettling] = useState<{ item: string; preview: CheckinPreview; resolve: (r: CheckinResult | null) => void } | null>(null)
+  const [receipt, setReceipt] = useState<Receipt | null>(null)
   const ref = useRef<HTMLInputElement>(null)
   const form = useRef<HTMLFormElement>(null)
 
@@ -401,7 +406,20 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
   /** Sends one queued return; true when the server could not be reached (it was saved offline). */
   async function checkinOne(item: string) {
     try {
-      const r = await api<CheckinResult>('/api/circulation/checkin', { body: { item }, timeoutMs: DESK_TIMEOUT })
+      // Fines tied to the borrowing (overdue, damage...) must be settled before the return completes.
+      const preview = await api<CheckinPreview>(`/api/circulation/checkin/preview${qs({ item })}`, { timeoutMs: DESK_TIMEOUT })
+      let r: CheckinResult | null
+      if (preview.total > 0) {
+        r = await new Promise<CheckinResult | null>((resolve) => setSettling({ item, preview, resolve }))
+        setSettling(null)
+        if (!r) {
+          addLog(false, `${item}: not returned — fines of ${fmtMoney(preview.total)} for this borrowing were not settled`)
+          return false
+        }
+        if (r.receipt) setReceipt(r.receipt)
+      } else {
+        r = await api<CheckinResult>('/api/circulation/checkin', { body: { item }, timeoutMs: DESK_TIMEOUT })
+      }
       setLast(r)
       // Nothing prints by itself: staff check the details, then press the print buttons below.
       if (r.loan) {
@@ -410,7 +428,7 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
         setReturns((list) => [...list, item])
       }
       addLog(true, `IN ${r.loan?.barcode ?? item} ${r.loan ? `"${r.loan.title}" from ${r.loan.patronName}` : ''} — ${r.message}`
-        + (r.fineAmount > 0 ? ` · fine ${fmtMoney(r.fineAmount)}` : ''))
+        + (r.receipt ? ` · paid ${fmtMoney(r.receipt.total)} (${r.receipt.receiptNumber})` : r.fineAmount > 0 ? ` · fine ${fmtMoney(r.fineAmount)} waived` : ''))
       off.markOnline()
       return false
     } catch (err) {
@@ -426,6 +444,9 @@ function Checkin({ addLog, off }: { addLog: (ok: boolean, t: string) => void; of
 
   return (
     <div className="card stack">
+      {settling && <SettleReturnModal item={settling.item} preview={settling.preview}
+        onDone={(r) => settling.resolve(r)} onCancel={() => settling.resolve(null)} />}
+      {receipt && <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />}
       <form onSubmit={submit} ref={form}>
         <label className="field">
           <span>Scan returned item (barcode / RFID tag)</span>

@@ -326,7 +326,12 @@ export interface CheckinResult {
   message: string
   /** Set when the copy was put aside for a reservation: details for the hold shelf slip. */
   holdSlip: { holdId: number; title: string; barcode: string; callNumber: string | null; cardNumber: string; initials: string; pickupBy: string | null } | null
+  /** The payment receipt when the borrowing's fines were paid as part of the return. */
+  receipt: Receipt | null
 }
+
+/** What must be cleared before a copy's return completes: its overdue fine plus charges linked to the borrowing. */
+export interface CheckinPreview { loan: Loan | null; overdueFine: number; charges: Fine[]; total: number }
 
 export interface KioskConfig {
   mode: 'ATTENDANCE' | 'STANDBY'

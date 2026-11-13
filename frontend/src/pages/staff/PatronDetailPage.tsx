@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, download, openPdf, qs, releaseHold } from '../../api/client'
-import type { BibRecord, CheckinResult, Fine, Hold, Loan, Page, Patron, PatronSummary, Receipt } from '../../api/types'
+import type { BibRecord, CheckinPreview, CheckinResult, Fine, Hold, Loan, Page, Patron, PatronSummary, Receipt } from '../../api/types'
 import { hasRole, useSession } from '../../auth/AuthContext'
 import { PatronFormModal } from '../../components/PatronForm'
 import { BookModal } from '../../components/BookModal'
 import { PatronPhotoModal } from '../../components/PatronPhotoModal'
 import { ReleasedReceipt } from '../../components/ReleasedReceipt'
+import { SettleReturnModal } from '../../components/SettleReturnModal'
 import { ReceiptModal } from '../../components/ReceiptModal'
 import { errorText, useToast } from '../../components/Toast'
 import { ErrorAlert, Field, Modal, Pager, StatusBadge, Table, Tabs } from '../../components/ui'
@@ -38,6 +39,9 @@ export function PatronDetailPage() {
   const [selected, setSelected] = useState<number[]>([])
   const [released, setReleased] = useState<Loan | null>(null)
   const [returned, setReturned] = useState<CheckinResult | null>(null)
+  /** A return held until the fines tied to that borrowing are settled. */
+  const [settling, setSettling] = useState<{ item: string; preview: CheckinPreview } | null>(null)
+  const [charging, setCharging] = useState(false)
   const lib = useLibrary()
   const [histPage, setHistPage] = useState(0)
   const { data: s, error, reload } = useAsync(() => api<PatronSummary>(`/api/circulation/patrons/${id}/summary`), [id])
@@ -93,28 +97,27 @@ export function PatronDetailPage() {
     }
   }
 
-  async function addFine() {
-    const reason = prompt('Charge reason (e.g. Damaged book cover):')
-    if (!reason) return
-    const amount = Number(prompt('Amount in PHP:'))
-    if (!amount || amount <= 0) return
-    await act(() => api('/api/fines', { body: { patronId: Number(id), amount, reason } }), 'Charge added')
-  }
 
   /**
-   * Checks a loan in from the patron's page. A return is never held up by fines: the overdue fine is only
-   * worked out when the book comes back, and unpaid fines already stop further borrowing.
+   * Checks a loan in from the patron's page. When fines are tied to the borrowing (overdue, damage...) the
+   * return only completes once they are paid or waived, in the settle window.
    */
   async function returnLoan(l: Loan) {
-    const late = l.overdue && l.accruedFine > 0 ? `\n\nIt is ${l.overdueDays} day(s) late: an overdue fine of ${fmtMoney(l.accruedFine)} will be charged.` : ''
-    if (!confirm(`Return "${l.title}" (copy ${l.barcode})?${late}`)) return
     try {
-      const r = await api<CheckinResult>('/api/circulation/checkin', { body: { item: l.barcode } })
-      setReturned(r)
-      refreshAll()
+      const preview = await api<CheckinPreview>(`/api/circulation/checkin/preview${qs({ item: l.barcode })}`)
+      if (preview.total > 0) return setSettling({ item: l.barcode, preview })
+      if (!confirm(`Return "${l.title}" (copy ${l.barcode})?`)) return
+      finishReturn(await api<CheckinResult>('/api/circulation/checkin', { body: { item: l.barcode } }))
     } catch (e) {
       toast(errorText(e), 'error')
     }
+  }
+
+  function finishReturn(r: CheckinResult) {
+    setSettling(null)
+    setReturned(r)
+    if (r.receipt) setReceipt(r.receipt)
+    refreshAll()
   }
 
   function printReturnReceipt(r: CheckinResult) {
@@ -200,12 +203,15 @@ export function PatronDetailPage() {
         </div>
       </div>
       {released && <ReleasedReceipt loan={released} onClose={() => setReleased(null)} />}
+      {settling && <SettleReturnModal item={settling.item} preview={settling.preview} onDone={finishReturn} onCancel={() => setSettling(null)} />}
+      {charging && <ChargeModal patronId={p.id} current={s.loans} onClose={() => setCharging(false)}
+        onSaved={() => { setCharging(false); refreshAll(); setTab('fines') }} />}
       {returned?.loan && <div className={`alert ${returned.fineAmount > 0 ? 'warn' : 'success'} row`} style={{ marginBottom: 16, justifyContent: 'space-between' }}>
         <span><strong>Returned:</strong> “{returned.loan.title}” (copy <span className="mono">{returned.loan.barcode}</span>). {returned.message.replace(/([^.!?])$/, '$1.')}
-          {returned.fineAmount > 0 && <> Overdue fine of <strong>{fmtMoney(returned.fineAmount)}</strong> charged.</>}</span>
+          {returned.receipt ? <> Paid <strong>{fmtMoney(returned.receipt.total)}</strong> (receipt {returned.receipt.receiptNumber}).</>
+            : returned.fineAmount > 0 && <> Fines waived.</>}</span>
         <span className="row-actions">
-          {returned.fineAmount > 0 && <button className="btn small primary" onClick={() => { setTab('fines'); setReturned(null) }}>
-            <Icon name="credit-card" />Collect payment</button>}
+
           <button className="btn small" onClick={() => printReturnReceipt(returned)}><Icon name="printer" />Print receipt</button>
           {returned.holdSlip && <button className="btn small" onClick={() => void printRecorded({ kind: 'HOLD_SLIP', cardNumber: returned.holdSlip!.cardNumber,
             reference: `HOLD-${returned.holdSlip!.holdId}`, details: returned.holdSlip!.barcode }, <HoldShelfSlip lib={lib} hold={returned.holdSlip!} />)}>
@@ -297,7 +303,7 @@ export function PatronDetailPage() {
               Receive {selected.length ? fmtMoney(selectedTotal) : 'payment'}</button>
             {unpaid.length > 0 && <button className="btn" onClick={() => setSelected(unpaid.map((f) => f.id))}>Select all unpaid</button>}
             <span className="spacer" />
-            {isLibrarian && <button className="btn" onClick={addFine}><Icon name="plus" />Add charge</button>}
+            {isLibrarian && <button className="btn" onClick={() => setCharging(true)}><Icon name="plus" />Add charge</button>}
           </div>
           <Table rows={fines} rowKey={(f) => f.id} empty="No fines" columns={[
             { header: '', render: (f) => f.status === 'UNPAID' && <input type="checkbox" aria-label="Select fine" checked={selected.includes(f.id)}
@@ -523,4 +529,74 @@ function PrintHistory({ rows }: { rows: PrintEntry[] | undefined }) {
     { header: 'Details', render: (e) => <span className="small">{e.details ?? '—'}</span> },
     { header: 'By', render: (e) => e.printedBy },
   ]} />
+}
+
+const CHARGE_REASONS = ['Damaged book (cover, pages, binding)', 'Water damage', 'Missing or damaged barcode / RFID tag',
+  'Writing or highlighting in the book', 'Replacement library ID', 'Other']
+
+/**
+ * Add charge: the reason, the amount, and whether it is for one of the patron's borrowings (current or
+ * past), so the charge names that book and copy and must be cleared before that book can be returned.
+ */
+function ChargeModal({ patronId, current, onClose, onSaved }: { patronId: number; current: Loan[]; onClose: () => void; onSaved: () => void }) {
+  const { data: history } = useAsync(() => api<Page<Loan>>(`/api/circulation/patrons/${patronId}/history?size=50`), [patronId])
+  const past = (history?.content ?? []).filter((l) => l.returnedAt)
+  const [loanId, setLoanId] = useState('')
+  const [reason, setReason] = useState(CHARGE_REASONS[0])
+  const [other, setOther] = useState('')
+  const [amount, setAmount] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const toast = useToast()
+  const text = reason === 'Other' ? other.trim() : reason
+  const value = Number(amount)
+
+  async function save() {
+    setBusy(true)
+    setError(null)
+    try {
+      await api('/api/fines', { body: { patronId, amount: value, reason: text, loanId: loanId ? Number(loanId) : null } })
+      toast('Charge added')
+      onSaved()
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal title="Add charge" onClose={onClose} footer={<>
+      <button className="btn" onClick={onClose}>Cancel</button>
+      <button className="btn primary" disabled={busy || !text || !(value > 0)} onClick={() => void save()}>Add charge</button>
+    </>}>
+      <div className="stack">
+        <ErrorAlert error={error} />
+        <Field label="For which borrowing?" hint={loanId
+          ? 'The charge names this book and copy. While the book is on loan, it must be paid before the book can be returned.'
+          : 'A general charge, not tied to any book.'}>
+          <select value={loanId} onChange={(e) => setLoanId(e.target.value)}>
+            <option value="">Not for a borrowed book (general charge)</option>
+            {current.length > 0 && <optgroup label="On loan now">
+              {current.map((l) => <option key={l.id} value={l.id}>{l.title} · {l.barcode} · borrowed {fmtDate(l.checkoutAt)}</option>)}
+            </optgroup>}
+            {past.length > 0 && <optgroup label="Returned">
+              {past.map((l) => <option key={l.id} value={l.id}>{l.title} · {l.barcode} · returned {fmtDate(l.returnedAt)}</option>)}
+            </optgroup>}
+          </select>
+        </Field>
+        <div className="form-grid">
+          <Field label="Reason *">
+            <select value={reason} onChange={(e) => setReason(e.target.value)}>
+              {CHARGE_REASONS.map((r) => <option key={r}>{r}</option>)}
+            </select>
+          </Field>
+          <Field label="Amount (PHP) *"><input type="number" min="0.01" step="0.01" inputMode="decimal" value={amount}
+            onChange={(e) => setAmount(e.target.value)} placeholder="0.00" /></Field>
+          {reason === 'Other' && <Field label="Describe the charge *" className="span-all">
+            <input value={other} onChange={(e) => setOther(e.target.value)} maxLength={150} autoFocus /></Field>}
+        </div>
+      </div>
+    </Modal>
+  )
 }
