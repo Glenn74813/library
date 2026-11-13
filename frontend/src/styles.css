@@ -232,16 +232,16 @@ button.section:focus-visible { outline: 2px solid var(--accent); outline-offset:
   .main { padding: 24px 32px; }
 }
 
-/* Title first, its buttons right after it (not pushed to the far edge of wide screens); wraps when narrow. */
+/* Title on the left, its buttons on the right; they wrap under the title when narrow. */
 .page-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 8px 12px;
   margin-bottom: 16px;
 }
-.page-head h1 { margin: 0 12px 0 0; }
+.page-head h1 { margin: 0; }
 
 /* ---------------------------------------------------------------- surfaces */
 
