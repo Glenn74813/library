@@ -270,7 +270,7 @@ function DeviceModal({ value, onClose, onSaved }: { value: Partial<User>; onClos
               <div className="row"><button className="btn small primary" onClick={copy}>Copy token</button>
                 <span className="muted">Keep it secret, like a password. It is not shown again.</span></div>
             </>}
-            <GateConnectSteps token={token} />
+            <GateConnectSteps token={token} gateId={(f.username ?? '').trim().toUpperCase() || 'GATE-1'} />
           </div>
         ) : f.id ? (
           <div className="alert small stack" style={{ gap: 8 }}>
@@ -345,11 +345,11 @@ function SignInProtection() {
  * How to connect a security gate of any brand: the RFID bridge runs on the PC wired to the gate and calls the
  * library with this device's token. Also lists the gates reporting to the library, so staff can see it worked.
  */
-function GateConnectSteps({ token }: { token: string | null }) {
+function GateConnectSteps({ token, gateId }: { token: string | null; gateId: string }) {
   const { data } = useAsync(() => api<GateSummary>('/api/gate/summary'), [])
   const settings = [
     'mode=gate',
-    'gate.id=GATE-1',
+    `gate.id=${gateId}`,
     `lms.url=${window.location.origin}`,
     `lms.deviceKey=${token ?? '<paste the device token here>'}`,
     '# Tries every reader type at once and uses whichever sends tags.',
@@ -406,7 +406,7 @@ function GateConnectSteps({ token }: { token: string | null }) {
 
         <strong>Check it works</strong>
         <ol start={9} style={{ margin: 0, paddingLeft: 20 }}>
-          <li>Within a minute, <em>Gates reporting now</em> below shows <span className="mono">GATE-1 · online</span>.</li>
+          <li>Within a minute, <em>Gates reporting now</em> below shows <span className="mono">{gateId} · online</span>.</li>
           <li>Walk through the gate with a copy that is <strong>not</strong> checked out: an <strong>ALARM</strong> with its title
             appears on the Security gate page. A borrowed copy passes quietly.</li>
         </ol>
