@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from 'react'
+import { useState, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import qrcode from 'qrcode-generator'
 import { api, qs } from '../api/client'
@@ -70,10 +70,34 @@ export async function printRecorded(record: PrintRecord, slip: ReactElement, kio
 }
 
 /** Prints one slip on the receipt printer. Resolves once the print dialog (or direct print) is done. */
-export function printSlip(slip: ReactElement, copy = 1): Promise<void> {
+/** The slip as a complete HTML page: exactly what goes to the receipt printer (and what the preview shows). */
+function slipDocument(slip: ReactElement, copy = 1, extraCss = '') {
   const banner = copy > 1 ? `<div class="reprint">REPRINT · COPY ${copy}</div>` : ''
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Slip</title><style>${SLIP_CSS}</style></head>`
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Slip</title><style>${SLIP_CSS}${extraCss}</style></head>`
     + `<body>${banner}${renderToStaticMarkup(slip)}</body></html>`
+}
+
+/**
+ * Shows a slip on screen exactly as it prints: the same page the printer gets, on an 80 mm "paper roll".
+ * Used wherever a receipt or report is shown before printing.
+ */
+export function SlipPreview({ slip, title = 'Print preview' }: { slip: ReactElement; title?: string }) {
+  const [height, setHeight] = useState(200)
+  const html = slipDocument(slip, 1, 'html{background:#fff}body{margin:3mm}')
+  return (
+    <div className="slip-preview">
+      <iframe title={title} srcDoc={html} style={{ height }} sandbox="allow-same-origin"
+        onLoad={(e) => {
+          const doc = e.currentTarget.contentDocument
+          // The slip's own height plus its 3 mm margins (the page's height would be the frame's, not the slip's).
+          if (doc?.body) setHeight(Math.ceil(doc.body.getBoundingClientRect().height + 2 * 11.34) + 2)
+        }} />
+    </div>
+  )
+}
+
+export function printSlip(slip: ReactElement, copy = 1): Promise<void> {
+  const html = slipDocument(slip, copy)
   return new Promise((resolve) => {
     const frame = document.createElement('iframe')
     frame.setAttribute('aria-hidden', 'true')

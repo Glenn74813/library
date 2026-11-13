@@ -10,7 +10,7 @@ import { fmtDate, fmtMoney, isoDate } from '../../format'
 import { useAsync } from '../../hooks/useAsync'
 import { Icon } from '../../components/Icon'
 import { useLibrary } from '../../api/library'
-import { CashReportSlip, printRecorded, type CashReportData } from '../../print/slips'
+import { CashReportSlip, printRecorded, SlipPreview, type CashReportData } from '../../print/slips'
 
 export function FinesPage() {
   const [status, setStatus] = useState<FineStatus | 'ALL'>('UNPAID')
@@ -98,23 +98,12 @@ function CashReportModal({ onClose }: { onClose: () => void }) {
       <button className="btn" onClick={onClose}>Close</button>
       <button className="btn primary" disabled={!data} onClick={() => data && void printRecorded({ kind: 'CASH_REPORT', reference: `CASH-${data.date}`,
         details: `${data.receipts.length} receipt(s), ${fmtMoney(data.total)}` }, <CashReportSlip lib={lib} r={data} />)}>
-        <Icon name="printer" />Print on receipt printer</button></>}>
+        <Icon name="printer" />Print</button></>}>
       <div className="stack">
         <Field label="Date"><input type="date" value={date} max={isoDate()} onChange={(e) => setDate(e.target.value)} /></Field>
         <ErrorAlert error={error} />
-        {data && <>
-          <Table rows={data.receipts} rowKey={(r) => r.receiptNumber} empty="No payments received on this day" columns={[
-            { header: 'Receipt', render: (r) => <span className="mono">{r.receiptNumber}</span> },
-            { header: 'Patron', render: (r) => <>{r.patronName}<div className="muted small">{r.cardNumber}</div></> },
-            { header: 'Cashier', render: (r) => r.cashier },
-            { header: 'Amount', render: (r) => <span className="nowrap">{fmtMoney(r.amount)}</span> },
-          ]} />
-          <div className="row" style={{ justifyContent: 'space-between' }}>
-            <strong>Total collected: {fmtMoney(data.total)}</strong>
-            {data.waivedCount > 0 && <span className="muted small">Waived: {data.waivedCount} ({fmtMoney(data.waivedTotal)}), not collected</span>}
-          </div>
-          {data.byCashier.length > 1 && <div className="muted small">{data.byCashier.map((c) => `${c.cashier}: ${fmtMoney(c.total)} (${c.receipts})`).join(' · ')}</div>}
-        </>}
+        {/* The report exactly as it prints on the receipt printer. */}
+        {data && <SlipPreview slip={<CashReportSlip lib={lib} r={data} />} title={`End-of-day report ${data.date}`} />}
       </div>
     </Modal>
   )

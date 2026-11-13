@@ -1,52 +1,20 @@
 import type { Receipt } from '../api/types'
-import { fmtDateTime, fmtMoney } from '../format'
+import { fmtMoney } from '../format'
 import { Modal } from './ui'
 import { Icon } from './Icon'
-import { Logo } from './Logo'
 import { useLibrary } from '../api/library'
-import { OfficialReceiptSlip, printRecorded } from '../print/slips'
+import { OfficialReceiptSlip, printRecorded, SlipPreview } from '../print/slips'
 
-/** Printable payment receipt sized for an 80 mm thermal printer. */
+/** The official receipt exactly as it prints on the 80 mm receipt printer, with Print. */
 export function ReceiptModal({ receipt, onClose }: { receipt: Receipt; onClose: () => void }) {
   const lib = useLibrary()
+  const slip = <OfficialReceiptSlip lib={lib} receipt={receipt} />
   return (
-    <Modal title="Official receipt" onClose={onClose}
+    <Modal title={`Official receipt ${receipt.receiptNumber}`} onClose={onClose}
       footer={<><button className="btn" onClick={onClose}>Close</button>
         <button className="btn primary" onClick={() => void printRecorded({ kind: 'RECEIPT', cardNumber: receipt.cardNumber, reference: receipt.receiptNumber,
-          details: fmtMoney(receipt.total) }, <OfficialReceiptSlip lib={lib} receipt={receipt} />)}><Icon name="printer" />Print</button></>}>
-      <div className="print-receipt stack" style={{ gap: 6 }}>
-        <div style={{ textAlign: 'center' }}>
-          <Logo />
-          <strong>{lib.name}</strong><br />
-          {lib.institution && <span className="small">{lib.institution}<br /></span>}
-          {lib.address && <span className="small">{lib.address}<br /></span>}
-          {(lib.phone || lib.email) && <span className="small">{[lib.phone, lib.email].filter(Boolean).join(' · ')}<br /></span>}
-          {lib.receiptHeader && <span className="small" style={{ whiteSpace: 'pre-line' }}>{lib.receiptHeader}<br /></span>}
-          <span className="small">Library fines receipt</span>
-        </div>
-        <div className="small">
-          Receipt No: <strong className="mono">{receipt.receiptNumber}</strong><br />
-          Date: {fmtDateTime(receipt.paidAt)}<br />
-          Patron: {receipt.patronName} ({receipt.cardNumber})<br />
-          Received by: {receipt.cashier}
-        </div>
-        <table className="small" style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <tbody>
-            {receipt.fines.map((f) => (
-              <tr key={f.id}>
-                <td style={{ padding: '4px 0' }}>{f.reason}</td>
-                <td className="right nowrap" style={{ padding: '4px 0' }}>{fmtMoney(f.amount)}</td>
-              </tr>
-            ))}
-            <tr>
-              <td style={{ borderTop: '1px dashed currentColor', paddingTop: 6 }}><strong>TOTAL</strong></td>
-              <td className="right" style={{ borderTop: '1px dashed currentColor', paddingTop: 6 }}>
-                <strong>{fmtMoney(receipt.total)}</strong></td>
-            </tr>
-          </tbody>
-        </table>
-        <div className="small" style={{ textAlign: 'center', whiteSpace: 'pre-line' }}>{lib.receiptFooter || 'Thank you!'}</div>
-      </div>
+          details: fmtMoney(receipt.total) }, slip)}><Icon name="printer" />Print</button></>}>
+      <SlipPreview slip={slip} title={`Official receipt ${receipt.receiptNumber}`} />
     </Modal>
   )
 }
