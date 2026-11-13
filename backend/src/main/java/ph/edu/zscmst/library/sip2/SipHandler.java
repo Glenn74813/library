@@ -39,6 +39,8 @@ import ph.edu.zscmst.library.common.SettingsService;
 import ph.edu.zscmst.library.common.SystemSettings;
 import ph.edu.zscmst.library.patron.Patron;
 import ph.edu.zscmst.library.patron.PatronRepository;
+import ph.edu.zscmst.library.security.LoginThrottle;
+import ph.edu.zscmst.library.security.LoginThrottle.Account;
 import ph.edu.zscmst.library.sip2.SipMessage.Reply;
 import ph.edu.zscmst.library.user.AppUser;
 import ph.edu.zscmst.library.user.AppUserRepository;
@@ -56,7 +58,8 @@ public class SipHandler {
     private static final Duration MAX_OFFLINE = Duration.ofDays(3);
     private static final Logger log = LoggerFactory.getLogger(SipHandler.class);
     private static final DateTimeFormatter SIP_DATE = DateTimeFormatter.ofPattern("yyyyMMdd'    'HHmmss");
-    private static final List<Role> SIP_ROLES = List.of(Role.ADMIN, Role.LIBRARIAN, Role.STAFF, Role.KIOSK);
+    /** Stations sign in with a device account; staff and administrator passwords never travel over plain SIP2. */
+    private static final List<Role> SIP_ROLES = List.of(Role.KIOSK);
 
     /** Per-connection state. */
     public static final class Session {
@@ -87,11 +90,13 @@ public class SipHandler {
     private final TransactionTemplate tx;
     private final SystemSettings system;
     private final RenewalService renewals;
+    private final LoginThrottle throttle;
 
     public SipHandler(AppUserRepository users, PasswordEncoder passwords, PatronRepository patrons, ItemRepository items,
                       LoanRepository loans, HoldRequestRepository holds, CirculationService circulation,
                       SettingsService settings, AuditService audit, LibraryClock clock, TransactionTemplate tx,
-                      SystemSettings system, RenewalService renewals) {
+                      SystemSettings system, RenewalService renewals, LoginThrottle throttle) {
+        this.throttle = throttle;
         this.system = system;
         this.renewals = renewals;
         this.users = users;
@@ -220,10 +225,30 @@ public class SipHandler {
                 .filter(p -> p.getAnonymizedAt() == null);
     }
 
-    /** True when no PIN was sent, or the PIN matches. Patrons without a PIN can't use a PIN. */
+    /**
+     * The patron's PIN, checked like at the kiosk: wrong PINs count towards the same lock-out, and no PIN only
+     * passes when the library doesn't require PINs at self-check.
+     */
     private boolean pinOk(Patron p, String pin) {
-        if (pin == null || pin.isEmpty()) return true;
-        return p.getPinHash() != null && passwords.matches(pin, p.getPinHash());
+        if (pin == null || pin.isEmpty()) return "false".equals(settings.get("selfcheck.requirePin", "true"));
+        Instant now = Instant.now();
+        if (p.getPinHash() == null || p.isPinLocked(now)) return false;
+        if (throttle.claim(Account.PATRON, p.getId(), setting("security.maxAttempts", 5), setting("security.lockMinutes", 15), now)
+                .locked() != null) return false;
+        if (!passwords.matches(pin, p.getPinHash())) {
+            audit.record(p.getCardNumber(), "SIP2_PIN_FAILED", null);
+            return false;
+        }
+        throttle.succeeded(Account.PATRON, p.getId());
+        return true;
+    }
+
+    private int setting(String key, int fallback) {
+        try {
+            return Integer.parseInt(settings.get(key, String.valueOf(fallback)));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     /** The 14-character patron status flags (Y = privilege denied / limit reached). */
@@ -268,9 +293,14 @@ public class SipHandler {
 
     private Reply login(SipMessage m, Session s) {
         String username = m.field("CN");
+        Instant now = Instant.now();
+        // Wrong passwords count towards the account's lock-out, as on the website.
         Optional<AppUser> user = users.findByUsernameIgnoreCase(username)
-                .filter(u -> u.isEnabled() && !u.isLocked(Instant.now()) && SIP_ROLES.contains(u.getRole())
-                        && passwords.matches(m.field("CO"), u.getPasswordHash()));
+                .filter(u -> u.isEnabled() && !u.isLocked(now) && SIP_ROLES.contains(u.getRole()))
+                .filter(u -> throttle.claim(Account.STAFF, u.getId(), setting("security.maxAttempts", 5),
+                        setting("security.lockMinutes", 15), now).locked() == null)
+                .filter(u -> passwords.matches(m.field("CO"), u.getPasswordHash()));
+        user.ifPresent(u -> throttle.succeeded(Account.STAFF, u.getId()));
         s.user = user.map(AppUser::getUsername).orElse(null);
         audit.record("sip2:" + username, user.isPresent() ? "SIP2_LOGIN" : "SIP2_LOGIN_FAILED",
                 s.peer + (m.field("CP").isEmpty() ? "" : " location " + m.field("CP")));
@@ -334,8 +364,8 @@ public class SipHandler {
         }
         if (summary.length() > 1 && summary.charAt(1) == 'Y') overdue.forEach(l -> r.field("AT", l.barcode()));
         if (summary.length() > 2 && summary.charAt(2) == 'Y') s.loans().forEach(l -> r.field("AU", l.barcode()));
-        return r.optional("BE", patron.getEmail()).optional("BF", patron.getPhone())
-                .optional("AF", s.blocks().isEmpty() ? null : String.join("; ", s.blocks()));
+        // No e-mail or phone (BE/BF): stations don't need them and SIP2 is unencrypted.
+        return r.optional("AF", s.blocks().isEmpty() ? null : String.join("; ", s.blocks()));
     }
 
     private Reply itemInformation(SipMessage m) {
@@ -408,6 +438,16 @@ public class SipHandler {
         boolean noBlock = m.flag(0, 'N') == 'Y';
         String barcode = m.field("AB");
         Instant returned = noBlock ? offlineTime(m.fixed().substring(19, 37)) : null;
+        // Fines tied to the borrowing are settled at the desk before the return completes, as at the kiosk.
+        // (An offline return already happened at the station, so it is recorded and the fine stays to pay.)
+        if (!noBlock) {
+            Result<java.math.BigDecimal> due = attempt(() -> circulation.previewCheckin(barcode).total());
+            if (due.ok() && due.value().signum() > 0) {
+                return new Reply("10").fixed('0').fixed('Y').fixed('U').fixed('N').fixed(now()).field("AO", institution(m))
+                        .field("AB", barcode).field("AQ", "")
+                        .field("AF", "This item has fines to settle. Please return it at the circulation desk.");
+            }
+        }
         Result<CheckinResult> result = attempt(() -> circulation.checkin(barcode, returned));
         Reply r = new Reply("10");
         if (!result.ok()) {
