@@ -353,7 +353,7 @@ function GateConnectSteps({ token }: { token: string | null }) {
     `lms.url=${window.location.origin}`,
     `lms.deviceKey=${token ?? '<paste the device token here>'}`,
     '# Tries every reader type at once and uses whichever sends tags.',
-    '# Fill in only what the gate vendor gave you (step 2).',
+    '# Fill in only what applies to your gate (step 6).',
     'reader=auto',
     '#serial.device=COM4',
     '#tcp.host=192.168.1.60',
@@ -365,25 +365,55 @@ function GateConnectSteps({ token }: { token: string | null }) {
     <details>
       <summary style={{ cursor: 'pointer' }}><strong>How to connect a gate (any brand)</strong></summary>
       <div className="stack" style={{ gap: 6, marginTop: 8 }}>
-        <span>The gate connects to the library, not the other way round: the <strong>RFID bridge</strong> program
-          (<span className="mono">rfid-bridge</span> folder of the system) runs on the PC wired to the gate, reads its tags, asks the
-          library if each item is borrowed, and sounds the alarm if not.</span>
+        <span>The gate connects to the library, not the other way round: the <strong>RFID bridge</strong> program runs on the
+          PC wired to the gate, reads its tags, asks the library if each item is borrowed, and sounds the alarm if not.</span>
+
+        <strong>On the library system (once per gate)</strong>
         <ol style={{ margin: 0, paddingLeft: 20 }}>
-          <li><strong>Token:</strong> press <em>Issue new device token</em> above and copy it. One device per gate.</li>
-          <li><strong>Reader:</strong> leave <span className="mono">reader=auto</span>. The bridge tries every serial/USB-COM
-            port, reads pushed by the vendor's software, and the network reader or vendor tool if you fill them in, all at once,
-            and uses whichever sends tags. From the gate vendor you only need: its IP and port if it is a network gate, or its
-            command-line tool if it has one, and a command that sounds the alarm (<span className="mono">gate.alarm</span>).</li>
-          <li><strong>On the gate PC:</strong> install Java 21 or newer, copy the <span className="mono">rfid-bridge</span> folder,
-            and save these settings as <span className="mono">rfid-bridge.properties</span> (paths with forward slashes):</li>
+          <li>Click <em>Issue new device token</em> above, then <em>Copy token</em>. One device per gate: for another gate, use
+            <em> Add device → Security gate</em>.</li>
+          <li>Copy the whole settings box below. It has this library's address, and the token once you have issued it.</li>
         </ol>
         <textarea readOnly className="mono small" rows={8} value={settings} onFocus={(e) => e.target.select()} />
-        <ol start={4} style={{ margin: 0, paddingLeft: 20 }}>
-          <li><strong>Run</strong> <span className="mono">java RfidBridge.java</span> in that folder, and make it start with Windows
-            (Task Scheduler, "At log on").</li>
-          <li><strong>Check:</strong> within a minute the gate appears below as online. Walk out with a copy that is not checked
-            out: it shows as an alarm on the Security gate page. No hardware yet? Use <span className="mono">reader=simulator</span> to try it.</li>
+
+        <strong>On the PC wired to the gate</strong>
+        <ol start={3} style={{ margin: 0, paddingLeft: 20 }}>
+          <li><strong>Install Java 21 or newer</strong>: Eclipse Temurin, free at{' '}
+            <a href="https://adoptium.net" target="_blank" rel="noreferrer">adoptium.net</a> (Windows installer, Next through it).</li>
+          <li><strong>Get the bridge</strong>: from the{' '}
+            <a href="https://github.com/Glenn74813/library" target="_blank" rel="noreferrer">system's GitHub repository</a>,
+            {' '}<em>Code → Download ZIP</em>, unzip it, and copy just the <span className="mono">rfid-bridge</span> folder to the PC,
+            e.g. <span className="mono">C:\rfid-bridge</span>.</li>
+          <li>In that folder, create <span className="mono">rfid-bridge.properties</span> (make sure Windows doesn't add
+            <span className="mono"> .txt</span>) and paste the settings into it.</li>
+          <li><strong>Fill in only what applies</strong> (remove the <span className="mono">#</span> in front of the line):
+            <ul style={{ margin: '2px 0', paddingLeft: 18 }}>
+              <li>Gate plugged in by USB: nothing. Auto finds the port.</li>
+              <li>Network gate: <span className="mono">tcp.host</span> and <span className="mono">tcp.port</span>, the gate's IP
+                and port (from the vendor or the gate's manual).</li>
+              <li>The vendor gave you a program: <span className="mono">exec.inventory</span>, pointing to it.</li>
+              <li>The bridge should sound the alarm: <span className="mono">gate.alarm</span>, the vendor's alarm command. Skip it
+                if the gate beeps on its own.</li>
+            </ul>
+            Write paths with forward slashes (<span className="mono">C:/Program Files/...</span>).</li>
+          <li><strong>Start it</strong>: open Command Prompt in that folder and run <span className="mono">java RfidBridge.java</span>.
+            It shows <span className="mono">Auto reader: watching ...</span>, then <span className="mono">Connected to ...</span> once
+            the gate sends data. Leave the window open.</li>
+          <li><strong>Start it with Windows</strong>: in Task Scheduler, add a task <em>At log on</em> that runs program
+            {' '}<span className="mono">java</span>, argument <span className="mono">RfidBridge.java</span>, start in
+            {' '}<span className="mono">C:\rfid-bridge</span>.</li>
         </ol>
+
+        <strong>Check it works</strong>
+        <ol start={9} style={{ margin: 0, paddingLeft: 20 }}>
+          <li>Within a minute, <em>Gates reporting now</em> below shows <span className="mono">GATE-1 · online</span>.</li>
+          <li>Walk through the gate with a copy that is <strong>not</strong> checked out: an <strong>ALARM</strong> with its title
+            appears on the Security gate page. A borrowed copy passes quietly.</li>
+        </ol>
+        <span className="muted"><strong>No gate yet?</strong> Change <span className="mono">reader=auto</span> to
+          {' '}<span className="mono">reader=simulator</span>, run the bridge, and type <span className="mono">place</span> and a tag
+          number in its window: it acts like a tag passing the gate. <strong>Online but no tags?</strong> The gate isn't sending tag
+          numbers in a form the bridge can read: ask the vendor how it outputs reads, or for a command-line tool that prints them.</span>
         <span><strong>Gates reporting now:</strong>{' '}
           {data?.gates.length
             ? data.gates.map((g) => <span key={g.gateId} className={`badge ${g.online ? 'ok' : ''}`} style={{ marginRight: 6 }}>
