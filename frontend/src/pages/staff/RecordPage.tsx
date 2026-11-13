@@ -191,14 +191,20 @@ export function RecordPage() {
       {!isNew && <BorrowerHistory recordId={Number(id)} />}
       {copycat && <CopyCatalogModal initialIsbn={form.isbn ?? ''} initialTitle={form.title} onClose={() => setCopycat(false)}
         onUse={(c) => {
+          // The ISBN already typed or scanned is the book in hand; a record found by title may be another
+          // edition (e.g. the hardcover of this paperback), so its ISBN only fills an empty field.
+          const own = form.isbn?.trim()
+          const otherEdition = !!own && !!c.isbn && own.replace(/[^0-9Xx]/g, '') !== c.isbn.replace(/[^0-9Xx]/g, '')
           setForm((f) => ({
-            ...f, title: c.title ?? f.title, subtitle: c.subtitle ?? f.subtitle, authors: c.authors ?? f.authors, isbn: c.isbn ?? f.isbn,
+            ...f, title: c.title ?? f.title, subtitle: c.subtitle ?? f.subtitle, authors: c.authors ?? f.authors, isbn: f.isbn?.trim() ? f.isbn : c.isbn ?? f.isbn,
             publisher: c.publisher ?? f.publisher, publicationYear: c.publicationYear ?? f.publicationYear, edition: c.edition ?? f.edition,
             subjects: c.subjects ?? f.subjects, callNumber: c.callNumber ?? f.callNumber, materialType: c.materialType ?? f.materialType,
             language: c.language ?? f.language, summary: c.summary ?? f.summary,
           }))
           setCopycat(false)
-          toast(`Filled from the ${c.source} record — review and save`)
+          toast(otherEdition
+            ? `Filled from the ${c.source} record of another edition (ISBN ${c.isbn}); your ISBN was kept. Check the year, publisher and edition, then save.`
+            : `Filled from the ${c.source} record — review and save`)
         }} />}
       {editingItem && <ItemModal recordId={Number(id)} item={editingItem} canDelete={canDelete} others={items.filter((x) => x.id !== editingItem.id)}
         onClose={() => setEditingItem(null)} onSaved={() => { setEditingItem(null); void load() }} />}
