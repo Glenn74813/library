@@ -75,9 +75,18 @@ export function Pager({ page, onPage }: { page: Page<unknown> | undefined; onPag
  */
 let scrollLocks = 0
 export function lockPageScroll() {
-  if (scrollLocks++ === 0) document.documentElement.classList.add('scroll-locked')
+  const root = document.documentElement
+  if (scrollLocks++ === 0) {
+    // Hiding the scrollbar would widen the page: keep its width as padding while locked.
+    const bar = window.innerWidth - root.clientWidth
+    root.style.paddingRight = bar > 0 ? `${bar}px` : ''
+    root.classList.add('scroll-locked')
+  }
   return () => {
-    if (--scrollLocks === 0) document.documentElement.classList.remove('scroll-locked')
+    if (--scrollLocks === 0) {
+      root.classList.remove('scroll-locked')
+      root.style.paddingRight = ''
+    }
   }
 }
 

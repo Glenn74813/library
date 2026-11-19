@@ -52,8 +52,8 @@ html {
 }
 
 html, body { overflow-x: clip; }
-/* Keep the scrollbar's space so the page doesn't shift sideways when a dialog locks scrolling. */
-html { scrollbar-gutter: stable; }
+/* A dialog locks scrolling; lockPageScroll() pads the page by the scrollbar's width so nothing shifts sideways.
+   (No reserved scrollbar gutter: on pages that don't scroll it showed as an empty strip beside the top bar.) */
 html.scroll-locked { overflow: hidden; }
 
 body {
